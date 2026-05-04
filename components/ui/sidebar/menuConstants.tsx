@@ -90,6 +90,11 @@ export const MENU_ITEMS: MenuItem[] = [
     href: "/configuraciones",
   },
   {
+    name: "Auditoría",
+    icon: <HiOutlineArchive size={iconSize} />,
+    href: "/auditoria",
+  },
+  {
     name: "Cerrar sesión",
     icon: <HiOutlineLogout size={iconSize} />,
     href: "#",

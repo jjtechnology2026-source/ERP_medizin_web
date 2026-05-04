@@ -4,8 +4,17 @@ import React, { useState, useRef, useEffect } from "react";
 import { HiMenuAlt2, HiMenu, HiOutlineBell, HiSearch, HiX } from "react-icons/hi";
 import UserAvatar from "@/components/shared/dashboard/UserAvatar";
 import { useUserNavbar } from "./useUserNavbar";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNotifications } from "@/modules/core/providers/NotificationProvider";
+import { NotificationsDialog } from "./NotificationsDialog";
 import { SearchBar, CurrencySwitch, NotificationsDropdown, ProfileDropdown } from "./NavbarComponents";
 import { ConfirmationDialog } from "@/components/shared/modals/ConfirmationDialog";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 const Logo = () => (
   <div className="flex items-center gap-3 shrink-0">
@@ -32,28 +41,47 @@ export default function Navbar({
     setCurrency,
     isNotifOpen,
     setIsNotifOpen,
+    isNotifModalOpen,
+    setIsNotifModalOpen,
     isProfileOpen,
     setIsProfileOpen,
     handleLogout
   } = useUserNavbar();
 
+  const { unreadCount } = useNotifications();
+
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (searchRef.current && !searchRef.current.contains(target)) {
         setIsSearchOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(target)) {
+        setIsNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        setIsProfileOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [setIsNotifOpen, setIsProfileOpen]);
 
   return (
     <nav className="bg-white sticky top-0 w-full py-3 px-3 lg:py-4 lg:px-8 flex justify-between items-center border-b border-slate-100/60 z-[60] backdrop-blur-md bg-white/90 gap-2 lg:gap-10">
       
+      {/* Notifications Modal */}
+      <NotificationsDialog 
+        isOpen={isNotifModalOpen} 
+        onClose={() => setIsNotifModalOpen(false)} 
+      />
+
       {/* Izquierda: Logo + Hamburguesa (Móvil) */}
       <div className="flex items-center gap-4">
         <Logo />
@@ -105,22 +133,47 @@ export default function Navbar({
       <div className="hidden lg:flex items-center gap-4">
         <CurrencySwitch currency={currency} setCurrency={setCurrency} />
 
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
             onClick={() => {
               setIsNotifOpen(!isNotifOpen);
               setIsProfileOpen(false);
             }}
-            className={`p-2.5 rounded-xl transition-all ${
+            className={`p-2.5 rounded-xl transition-all relative group ${
               isNotifOpen ? "bg-blue-50 text-blue-600" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <HiOutlineBell size={24} />
+            <HiOutlineBell size={24} className={cn("transition-transform", isNotifOpen && "scale-110")} />
+            
+            <AnimatePresence>
+              {unreadCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  key={unreadCount}
+                  className="absolute top-1.5 right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-lg ring-4 ring-rose-500/10 z-10"
+                >
+                  <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-20" />
+                  <span className="relative">
+                    {unreadCount > 9 ? "+9" : unreadCount}
+                  </span>
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
-          {isNotifOpen && <NotificationsDropdown />}
+          {isNotifOpen && (
+            <NotificationsDropdown 
+              onClose={() => setIsNotifOpen(false)}
+              onShowAll={() => {
+                setIsNotifModalOpen(true);
+                setIsNotifOpen(false);
+              }} 
+            />
+          )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={profileRef}>
           <button
             onClick={() => {
               setIsProfileOpen(!isProfileOpen);
@@ -136,10 +189,12 @@ export default function Navbar({
                 {profile?.role || "Agente"}
               </span>
             </div>
-            <UserAvatar
-              src={profile?.image}
-              className="w-10 h-10 border-2 border-white shadow-md ring-2 ring-blue-500/5 group-hover:ring-blue-500/20 transition-all"
-            />
+            <div className="p-0.5 bg-white rounded-full ring-2 ring-slate-100 group-hover:ring-blue-100 transition-all">
+              <UserAvatar 
+                src={profile?.image} 
+                className="w-9 h-9 border border-white shadow-sm"
+              />
+            </div>
           </button>
 
           {isProfileOpen && <ProfileDropdown onLogout={() => setIsLogoutDialogOpen(true)} />}
@@ -176,19 +231,46 @@ export default function Navbar({
           )}
         </div>
         <CurrencySwitch currency={currency} setCurrency={setCurrency} />
-        <button
-          onClick={() => {
-            setIsNotifOpen(!isNotifOpen);
-            setIsProfileOpen(false);
-          }}
-          className={`p-2 rounded-lg transition-all ${
-            isNotifOpen ? "bg-blue-50 text-blue-600" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          <HiOutlineBell size={18} />
-        </button>
+        <div ref={notifRef} className="flex items-center">
+          <button
+            onClick={() => {
+              setIsNotifOpen(!isNotifOpen);
+              setIsProfileOpen(false);
+            }}
+            className={`p-2 rounded-lg transition-all relative ${
+              isNotifOpen ? "bg-blue-50 text-blue-600" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <HiOutlineBell size={18} />
+            <AnimatePresence>
+              {unreadCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  key={unreadCount}
+                  className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-white shadow-sm ring-2 ring-rose-500/10 z-10"
+                >
+                  <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-20" />
+                  <span className="relative">
+                    {unreadCount > 9 ? "+" : unreadCount}
+                  </span>
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+          {isNotifOpen && (
+            <NotificationsDropdown 
+              onClose={() => setIsNotifOpen(false)}
+              onShowAll={() => {
+                setIsNotifModalOpen(true);
+                setIsNotifOpen(false);
+              }} 
+            />
+          )}
+        </div>
 
-        <div className="relative">
+        <div className="relative" ref={profileRef}>
           <button
             onClick={() => {
               setIsProfileOpen(!isProfileOpen);
@@ -208,12 +290,6 @@ export default function Navbar({
             </div>
           )}
         </div>
-
-        {isNotifOpen && (
-          <div className="absolute top-[44px] right-0 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[70]">
-            <NotificationsDropdown />
-          </div>
-        )}
       </div>
     </nav>
   );

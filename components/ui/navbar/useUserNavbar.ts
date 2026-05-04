@@ -7,6 +7,7 @@ export const useUserNavbar = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
   const [currency, setCurrency] = useState<"BS" | "USD">("BS");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -27,6 +28,8 @@ export const useUserNavbar = () => {
     setIsProfileOpen,
     isNotifOpen,
     setIsNotifOpen,
+    isNotifModalOpen,
+    setIsNotifModalOpen,
     currency,
     setCurrency,
     searchQuery,

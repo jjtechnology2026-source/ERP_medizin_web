@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+package orderspharmacypresent;
+
+
+//topic pharmacy/{order_id}
+message OrderDto {
+  string order_id = 1;
+  repeated MedicineDto medicines = 2;
+  GeoJSONPoint geolocation = 3;
+}
+
+message MedicineDto {
+  string medicine_id = 1;
+  uint32 quantity = 2;
+}
+
+message GeoJSONPoint {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+
+

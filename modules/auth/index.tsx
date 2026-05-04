@@ -1,12 +1,15 @@
 "use client";
 import React from "react";
-import { FaEye, FaEyeSlash, FaGoogle, FaApple, FaFacebook, FaArrowRight } from "react-icons/fa";
+import { FaEye, FaEyeSlash, FaArrowRight } from "react-icons/fa";
 import Link from "next/link";
 import LoadingOverlay from "@/modules/auth/components/LoadingOverlay";
 import { useLoginForm } from "./hooks/useLoginForm";
 import { useRouter } from "next/navigation";
 
+import { useSession } from "next-auth/react";
+
 export default function LoginForm() {
+  const { status } = useSession();
   const { username, setUsername, password, setPassword, showPassword, togglePassword, isLoading, error, handleLogin } = useLoginForm();
   const router = useRouter();
   const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === "true";
@@ -16,14 +19,13 @@ export default function LoginForm() {
     router.push("/panel");
   };
 
+  if (status === "loading" || status === "authenticated") {
+    return <LoadingOverlay message="Cargando..." subtext="Iniciando tu espacio de trabajo" />;
+  }
+
   return (
     <div className="w-full relative">
-      {isLoading && (
-        <LoadingOverlay
-          message="Iniciando sesión..."
-          subtext="Verificando tus credenciales"
-        />
-      )}
+      {isLoading && <LoadingOverlay message="Iniciando sesión..." subtext="Verificando tus credenciales" />}
       <div className="text-center mb-10">
         <h2 className="text-2xl font-black text-slate-800 tracking-tight">Iniciar sesión</h2>
         <p className="text-gray-400 text-sm font-bold mt-1">Ingresa tus credenciales para continuar</p>

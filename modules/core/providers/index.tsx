@@ -4,6 +4,9 @@ import { useState } from "react";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import AuthSync from "@/modules/auth/components/AuthSync";
+import { MqttOrdersProvider } from "@/modules/marketplace/providers/MqttOrdersProvider";
+import GlobalOrderNotifications from "@/modules/marketplace/components/GlobalOrderNotifications";
+import { NotificationProvider } from "./NotificationProvider";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   // 1. Configuración compacta de React Query
@@ -28,7 +31,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <SessionProvider>
         {/* AuthSync vive dentro del modulo auth y se encarga del store */}
         <AuthSync />
-        {children}
+        <NotificationProvider>
+          <MqttOrdersProvider>
+            <GlobalOrderNotifications />
+            {children}
+          </MqttOrdersProvider>
+        </NotificationProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

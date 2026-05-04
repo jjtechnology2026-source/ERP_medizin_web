@@ -1,13 +1,14 @@
 "use client";
 import { usePageTitle } from "@/modules/core/hooks/usePageTitle";
 import DashboardLayout from "@/components/ui/layout";
-import MarketplaceFeature from "@/modules/stadistics";
+import MarketplaceOrdersFeature from "@/modules/marketplace";
 
 export default function MarketplacePage() {
-  usePageTitle("Cierre de Caja");
+  usePageTitle("Órdenes marketplace");
+
   return (
     <DashboardLayout>
-      <MarketplaceFeature />
+      <MarketplaceOrdersFeature />
     </DashboardLayout>
   );
 }

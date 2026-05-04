@@ -1,7 +1,7 @@
 "use client";
 
 import { HiChevronDown } from "react-icons/hi";
-import { VentasTotales } from "./ventasTotales.constans";
+import { VentasTotales } from "../types/ventasTotales.constans";
 
 export default function FeaturedPharmacies({
   pharmacies = [],

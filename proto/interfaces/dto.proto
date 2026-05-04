@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package orderspharmacydto;
+
+//topic order_id/{order_id}/accepted_pharmacy
+//manda el id de la farmacia aceptada
+
+
+//topic   pharmacy/{pharmacy_id}/insert_inventory    o   pharmacy/{pharmacy_id}/remove_inventory
+
+
+
+
+
+// Equivalente a: pub struct DtoUpdateMedications
+message DtoUpdateMedications {
+  string id_agent = 1;
+  string id_pharmacy = 2;
+  // 'repeated' es el equivalente al Vec<> de Rust
+  repeated MedicationProto medications = 3; 
+}
+
+
+message MedicationProto {
+  string brand = 1;
+  string active_ingredient = 2; // Mapea a activeIngredient
+  string dosage = 3;
+  string tablets = 4;           // Se mantiene como string según tu struct
+  string bar_code = 5;          // Mapea a barCode
+  string name = 6;
+  string image = 7;
+  string category = 8;
+  string subcategory = 9;
+  double price = 10;            // f64 en Rust es double en Proto
+  double quantity = 11;
+  double stock = 12;
+  string description = 13;
+  bool controlled = 14;
+  double vat = 15;
+  bool antibiotic = 16;
+  double minimum = 17;
+}
+
+
+
+message OrderContactAndItems {
+  string order_id= 1;
+  string pharmacy_id= 2;
+  string client_name = 3;
+  string client_address = 4;
+  string client_id_number = 5;
+  string client_phone = 6;
+  string client_email = 7;
+  repeated OrderItem items = 8;
+  
+  
+}
+
+// Ítem en la orden (medicamento y cantidad)
+message OrderItem {
+  string barcode = 1;
+  int32 quantity = 2;
+}
