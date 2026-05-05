@@ -35,7 +35,7 @@ export default function ModalWrapper({ isOpen, onClose, children, zIndex = 100 }
     >
       {/* Backdrop: Más lento para una entrada cinemática */}
       <div 
-        className={`absolute inset-0 bg-black/10 backdrop-blur-md transition-opacity duration-700 ease-in-out ${
+        className={`absolute inset-0 bg-slate-900/30 backdrop-blur-lg transition-opacity duration-700 ease-in-out ${
           isAnimating ? 'opacity-100' : 'opacity-0'
         }`} 
         onClick={onClose}

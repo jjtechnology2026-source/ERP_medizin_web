@@ -55,17 +55,20 @@ export default function Navbar({
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
+  const mobileNotifRef = useRef<HTMLDivElement>(null);
+  const mobileProfileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (searchRef.current && !searchRef.current.contains(target)) {
+      if (searchRef.current && !searchRef.current.contains(target) && mobileSearchRef.current && !mobileSearchRef.current.contains(target)) {
         setIsSearchOpen(false);
       }
-      if (notifRef.current && !notifRef.current.contains(target)) {
+      if (notifRef.current && !notifRef.current.contains(target) && mobileNotifRef.current && !mobileNotifRef.current.contains(target)) {
         setIsNotifOpen(false);
       }
-      if (profileRef.current && !profileRef.current.contains(target)) {
+      if (profileRef.current && !profileRef.current.contains(target) && mobileProfileRef.current && !mobileProfileRef.current.contains(target)) {
         setIsProfileOpen(false);
       }
     };
@@ -122,7 +125,10 @@ export default function Navbar({
       <ConfirmationDialog
         isOpen={isLogoutDialogOpen}
         onClose={() => setIsLogoutDialogOpen(false)}
-        onConfirm={handleLogout}
+        onConfirm={() => {
+          setIsLogoutDialogOpen(false);
+          handleLogout();
+        }}
         title="¿Cerrar sesión?"
         description="¿Estás seguro de que deseas salir de tu cuenta? Tendrás que iniciar sesión nuevamente para acceder."
         confirmLabel="Sí, salir"
@@ -197,13 +203,20 @@ export default function Navbar({
             </div>
           </button>
 
-          {isProfileOpen && <ProfileDropdown onLogout={() => setIsLogoutDialogOpen(true)} />}
+          {isProfileOpen && (
+            <ProfileDropdown 
+              onLogout={() => {
+                setIsLogoutDialogOpen(true);
+                setIsProfileOpen(false);
+              }} 
+            />
+          )}
         </div>
       </div>
 
       {/* Mobile: Botones compactos (Se mantiene igual) */}
       <div className="lg:hidden flex items-center gap-0.5">
-        <div ref={searchRef}>
+        <div ref={mobileSearchRef}>
           <button
             onClick={() => setIsSearchOpen(!isSearchOpen)}
             className={`p-2 rounded-lg transition-all ${
@@ -231,7 +244,7 @@ export default function Navbar({
           )}
         </div>
         <CurrencySwitch currency={currency} setCurrency={setCurrency} />
-        <div ref={notifRef} className="flex items-center">
+        <div ref={mobileNotifRef} className="flex items-center">
           <button
             onClick={() => {
               setIsNotifOpen(!isNotifOpen);
@@ -270,7 +283,7 @@ export default function Navbar({
           )}
         </div>
 
-        <div className="relative" ref={profileRef}>
+        <div className="relative" ref={mobileProfileRef}>
           <button
             onClick={() => {
               setIsProfileOpen(!isProfileOpen);
@@ -285,9 +298,12 @@ export default function Navbar({
           </button>
 
           {isProfileOpen && (
-            <div className="absolute top-[44px] right-0 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[70]">
-              <ProfileDropdown onLogout={() => setIsLogoutDialogOpen(true)} />
-            </div>
+            <ProfileDropdown 
+              onLogout={() => {
+                setIsLogoutDialogOpen(true);
+                setIsProfileOpen(false);
+              }} 
+            />
           )}
         </div>
       </div>

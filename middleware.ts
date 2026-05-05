@@ -12,15 +12,15 @@ export default withAuth(
     }
 
     // 1. Manejo de errores de sesión
-    if (token?.error === "RefreshAccessTokenError") {
+    if (token?.error === "RefreshAccessTokenError" && pathname !== "/") {
       const url = new URL("/", req.url);
       url.searchParams.set("error", "SessionExpired");
       return NextResponse.redirect(url);
     }
 
     // 2. Evitar bucle: Si ya estoy en / no redirecciono a /panel de nuevo
-    // Solo si el usuario está autenticado e intenta acceder explícitamente a la raíz
-    if (pathname === "/" && token) {
+    // Solo si el usuario está autenticado (y sin errores) e intenta acceder explícitamente a la raíz
+    if (pathname === "/" && token && !token.error) {
       return NextResponse.redirect(new URL("/panel", req.url));
     }
 

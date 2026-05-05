@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -17,7 +16,7 @@ import { useNotifications } from "@/modules/core/providers/NotificationProvider"
 import { clsx } from "clsx";
 import ModalWrapper from "@/components/shared/modals/ModalWrapper";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 4;
 
 export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -28,13 +27,12 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
 
   useEffect(() => {
     setMounted(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleNotificationClick = (notif: { id: string; type: string; orderId?: string }) => {
+  const handleNotificationClick = (notif: any) => {
     markAsRead(notif.id);
     if (notif.type === "order") {
-      const orderQuery = notif.orderId ? `?order=${encodeURIComponent(notif.orderId)}` : "";
-      router.push(`/marketplace${orderQuery}`);
+      router.push(`/marketplace${notif.orderId ? `?order=${notif.orderId}` : ""}`);
       onClose();
       return;
     }
@@ -42,9 +40,8 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
   };
 
   const filteredNotifs = useMemo(() => notifications.filter((n) => n.type === activeTab), [notifications, activeTab]);
-
-  const totalPages = Math.ceil(filteredNotifs.length / ITEMS_PER_PAGE);
   const paginatedNotifs = filteredNotifs.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredNotifs.length / ITEMS_PER_PAGE);
 
   const tabs = [
     { id: "order", label: "Órdenes", icon: <HiOutlineShoppingCart /> },
@@ -55,36 +52,22 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
   if (!mounted) return null;
 
   return createPortal(
-    <ModalWrapper isOpen={isOpen} onClose={onClose} zIndex={50}>
-      <div className="w-[95vw] md:w-[600px] h-fit max-h-[min(90vh,760px)] flex flex-col bg-white">
+    <ModalWrapper isOpen={isOpen} onClose={onClose} zIndex={100}>
+      <div className="w-[92vw] max-w-[440px] bg-white rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-slate-100 mx-auto">
         {/* Header */}
-        <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-slate-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white sticky top-0 z-10 shrink-0">
+        <header className="p-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-20">
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Notificaciones</h2>
-            <p className="text-[13px] font-bold text-slate-500">Gestiona tus alertas y actividad</p>
+            <h2 className="text-lg font-black text-slate-800 leading-none mb-1">Notificaciones</h2>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Actividad Reciente</p>
           </div>
-          <button
-            onClick={onClose}
-            className="inline-flex items-center justify-center p-2.5 bg-slate-50 text-slate-500 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-95"
-            aria-label="Cerrar notificaciones"
-          >
-            <HiX size={20} />
+          <button onClick={onClose} className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all">
+            <HiX size={16} />
           </button>
-        </div>
+        </header>
 
-        {/* Tabs */}
-        <div className="px-5 py-3 sm:px-6 sm:py-4 bg-white border-b border-slate-100 flex flex-col gap-3 shrink-0">
-          <style jsx>{`
-            .no-scrollbar::-webkit-scrollbar {
-              display: none;
-            }
-            .no-scrollbar {
-              -ms-overflow-style: none;
-              scrollbar-width: none;
-            }
-          `}</style>
-
-          <div className="flex flex-wrap gap-2">
+        {/* Tabs - Scrollable en móvil */}
+        <div className="p-5 bg-white space-y-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -93,16 +76,18 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
                   setPage(1);
                 }}
                 className={clsx(
-                  "flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-black text-[13px] transition-all active:scale-95 min-w-[110px] flex-1",
-                  activeTab === tab.id ? "bg-blue-600 text-white shadow-lg shadow-blue-100/50" : "bg-slate-50 text-slate-500 hover:bg-slate-100",
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border shrink-0 text-xs",
+                  activeTab === tab.id
+                    ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
+                    : "bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-200",
                 )}
               >
-                {React.cloneElement(tab.icon as React.ReactElement<{ size?: number }>, { size: 16 })}
-                {tab.label}
+                {React.cloneElement(tab.icon as any, { size: 16 })}
+                <span>{tab.label}</span>
                 <span
                   className={clsx(
-                    "ml-1 px-1.5 py-0.5 rounded-lg text-[9px]",
-                    activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500",
+                    "px-1.5 py-0.5 rounded text-[9px] font-black",
+                    activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-400",
                   )}
                 >
                   {notifications.filter((n) => n.type === tab.id).length}
@@ -111,63 +96,51 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
             ))}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Historial</span>
             <button
               onClick={() => clearNotifications(activeTab)}
-              className="inline-flex items-center justify-center p-2.5 text-slate-400 hover:text-rose-500 rounded-2xl hover:bg-slate-50 transition-colors"
-              title="Limpiar pestaña"
+              className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 hover:text-rose-500 uppercase tracking-widest transition-colors"
             >
-              <HiOutlineTrash size={18} />
+              Limpiar <HiOutlineTrash size={14} />
             </button>
           </div>
         </div>
 
-        {/* List Content */}
-        <div className="flex-grow overflow-y-auto px-5 py-4 sm:px-6 sm:py-5 no-scrollbar min-h-[260px]">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 max-h-[260px] no-scrollbar pb-5">
           {paginatedNotifs.length === 0 ? (
-            <div className="h-full min-h-[250px] flex flex-col items-center justify-center text-center opacity-50 py-10">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                <HiOutlineBell className="text-slate-300 w-8 h-8" />
-              </div>
-              <p className="text-slate-400 font-black text-sm tracking-tight">No hay nada por aquí todavía</p>
+            <div className="py-12 flex flex-col items-center justify-center text-center opacity-30">
+              <HiOutlineBell size={40} className="mb-2" />
+              <p className="font-black text-[9px] uppercase tracking-widest">Sin actividad</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {paginatedNotifs.map((notif) => (
+            <div className="space-y-2">
+              {paginatedNotifs.map((n) => (
                 <div
-                  key={notif.id}
-                  onClick={() => handleNotificationClick(notif)}
+                  key={n.id}
+                  onClick={() => handleNotificationClick(n)}
                   className={clsx(
-                    "flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-[1.5rem] border transition-all cursor-pointer group",
-                    notif.read ? "bg-white border-slate-100 opacity-70" : "bg-blue-50/15 border-blue-100/40 hover:border-blue-200 shadow-sm",
+                    "flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer",
+                    n.read ? "bg-white border-slate-100 opacity-40" : "bg-blue-50/20 border-blue-100/40 hover:border-blue-200",
                   )}
                 >
                   <div
                     className={clsx(
-                      "w-11 h-11 rounded-full flex items-center justify-center shrink-0 shadow-sm",
-                      notif.type === "order"
-                        ? "bg-[#00D1FF] text-white"
-                        : notif.type === "profile"
-                          ? "bg-[#4A69BD] text-white"
-                          : "bg-[#6A89CC] text-white",
+                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white",
+                      n.type === "order" ? "bg-cyan-400" : n.type === "profile" ? "bg-blue-500" : "bg-indigo-400",
                     )}
                   >
-                    {notif.type === "order" ? (
-                      <HiOutlineShoppingCart size={18} />
-                    ) : notif.type === "profile" ? (
-                      <HiOutlineUser size={18} />
-                    ) : (
-                      <HiOutlineInformationCircle size={18} />
-                    )}
+                    {n.type === "order" ? <HiOutlineShoppingCart size={16} /> : <HiOutlineUser size={16} />}
                   </div>
-                  <div className="flex-grow min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-1">
-                      <h4 className="font-black text-slate-800 tracking-tight leading-none text-sm truncate pr-2">{notif.title}</h4>
-                      <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">
-                        {new Date(notif.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-0.5">
+                      <p className="font-black text-slate-800 text-[11px] truncate">{n.title}</p>
+                      <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap ml-2">
+                        {new Date(n.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <p className="text-xs font-bold text-slate-500 leading-tight truncate">{notif.message}</p>
+                    <p className="text-[10px] font-bold text-slate-400 truncate leading-normal">{n.message}</p>
                   </div>
                 </div>
               ))}
@@ -176,43 +149,48 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 sm:px-6 sm:py-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-slate-100 text-slate-600 font-black hover:bg-slate-200 transition-all active:scale-95"
-          >
-            Cerrar
-          </button>
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+        <footer className="p-5 border-t border-slate-50 bg-slate-50/50 flex flex-col gap-3">
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                Pág {page} de {totalPages}
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="p-1.5 bg-white border border-slate-100 rounded-lg disabled:opacity-20 hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  <HiChevronLeft size={16} />
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="p-1.5 bg-white border border-slate-100 rounded-lg disabled:opacity-20 hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  <HiChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-400 font-black text-[9px] rounded-xl hover:bg-slate-50 transition-all uppercase tracking-widest shadow-sm"
+            >
+              Cerrar
+            </button>
             <button
               onClick={() => {
                 router.push("/marketplace");
                 onClose();
               }}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700 transition-all active:scale-95"
+              className="flex-1 py-2.5 bg-blue-600 text-white font-black text-[9px] rounded-xl hover:bg-blue-700 transition-all uppercase tracking-widest truncate shadow-sm"
             >
-              Ir a Marketplace
+              Marketplace
             </button>
-            {totalPages > 1 && (
-              <div className="flex gap-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="p-3 bg-white border border-slate-100 rounded-2xl disabled:opacity-30 hover:shadow-md transition-all active:scale-90"
-                >
-                  <HiChevronLeft size={20} />
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="p-3 bg-white border border-slate-100 rounded-2xl disabled:opacity-30 hover:shadow-md transition-all active:scale-90"
-                >
-                  <HiChevronRight size={20} />
-                </button>
-              </div>
-            )}
           </div>
-        </div>
+        </footer>
       </div>
     </ModalWrapper>,
     document.body,
