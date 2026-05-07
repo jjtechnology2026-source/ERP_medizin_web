@@ -80,10 +80,7 @@ export function useStatistics(initialItemsPerPage = 20) {
   const { data: orders = [], isLoading } = useApiQuery<Order[]>(
     ["marketplace-stats", query],
     `/admin/Orders/SearchOrders?${query}`,
-    {
-      enabled:
-        !!profile?.id_group || process.env.NEXT_PUBLIC_TEST_MODE === "true",
-    },
+    { enabled: !!profile },
   );
 
   const products = useMemo(() => aggregateProductStats(orders), [orders]);
