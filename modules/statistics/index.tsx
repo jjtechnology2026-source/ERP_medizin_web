@@ -1,130 +1,72 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { HiSearch, HiOutlineRefresh } from "react-icons/hi";
-import { useApiQuery } from "@/modules/core/hooks/useApi";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { Order } from "@/modules/orders/types/orders";
-
-interface StatProduct {
-  id: string;
-  name: string;
-  category: string;
-  quantity: number;
-  controlled: boolean;
-  cost: number;
-  total: number;
-}
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
-
-const aggregateProductStats = (orders: Order[]): StatProduct[] => {
-  const map = new Map<string, StatProduct>();
-
-  orders.forEach((order) => {
-    order.medications?.forEach((med) => {
-      const name = med.name?.trim() || "Sin nombre";
-      const category = med.category?.trim() || "Sin categoría";
-      const controlled = !!med.controlled;
-      const price = typeof med.price === "number" ? med.price : parseFloat(String(med.price)) || 0;
-      const quantity = typeof med.quantity === "number" ? med.quantity : parseFloat(String(med.quantity)) || 0;
-      const total = price * quantity;
-      const key = `${name}|${category}|${controlled}`;
-
-      const existing = map.get(key);
-      if (existing) {
-        existing.quantity += quantity;
-        existing.total += total;
-      } else {
-        map.set(key, {
-          id: key,
-          name,
-          category,
-          quantity,
-          controlled,
-          cost: price,
-          total,
-        });
-      }
-    });
-  });
-
-  return Array.from(map.values()).sort((a, b) => b.total - a.total);
-};
+import { useStatistics } from "./useStatistics";
 
 export default function StatisticsPage() {
-  const { profile } = useAuthStore();
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [dateStart, setDateStart] = useState("");
-  const [dateEnd, setDateEnd] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const { state, data, actions, utils } = useStatistics();
 
-  const query = useMemo(() => {
-    return new URLSearchParams({
-      id_group: profile?.id_group || "",
-      id_pharmacy: profile?.pharmacyId || "",
-      ...(dateStart ? { "date.start": new Date(dateStart).toISOString() } : {}),
-      ...(dateEnd ? { "date.end": new Date(dateEnd).toISOString() } : {}),
-    }).toString();
-  }, [profile?.id_group, profile?.pharmacyId, dateStart, dateEnd]);
-
-  const { data: orders = [], isLoading } = useApiQuery<Order[]>(["marketplace-stats", query], `/admin/Orders/SearchOrders?${query}`, {
-    enabled: !!profile?.id_group,
-  });
-
-  const products = useMemo(() => aggregateProductStats(orders), [orders]);
-
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = !category || product.category === category;
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, search, category]);
-
-  const categories = useMemo(() => Array.from(new Set(products.map((item) => item.category))).sort(), [products]);
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
-  const currentItems = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const totalQuantity = filteredProducts.reduce((sum, item) => sum + item.quantity, 0);
-  const totalRevenue = filteredProducts.reduce((sum, item) => sum + item.total, 0);
-
-  const resetFilters = () => {
-    setSearch("");
-    setCategory("");
-    setDateStart("");
-    setDateEnd("");
-    setCurrentPage(1);
-  };
+  const { search, category, dateStart, dateEnd, currentPage, itemsPerPage } =
+    state;
+  const {
+    setSearch,
+    setCategory,
+    setDateStart,
+    setDateEnd,
+    setCurrentPage,
+    resetFilters,
+  } = actions;
+  const {
+    filteredProducts,
+    currentItems,
+    categories,
+    totalPages,
+    totalQuantity,
+    totalRevenue,
+    isLoading,
+  } = data;
+  const { formatCurrency } = utils;
 
   return (
     <div className="flex flex-col gap-6 min-h-full bg-[#F8FAFC] p-4 md:p-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm uppercase tracking-[0.35em] text-slate-500">Estadísticas</p>
-          <h1 className="text-4xl font-extrabold text-slate-900">Ventas por producto</h1>
+          <p className="text-sm uppercase tracking-[0.35em] text-slate-500">
+            Estadísticas
+          </p>
+          <h1 className="text-4xl font-extrabold text-slate-900">
+            Ventas por producto
+          </h1>
           <p className="max-w-2xl text-sm text-slate-600">
-            Revisa los productos vendidos con filtros por categoría, fechas y un resumen claro de cantidad, costo y total generado.
+            Revisa los productos vendidos con filtros por categoría, fechas y un
+            resumen claro de cantidad, costo y total generado.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Productos</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{filteredProducts.length}</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">
+              Productos
+            </p>
+            <p className="mt-2 text-2xl font-black text-slate-900">
+              {filteredProducts.length}
+            </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Cantidad total</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{totalQuantity}</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">
+              Cantidad total
+            </p>
+            <p className="mt-2 text-2xl font-black text-slate-900">
+              {totalQuantity}
+            </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Total ventas</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{formatCurrency(totalRevenue)}</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">
+              Total ventas
+            </p>
+            <p className="mt-2 text-2xl font-black text-slate-900">
+              {formatCurrency(totalRevenue)}
+            </p>
           </div>
         </div>
       </div>
@@ -196,7 +138,14 @@ export default function StatisticsPage() {
             <table className="min-w-225 w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-white text-slate-500 uppercase tracking-[0.3em] text-[11px]">
-                  {["Producto", "Categoría", "Cantidad", "Controlado", "Costo", "Total"].map((title) => (
+                  {[
+                    "Producto",
+                    "Categoría",
+                    "Cantidad",
+                    "Controlado",
+                    "Costo",
+                    "Total",
+                  ].map((title) => (
                     <th key={title} className="px-6 py-5 font-semibold">
                       {title}
                     </th>
@@ -206,25 +155,46 @@ export default function StatisticsPage() {
               <tbody className="divide-y divide-slate-200">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center text-slate-400">
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-slate-400"
+                    >
                       Cargando datos...
                     </td>
                   </tr>
                 ) : currentItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center text-slate-500">
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-slate-500"
+                    >
                       No se encontraron productos con estos filtros.
                     </td>
                   </tr>
                 ) : (
                   currentItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-white/90 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{item.name}</td>
-                      <td className="px-6 py-4 text-slate-600">{item.category}</td>
-                      <td className="px-6 py-4 font-black text-slate-900">{item.quantity}</td>
-                      <td className="px-6 py-4 text-slate-500 uppercase">{item.controlled ? "SÍ" : "NO"}</td>
-                      <td className="px-6 py-4 text-slate-700">{formatCurrency(item.cost)}</td>
-                      <td className="px-6 py-4 font-bold text-slate-900">{formatCurrency(item.total)}</td>
+                    <tr
+                      key={item.id}
+                      className="hover:bg-white/90 transition-colors"
+                    >
+                      <td className="px-6 py-4 font-semibold text-slate-900">
+                        {item.name}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {item.category}
+                      </td>
+                      <td className="px-6 py-4 font-black text-slate-900">
+                        {item.quantity}
+                      </td>
+                      <td className="px-6 py-4 text-slate-500 uppercase">
+                        {item.controlled ? "SÍ" : "NO"}
+                      </td>
+                      <td className="px-6 py-4 text-slate-700">
+                        {formatCurrency(item.cost)}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-900">
+                        {formatCurrency(item.total)}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -234,8 +204,12 @@ export default function StatisticsPage() {
 
           <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-              Mostrando {currentItems.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} -{" "}
-              {Math.min(currentPage * itemsPerPage, filteredProducts.length)} de {filteredProducts.length}
+              Mostrando{" "}
+              {currentItems.length > 0
+                ? (currentPage - 1) * itemsPerPage + 1
+                : 0}{" "}
+              - {Math.min(currentPage * itemsPerPage, filteredProducts.length)}{" "}
+              de {filteredProducts.length}
             </p>
             <div className="flex items-center gap-3">
               <button
@@ -246,7 +220,9 @@ export default function StatisticsPage() {
                 Anterior
               </button>
               <button
-                onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(page + 1, totalPages))
+                }
                 disabled={currentPage === totalPages}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 disabled:opacity-40 hover:bg-slate-100 transition"
               >
