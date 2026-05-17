@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { HiSearch, HiOutlineRefresh } from "react-icons/hi";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { Order } from "@/modules/orders/types/orders";
 
 interface StatProduct {
@@ -15,17 +16,12 @@ interface StatProduct {
   total: number;
 }
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
-
 const aggregateProductStats = (orders: Order[]): StatProduct[] => {
   const map = new Map<string, StatProduct>();
 
   orders.forEach((order) => {
-    order.medications?.forEach((med) => {
+    const medications = order.medications || (order as any).medicines || [];
+    medications.forEach((med: any) => {
       const name = med.name?.trim() || "Sin nombre";
       const category = med.category?.trim() || "Sin categoría";
       const controlled = !!med.controlled;
@@ -57,6 +53,16 @@ const aggregateProductStats = (orders: Order[]): StatProduct[] => {
 
 export default function StatisticsPage() {
   const { profile } = useAuthStore();
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+
+  const formatCurrencyLocal = (amount: number) => {
+    if (isDollar) {
+      return `$ ${amount.toFixed(2)}`;
+    }
+    return `Bs ${(amount * rate).toFixed(2)}`;
+  };
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [dateStart, setDateStart] = useState("");
@@ -65,17 +71,34 @@ export default function StatisticsPage() {
   const itemsPerPage = 20;
 
   const query = useMemo(() => {
-    return new URLSearchParams({
-      id_group: profile?.id_group || "",
-      id_pharmacy: profile?.pharmacyId || "",
-      ...(dateStart ? { "date.start": new Date(dateStart).toISOString() } : {}),
-      ...(dateEnd ? { "date.end": new Date(dateEnd).toISOString() } : {}),
-    }).toString();
+    const cleanParams: Record<string, string> = {
+      limit: "500",
+    };
+    if (profile?.id_group && profile.id_group !== "undefined" && profile.id_group !== "null") {
+      cleanParams.id_group = profile.id_group;
+    }
+    if (profile?.pharmacyId && profile.pharmacyId !== "undefined" && profile.pharmacyId !== "null") {
+      cleanParams.id_pharmacy = profile.pharmacyId;
+    }
+    if (dateStart) {
+      cleanParams["date.start"] = new Date(dateStart).toISOString();
+    }
+    if (dateEnd) {
+      cleanParams["date.end"] = new Date(dateEnd).toISOString();
+    }
+    return new URLSearchParams(cleanParams).toString();
   }, [profile?.id_group, profile?.pharmacyId, dateStart, dateEnd]);
 
-  const { data: orders = [], isLoading } = useApiQuery<Order[]>(["marketplace-stats", query], `/admin/Orders/SearchOrders?${query}`, {
-    enabled: !!profile?.id_group,
-  });
+  const { data: orders = [], isLoading } = useApiQuery<Order[]>(
+    ["statistics-orders-v2", query],
+    `/admin/Orders/SearchOrders?${query}`,
+    {
+      enabled: true,
+      staleTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+    }
+  );
 
   const products = useMemo(() => aggregateProductStats(orders), [orders]);
 
@@ -124,7 +147,7 @@ export default function StatisticsPage() {
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Total ventas</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{formatCurrency(totalRevenue)}</p>
+            <p className="mt-2 text-2xl font-black text-slate-900">{formatCurrencyLocal(totalRevenue)}</p>
           </div>
         </div>
       </div>
@@ -223,8 +246,8 @@ export default function StatisticsPage() {
                       <td className="px-6 py-4 text-slate-600">{item.category}</td>
                       <td className="px-6 py-4 font-black text-slate-900">{item.quantity}</td>
                       <td className="px-6 py-4 text-slate-500 uppercase">{item.controlled ? "SÍ" : "NO"}</td>
-                      <td className="px-6 py-4 text-slate-700">{formatCurrency(item.cost)}</td>
-                      <td className="px-6 py-4 font-bold text-slate-900">{formatCurrency(item.total)}</td>
+                      <td className="px-6 py-4 text-slate-700">{formatCurrencyLocal(item.cost)}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">{formatCurrencyLocal(item.total)}</td>
                     </tr>
                   ))
                 )}

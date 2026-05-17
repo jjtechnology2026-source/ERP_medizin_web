@@ -13,6 +13,7 @@ export interface LocalImage {
 export default function CreateProductPage({ setView }: any) {
   const [selectedUnit, setSelectedUnit] = useState("mg");
   const { createMedication, isLoading, error } = useCreateMedication();
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,11 +121,11 @@ export default function CreateProductPage({ setView }: any) {
       doseUnit: selectedUnit,
     };
 
-    // Llamamos al hook pasando la lista completa de imágenes
     const result = await createMedication(payload, images);
 
     if (result.success) {
-      alert("Medicamento e imágenes creados exitosamente");
+      setSuccessMsg("Producto creado exitosamente. Redirigiendo...");
+      setTimeout(() => setView("LIST"), 1500);
     }
   };
 
@@ -344,6 +345,11 @@ export default function CreateProductPage({ setView }: any) {
               </div>
             </div>
 
+            {successMsg && (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+                <p className="text-emerald-700 text-xs font-bold">{successMsg}</p>
+              </div>
+            )}
             {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
 
             <div className="flex gap-4 pt-10 sticky bottom-0 bg-white py-4 border-t border-slate-50">

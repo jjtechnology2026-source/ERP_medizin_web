@@ -20,7 +20,10 @@ export default function AuthSync() {
     }
 
     if (status === "unauthenticated" && isHydrated) {
-      clearAuth();
+      const isLoginPage = typeof window !== "undefined" && (window.location.pathname === "/" || window.location.pathname === "/login");
+      if (isLoginPage) {
+        clearAuth();
+      }
     }
   }, [session, status, isHydrated, syncWithSession, clearAuth]);
 

@@ -1,6 +1,7 @@
 "use client";
 import { HiOutlineCash, HiOutlineClipboardList, HiOutlineCheckCircle, HiOutlineClock } from "react-icons/hi";
 import { OrderStats } from "../services/OrderService";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 interface OrderStatsCardsProps {
   stats: OrderStats;
@@ -8,10 +9,17 @@ interface OrderStatsCardsProps {
 }
 
 export default function OrderStatsCards({ stats, loading }: OrderStatsCardsProps) {
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+
+  const formattedSales = isDollar 
+    ? `$ ${stats.totalSales.toFixed(2)}` 
+    : `Bs ${(stats.totalSales * rate).toFixed(2)}`;
+
   const cards = [
     {
       title: "Ventas Totales",
-      value: stats.totalSales.toFixed(2),
+      value: formattedSales,
       icon: <HiOutlineCash className="w-5 h-5 text-[#4A69BD]" />,
     },
     {

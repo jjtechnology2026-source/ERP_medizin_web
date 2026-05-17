@@ -9,9 +9,9 @@ export const useAuth = () => {
   const syncWithSession = useAuthStore((state: any) => state.syncWithSession);
 
   const login = useCallback(async (credentials: any) => {
-    // ... logic remains same ...
     const result = await signIn("credentials", {
       ...credentials,
+      callbackUrl: "/panel",
       redirect: false,
     });
 

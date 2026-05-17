@@ -1,5 +1,6 @@
 "use client";
 
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { PromoCarousel } from "./components/PromoCarousel";
 import { SalesTypeCard } from "./components/SalesTypeCard";
 import { TopProductsCard } from "./components/TopProductsCard";
@@ -18,6 +19,8 @@ export default function PanelFeature() {
     monthOptions,
     selectedMonthKey,
     setSelectedMonthKey,
+    trends,
+    salesTrend,
   } = usePanel();
 
   return (
@@ -30,7 +33,30 @@ export default function PanelFeature() {
       </header>
 
       {/* Usamos el nuevo componente pasándole los datos necesarios */}
-      <PanelStatsCards totalUsers={totalUsers} totalOrders={totalOrders} totalSales={totalSales} canceledOrders={canceledOrders} />
+      <PanelStatsCards totalUsers={totalUsers} totalOrders={totalOrders} totalSales={totalSales} canceledOrders={canceledOrders} trends={trends} salesTrend={salesTrend} />
+
+      {salesTrend.length > 1 && (
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-6 md:p-8">
+          <h3 className="text-lg font-black text-slate-800 mb-4">Tendencia de Ventas</h3>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={salesTrend}>
+                <defs>
+                  <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 700 }} />
+                <Area type="monotone" dataKey="ventas" stroke="#3b82f6" strokeWidth={2.5} fill="url(#colorVentas)" name="Ventas ($)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       <div className="w-full">
         <PromoCarousel />

@@ -32,9 +32,9 @@ class MqttServerService {
   private activeSubscriptions = new Set<string>();
   private runtimeConfig: any = null;
 
-  // Callbacks para notificar cambios de conexión
-  private connectionChangeHandler?: (connected: boolean) => void;
-  private messageHandler?: (topic: string, payload: Uint8Array | string) => void;
+  // Múltiples handlers (pub-sub)
+  private connectionHandlers: Set<(connected: boolean) => void> = new Set();
+  private messageHandlers: Set<(topic: string, payload: Uint8Array | string) => void> = new Set();
 
   static get(): MqttServerService {
     if (!g._mqttSrv_v1) {
@@ -43,9 +43,32 @@ class MqttServerService {
     return g._mqttSrv_v1;
   }
 
+  /** Reemplaza TODOS los handlers (legacy) */
   setHandlers(connectionChangeHandler?: (connected: boolean) => void, messageHandler?: (topic: string, payload: Uint8Array | string) => void) {
-    this.connectionChangeHandler = connectionChangeHandler;
-    this.messageHandler = messageHandler;
+    this.connectionHandlers.clear();
+    this.messageHandlers.clear();
+    if (connectionChangeHandler) this.connectionHandlers.add(connectionChangeHandler);
+    if (messageHandler) this.messageHandlers.add(messageHandler);
+  }
+
+  /** Agrega un handler de conexión sin eliminar los existentes */
+  onConnectionChange(handler: (connected: boolean) => void) {
+    this.connectionHandlers.add(handler);
+    return () => this.connectionHandlers.delete(handler);
+  }
+
+  /** Agrega un handler de mensajes sin eliminar los existentes */
+  onMessage(handler: (topic: string, payload: Uint8Array | string) => void) {
+    this.messageHandlers.add(handler);
+    return () => this.messageHandlers.delete(handler);
+  }
+
+  private notifyDisconnected() {
+    this.connectionHandlers.forEach((h) => { try { h(false); } catch {} });
+  }
+
+  private notifyConnected() {
+    this.connectionHandlers.forEach((h) => { try { h(true); } catch {} });
   }
 
   private log(level: "log" | "warn" | "error", msg: string, ...args: any[]) {
@@ -133,14 +156,14 @@ class MqttServerService {
 
       let settled = false;
 
-      c.once("connect", (connack) => {
+    c.once("connect", (connack) => {
         settled = true;
         this.client = c;
         this.connecting = null;
         this.reconnectAttempts = 0;
         this.clearReconnectTimer();
         this.log("log", ">>> [MQTT:CONNECT] Servidor Conectado y Autenticado");
-        this.connectionChangeHandler?.(true);
+        this.notifyConnected();
 
         if (this.activeSubscriptions.size > 0) {
           const topics = Array.from(this.activeSubscriptions);
@@ -152,7 +175,7 @@ class MqttServerService {
         resolve(c);
       });
 
-      c.on("message", this.onMessage.bind(this));
+      c.on("message", this._handleIncomingMessage.bind(this));
 
       c.on("error", (err) => {
         this.log("error", ">>> [MQTT:ERROR] ", err.message);
@@ -186,7 +209,7 @@ class MqttServerService {
         if (this.authFailed) return;
         this.log("warn", ">>> [MQTT:CONN] Conexión cerrada. Programando reconexión...");
         this.client = null;
-        this.connectionChangeHandler?.(false);
+        this.notifyDisconnected();
         if (!settled) {
           settled = true;
           this.connecting = null;
@@ -202,6 +225,37 @@ class MqttServerService {
 
     this.connecting = this.withTimeout(connectPromise, 20_000, "Conexión MQTT");
     return this.connecting;
+  }
+
+  async subscribeToInventory(pharmacyId: string): Promise<void> {
+    const topics = [
+      MQTT_TOPICS.inventoryWildcard,
+      MQTT_TOPICS.stockAlerts,
+      MQTT_TOPICS.inventoryInsert(pharmacyId),
+      MQTT_TOPICS.inventoryUpdate(pharmacyId),
+      MQTT_TOPICS.inventoryRemove(pharmacyId),
+    ];
+
+    const client = await this.connect();
+    topics.forEach((t) => this.activeSubscriptions.add(t));
+
+    this.log("log", `\n>>> [MQTT:SUB] Suscribiendo inventario para: ${pharmacyId}`);
+
+    return this.withTimeout(
+      new Promise<void>((resolve, reject) => {
+        client.subscribe(topics, { qos: 1 }, (err) => {
+          if (err) {
+            this.log("error", ">>> [MQTT:SUB_INVENTORY_FAIL]", err.message);
+            reject(err);
+          } else {
+            this.log("log", ">>> [MQTT:SUB_INVENTORY_OK] Inventario suscrito");
+            resolve();
+          }
+        });
+      }),
+      10_000,
+      `Suscripción MQTT Inventario (${pharmacyId})`,
+    );
   }
 
   async subscribeToMarketplace(pharmacyId: string): Promise<void> {
@@ -257,12 +311,12 @@ class MqttServerService {
     }
   }
 
-  private onMessage(topic: string, raw: Uint8Array | string) {
+  private _handleIncomingMessage(topic: string, raw: Uint8Array | string) {
     const isServer = typeof window === "undefined";
     const payloadPreviewText = normalizePayloadText(raw);
 
     try {
-      this.messageHandler?.(topic, raw);
+      this.messageHandlers.forEach((h) => { try { h(topic, raw); } catch {} });
 
       if (topic.startsWith("pharmacy/")) {
         let decoded = false;
@@ -334,7 +388,7 @@ class MqttServerService {
     if (this.client) {
       this.client.end(true);
       this.client = null;
-      this.connectionChangeHandler?.(false);
+      this.notifyDisconnected();
     }
     this.clearReconnectTimer();
   }

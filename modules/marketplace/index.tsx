@@ -17,6 +17,8 @@ export default function MarketplaceOrdersFeature() {
     isLoading,
     refetch,
     stats,
+    activeTab,
+    setActiveTab,
     filters,
     setFilters,
     selectedOrder,
@@ -51,7 +53,47 @@ export default function MarketplaceOrdersFeature() {
 
       <MarketplaceStats {...stats} />
 
-      <MarketplaceFilters filters={filters} setFilters={setFilters} onReset={() => setFilters({ status: "", date_start: "", date_end: "" })} />
+      <MarketplaceFilters
+        filters={filters}
+        setFilters={setFilters}
+        onReset={() =>
+          setFilters({ status: "", date_start: "", date_end: "", search: "", minPrice: "", maxPrice: "", sortOrder: "desc" })
+        }
+      />
+
+      {/* Pestañas de Órdenes */}
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("incoming")}
+          className={`flex items-center gap-2 px-6 py-3.5 text-sm font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "incoming"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Órdenes Entrantes
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+            activeTab === "incoming" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+          }`}>
+            {stats.pending}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab("completed")}
+          className={`flex items-center gap-2 px-6 py-3.5 text-sm font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "completed"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Historial y Completadas
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+            activeTab === "completed" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+          }`}>
+            {stats.completed}
+          </span>
+        </button>
+      </div>
 
       <MarketplaceTable
         orders={orders}

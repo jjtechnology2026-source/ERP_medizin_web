@@ -26,25 +26,45 @@ export function useOrders(idGroup: string, idPharmacy: string) {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        id_group: filters.id_group,
-        id_pharmacy: filters.id_pharmacy,
+      const cleanParams: Record<string, string> = {
         page: page.toString(),
         limit: "20",
-        ...(filters.date_start && { "date.start": new Date(filters.date_start).toISOString() }),
-        ...(filters.date_end && { "date.end": new Date(filters.date_end).toISOString() }),
-        ...(filters.type_sale && { type_sale: filters.type_sale }),
-        ...(filters.status && { status: filters.status }),
-      });
+      };
 
-      const { data } = await api.get(`/admin/Orders/SearchOrders?${params}`);
-      setOrders(data || []);
+      if (filters.id_group && filters.id_group !== "undefined") {
+        cleanParams.id_group = filters.id_group;
+      }
+      if (filters.id_pharmacy && filters.id_pharmacy !== "undefined") {
+        cleanParams.id_pharmacy = filters.id_pharmacy;
+      }
+      if (filters.date_start) {
+        cleanParams["date.start"] = new Date(filters.date_start).toISOString();
+      }
+      if (filters.date_end) {
+        cleanParams["date.end"] = new Date(filters.date_end).toISOString();
+      }
+      if (filters.type_sale) {
+        cleanParams.type_sale = filters.type_sale;
+      }
+      if (filters.status) {
+        cleanParams.status = filters.status;
+      }
+
+      const params = new URLSearchParams(cleanParams);
+      const response = await api.get(`/admin/Orders/SearchOrders?${params}`);
+      
+      // Extract array safely from possible backend response wrapper keys
+      const finalData = response.data?.result || response.data?.data || response.data;
+      setOrders(Array.isArray(finalData) ? finalData : []);
     } catch (error) {
       console.error("Error fetching orders", error);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
   };
+
+  console.log(JSON.stringify(orders, null, 2));
 
   useEffect(() => {
     fetchOrders();

@@ -8,7 +8,6 @@ export const useUserNavbar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
-  const [currency, setCurrency] = useState<"BS" | "USD">("BS");
   const [searchQuery, setSearchQuery] = useState("");
 
   const toggleSidebar = useCallback(() => {
@@ -30,8 +29,6 @@ export const useUserNavbar = () => {
     setIsNotifOpen,
     isNotifModalOpen,
     setIsNotifModalOpen,
-    currency,
-    setCurrency,
     searchQuery,
     setSearchQuery,
     handleLogout,

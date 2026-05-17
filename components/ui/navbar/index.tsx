@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { HiMenuAlt2, HiMenu, HiOutlineBell, HiSearch, HiX } from "react-icons/hi";
 import UserAvatar from "@/components/shared/dashboard/UserAvatar";
 import { useUserNavbar } from "./useUserNavbar";
@@ -9,6 +9,9 @@ import { useNotifications } from "@/modules/core/providers/NotificationProvider"
 import { NotificationsDialog } from "./NotificationsDialog";
 import { SearchBar, CurrencySwitch, NotificationsDropdown, ProfileDropdown } from "./NavbarComponents";
 import { ConfirmationDialog } from "@/components/shared/modals/ConfirmationDialog";
+import { useProductsStore } from "@/modules/products/store/products.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useRouter } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -37,8 +40,6 @@ export default function Navbar({
     profile,
     searchQuery,
     setSearchQuery,
-    currency,
-    setCurrency,
     isNotifOpen,
     setIsNotifOpen,
     isNotifModalOpen,
@@ -47,6 +48,30 @@ export default function Navbar({
     setIsProfileOpen,
     handleLogout
   } = useUserNavbar();
+
+  const { inventory } = useProductsStore();
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+  const router = useRouter();
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    return inventory
+      .filter(m =>
+        m.name.toLowerCase().includes(q) ||
+        m.barCode.toLowerCase().includes(q) ||
+        m.activeIngredient.toLowerCase().includes(q) ||
+        m.brand.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [inventory, searchQuery]);
+
+  const formatPrice = (price: number) => {
+    if (isDollar) return `$${price.toFixed(2)}`;
+    return `Bs${(price * rate).toFixed(2)}`;
+  };
 
   const { unreadCount } = useNotifications();
 
@@ -109,15 +134,51 @@ export default function Navbar({
         </button>
 
         {/* Buscador */}
-        <div className="relative group flex-1">
+        <div className="relative group flex-1" ref={searchRef}>
           <input
             type="text"
             placeholder="¿Qué estás buscando?"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             className="w-full bg-[#F3F4F6] border-none rounded-xl py-3 pl-4 pr-12 text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none placeholder:text-slate-400"
           />
           <HiSearch className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+          
+          {searchFocused && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[200] max-h-96 overflow-y-auto">
+              {searchResults.map((med) => (
+                <button
+                  key={med.barCode}
+                  onClick={() => {
+                    router.push("/productos");
+                    setSearchQuery("");
+                    setSearchFocused(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50/50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                >
+                  <div className="size-9 shrink-0 bg-slate-50 rounded-lg border border-slate-100 overflow-hidden flex items-center justify-center">
+                    {med.image ? (
+                      <img src={med.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs">💊</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-700 truncate">{med.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{med.barCode} • {med.activeIngredient}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-black text-blue-600">{formatPrice(med.price)}</p>
+                    <span className={`text-[9px] font-bold ${med.stock > 0 ? "text-emerald-600" : "text-red-400"}`}>
+                      {med.stock > 0 ? `${med.stock} und` : "Sin stock"}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -137,7 +198,7 @@ export default function Navbar({
 
       {/* Derecha: Acciones - Desktop */}
       <div className="hidden lg:flex items-center gap-4">
-        <CurrencySwitch currency={currency} setCurrency={setCurrency} />
+        <CurrencySwitch />
 
         <div className="relative" ref={notifRef}>
           <button
@@ -189,7 +250,7 @@ export default function Navbar({
           >
             <div className="flex flex-col items-end text-right">
               <span className="text-xs font-black text-slate-800 tracking-tight">
-                @{profile?.name?.toLowerCase().replace(/\s+/g, "") || "usuario"}
+                @{typeof profile?.name === "string" && profile.name ? profile.name.toLowerCase().replace(/\s+/g, "") : "usuario"}
               </span>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                 {profile?.role || "Agente"}
@@ -243,7 +304,7 @@ export default function Navbar({
             </div>
           )}
         </div>
-        <CurrencySwitch currency={currency} setCurrency={setCurrency} />
+        <CurrencySwitch />
         <div ref={mobileNotifRef} className="flex items-center">
           <button
             onClick={() => {

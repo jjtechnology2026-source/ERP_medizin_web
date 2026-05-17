@@ -13,8 +13,10 @@ export interface UserProfile {
 
 interface AuthState {
   profile: UserProfile | null;
+  medicinesCatalog: any[];
   isHydrated: boolean;
   syncWithSession: (user: any) => void;
+  setMedicinesCatalog: (medicines: any[]) => void;
   clearAuth: () => void;
 }
 
@@ -22,17 +24,18 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       profile: null,
+      medicinesCatalog: [],
       isHydrated: false,
       syncWithSession: (user) => {
         if (JSON.stringify(get().profile) !== JSON.stringify(user)) {
           set({ profile: user });
         }
       },
+      setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
       clearAuth: () => set({ profile: null }),
     }),
     {
       name: "auth-storage",
-      // Corregido: Accedemos al set del closure o usamos el método de la instancia
       onRehydrateStorage: () => () => {
         useAuthStore.setState({ isHydrated: true });
       },

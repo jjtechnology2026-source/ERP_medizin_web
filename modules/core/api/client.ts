@@ -1,15 +1,16 @@
 import axios from "axios";
 import { signOut, getSession, signIn } from "next-auth/react";
 
-// Limpia espacios y caracteres de control del token
-const cleanToken = (t: string | undefined) => t ? t.replace(/\s/g, "").replace(/[\x00-\x1F\x7F]/g, "") : "";
+const cleanToken = (t: string | undefined) =>
+  t ? t.replace(/\s/g, "").replace(/[\x00-\x1F\x7F]/g, "") : "";
 
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL });
 
 api.interceptors.request.use(async (config) => {
+  if ((config as any).skipAuthInterceptor) return config;
+
   const session: any = await getSession();
 
-  // Si hay error de refresco en la sesión, cerrar sesión inmediatamente
   if (session?.error === "RefreshAccessTokenError") {
     signOut({ callbackUrl: "/" });
     return config;
@@ -17,7 +18,7 @@ api.interceptors.request.use(async (config) => {
 
   const token = session?.accessToken || process.env.NEXT_PUBLIC_JWT;
   if (token) config.headers.Authorization = `Bearer ${cleanToken(token)}`;
-  
+
   return config;
 }, (err) => Promise.reject(err));
 
@@ -27,28 +28,32 @@ api.interceptors.response.use(
     const req = err.config;
     const status = err.response?.status;
 
-    // Manejo de errores de autorización (401, 402, 403) para reintento único
-    if ([401, 402, 403].includes(status) && !req._retry) {
+    if ((req as any).skipAuthInterceptor) return Promise.reject(err);
+
+    const isAuthError = [401, 402, 403].includes(status);
+
+    if (isAuthError && !req._retry) {
       req._retry = true;
       const session: any = await getSession();
-      
+
       if (session?.refreshToken && !session?.error) {
-        // Intentar refresh
         try {
-          await signIn("credentials", { 
-            isRefresh: "true", 
-            refreshToken: session.refreshToken, 
-            userData: JSON.stringify(session.user) 
+          const result = await signIn("credentials", {
+            isRefresh: "true",
+            refreshToken: session.refreshToken,
+            userData: JSON.stringify(session.user),
+            redirect: false,
           });
-          
-          // Obtener nueva sesión
+
+          if (result?.error) throw new Error(result.error);
+
           const newSession: any = await getSession();
           if (newSession?.accessToken) {
             req.headers.Authorization = `Bearer ${cleanToken(newSession.accessToken)}`;
-            return api(req); // Reintenta la petición con el nuevo token
+            return api(req);
           }
-        } catch (refreshErr) {
-          // Si refresh falla, cerrar sesión
+        } catch {
+          // Refresh failed - will sign out below
         }
       }
       signOut({ callbackUrl: "/" });

@@ -8,11 +8,27 @@ export const MQTT_TOPICS = {
   marketplacePharmacy: (pharmacyId: string) => `pharmacy/${pharmacyId}`,
   pendingOrdersWildcard: "farmacia/ordenes/pendientes/+",
   pendingOrdersConfirmationWildcard: "farmacia/ordenes/confirmacion/+",
-  clientSearchMedicine: (clientId: string, orderId: string) => `client/${clientId}/orden/${orderId}/search_medicine`,
-  clientContactData: (clientId: string, orderId: string) => `client/${clientId}/orden/${orderId}/data`,
-  clientPharmacyChoice: (clientId: string, orderId: string) => `client/${clientId}/orden/${orderId}/pharmacy_choice`,
-  clientPaymentValidation: (clientId: string, orderId: string) => `client/${clientId}/orden/${orderId}/payment`,
-  acceptOrder: (pharmacyId: string, orderId: string) => `pharmacy/${pharmacyId}/orden_id/${orderId}/accept_order`,
-  rejectOrder: (pharmacyId: string, orderId: string) => `pharmacy/${pharmacyId}/orden_id/${orderId}/negada_order`,
+
+  // Topics de venta individual por código de barra
+  saleByBarCode: (barCode: string) => `farmacia/ventas/${barCode}`,
+
+  // Topics de órdenes de venta
+  orderSale: (orderId: string) => `farmacia/ordenes/${orderId}/venta`,
+
+  // Topics de cliente para marketplace
+  clientSearchMedicine: (clientId: string, orderId: string) =>
+    `client/${clientId}/orden/${orderId}/search_medicine`,
+  clientContactData: (clientId: string, orderId: string) =>
+    `client/${clientId}/orden/${orderId}/data`,
+  clientPharmacyChoice: (clientId: string, orderId: string) =>
+    `client/${clientId}/orden/${orderId}/pharmacy_choice`,
+  clientPaymentValidation: (clientId: string, orderId: string) =>
+    `client/${clientId}/orden/${orderId}/payment`,
+
+  // Topics de respuesta de farmacia
+  acceptOrder: (pharmacyId: string, orderId: string) =>
+    `pharmacy/${pharmacyId}/orden_id/${orderId}/accept_order`,
+  rejectOrder: (pharmacyId: string, orderId: string) =>
+    `pharmacy/${pharmacyId}/orden_id/${orderId}/negada_order`,
   paymentAccepted: (orderId: string) => `order_id/${orderId}/payment_accepted`,
 } as const;

@@ -27,7 +27,7 @@ export default function MarketplaceTable({
   onFocus
 }: MarketplaceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
 
   const totalPages = Math.ceil(orders.length / itemsPerPage);
   const currentOrders = orders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -128,9 +128,9 @@ export default function MarketplaceTable({
                       <td className="px-8 py-5 text-xs font-bold text-slate-500 capitalize">{order.saleType || "Delivery"}</td>
                       <td className="px-8 py-5">
                         <span className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider ${
-                          order.saleStatus === "Completed" ? "bg-emerald-500 text-white" : "bg-[#FFC552] text-white"
+                          (order.saleStatus === "Completed" || (order as any).sale_status === "Completed" || (order as any).sale_status === "COMPLETADA") ? "bg-emerald-500 text-white" : "bg-[#FFC552] text-white"
                         }`}>
-                          {order.saleStatus === "Completed" ? "Completado" : "Pendiente"}
+                          {(order.saleStatus === "Completed" || (order as any).sale_status === "Completed" || (order as any).sale_status === "COMPLETADA") ? "Completado" : "Pendiente"}
                         </span>
                       </td>
                       <td className="px-8 py-5">

@@ -8,6 +8,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 export const clearAllStores = () => {
   // Ejecuta la limpieza de cada store individualmente
+  useAuthStore.getState().setMedicinesCatalog([]);
   useAuthStore.getState().clearAuth();
 
   // Opcional: Solo si son manejadas llaves manuales fuera de Zustand

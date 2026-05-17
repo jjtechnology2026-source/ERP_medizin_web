@@ -1,15 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import AuthSync from "@/modules/auth/components/AuthSync";
 import { MqttOrdersProvider } from "@/modules/marketplace/providers/MqttOrdersProvider";
 import GlobalOrderNotifications from "@/modules/marketplace/components/GlobalOrderNotifications";
 import { NotificationProvider } from "./NotificationProvider";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { setupInventoryMqttHandler } from "@/modules/core/mqtt/handlers/inventory-handler";
+
+function CurrencyRatePoller() {
+  const fetchRate = useCurrencyStore((s) => s.fetchRate);
+
+  useEffect(() => {
+    fetchRate();
+    const interval = setInterval(fetchRate, 60000);
+    return () => clearInterval(interval);
+  }, [fetchRate]);
+
+  return null;
+}
+
+function MqttInventorySync() {
+  const pharmacyId = useAuthStore((s) => s.profile?.pharmacyId);
+
+  useEffect(() => {
+    if (!pharmacyId) return;
+    const unsub = setupInventoryMqttHandler(pharmacyId);
+    return () => unsub?.();
+  }, [pharmacyId]);
+
+  return null;
+}
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  // 1. Configuración compacta de React Query
   const [queryClient] = useState(() => new QueryClient({
     queryCache: new QueryCache({
       onError: (err: any) => {
@@ -34,6 +60,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <NotificationProvider>
           <MqttOrdersProvider>
             <GlobalOrderNotifications />
+            <CurrencyRatePoller />
+            <MqttInventorySync />
             {children}
           </MqttOrdersProvider>
         </NotificationProvider>

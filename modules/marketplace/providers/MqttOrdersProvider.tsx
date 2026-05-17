@@ -252,40 +252,44 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!profile?.pharmacyId) return;
 
-    mqttServer.setHandlers(
-      (connected) => setMqttConnected(connected),
-      (topic, payload) => {
-        if (topic.startsWith("pharmacy/")) {
-          const normalized = normalizeIncomingOrder(payload);
-          if (normalized) {
-            // Add to notification system
-            addNotification({
-              type: 'order',
-              title: 'Nuevo pedido',
-              message: `Se ha registrado un nuevo pedido de ${normalized.clientName} (#${normalized.orderId.slice(-8)})`,
-              orderId: normalized.orderId
-            });
+    const unsubConnection = mqttServer.onConnectionChange((connected) => {
+      setMqttConnected(connected);
+      if (connected) {
+        mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
+        mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
+      }
+    });
 
-            setQueuedOrders((prev) => {
-              if (prev.some((o) => o.orderId === normalized.orderId)) return prev;
-              const newQueue = [...prev, normalized];
-              // Si no hay nada enfocado, enfocamos la nueva
-              if (!focusedOrderId) setFocusedOrderId(normalized.orderId);
-              return newQueue;
-            });
-            setSecondsLeft(60);
-          }
+    const unsubMessage = mqttServer.onMessage((topic, payload) => {
+      if (topic.startsWith("pharmacy/")) {
+        const normalized = normalizeIncomingOrder(payload);
+        if (normalized) {
+          addNotification({
+            type: 'order',
+            title: 'Nuevo pedido',
+            message: `Se ha registrado un nuevo pedido de ${normalized.clientName} (#${normalized.orderId.slice(-8)})`,
+            orderId: normalized.orderId
+          });
+
+          setQueuedOrders((prev) => {
+            if (prev.some((o) => o.orderId === normalized.orderId)) return prev;
+            const newQueue = [...prev, normalized];
+            if (!focusedOrderId) setFocusedOrderId(normalized.orderId);
+            return newQueue;
+          });
+          setSecondsLeft(60);
         }
       }
-    );
+    });
 
     mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
-
+    mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
 
     return () => {
-      // Opcional: limpiar handlers si es necesario
+      unsubConnection();
+      unsubMessage();
     };
-  }, [profile, focusedOrderId]);
+  }, [profile]);
 
   // Timer para la orden actual
   useEffect(() => {

@@ -43,10 +43,15 @@ export const authOptions: NextAuthOptions = {
           username: loginIdentifier,
           password: credentials.password
         });
+
+        if (data.success === false) {
+          throw new Error(data.message || "Credenciales inválidas");
+        }
         
         return mapUserData(data);
-      } catch (e) {
-        return null;
+      } catch (e: any) {
+        const message = e.response?.data?.message || e.message || "Error de autenticación";
+        throw new Error(message);
       }
     },
   }),

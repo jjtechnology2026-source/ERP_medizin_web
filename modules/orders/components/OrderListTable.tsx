@@ -8,6 +8,7 @@ import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
 import NoteModal from "./NoteModal";
 import OrderFilters from "./OrderFilters";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 interface OrdersPageProps {
   orders: Order[];
@@ -42,6 +43,16 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
 // --- COMPONENTE PRINCIPAL ---
 
 export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh }: OrdersPageProps) {
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+
+  const formatOrderTotal = (total: number) => {
+    if (isDollar) {
+      return `$ ${total.toFixed(2)}`;
+    }
+    return `Bs ${(total * rate).toFixed(2)}`;
+  };
+
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteType, setNoteType] = useState<'Crédito' | 'Débito'>('Crédito');
@@ -51,13 +62,21 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
 
   // 1. Ordenar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return [...orders].sort((a, b) => {
+      const dateA = new Date(a.date || (a as any).fecha || Date.now()).getTime();
+      const dateB = new Date(b.date || (b as any).fecha || Date.now()).getTime();
+      return dateB - dateA;
+    });
   }, [orders]);
 
   // 2. Filtrar por status localmente
   const filteredOrders = useMemo(() => {
     if (!filters.status) return sortedOrders;
-    return sortedOrders.filter(order => order.saleStatus === filters.status);
+    return sortedOrders.filter(order => {
+      const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
+      const filterStatus = String(filters.status).trim().toLowerCase();
+      return status === filterStatus;
+    });
   }, [sortedOrders, filters.status]);
 
   // 3. Lógica de Paginación
@@ -105,16 +124,37 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
               ) : !loading && filteredOrders.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
               ) : currentOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-blue-50/40 transition-colors group">
-                  <td className="px-6 py-4 text-xs font-mono text-slate-400">{order.id?.slice(0, 8)}...</td>
-                  <td className="px-6 py-4 text-sm font-semibold text-slate-700">{order.client?.name}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500 capitalize">{order.client?.direccion || ''}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{new Date(order.date).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{order.saleType.charAt(0).toUpperCase() + order.saleType.slice(1).toLowerCase()}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-slate-800">{order.totalreal.toFixed(2)}</td>
+                <tr key={order.id || (order as any).idOrder} className="hover:bg-blue-50/40 transition-colors group">
+                  <td className="px-6 py-4 text-xs font-mono text-slate-400">{(order.id || (order as any).idOrder || "")?.slice(0, 8)}...</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-slate-700">{order.client?.name || (order as any).clientName || "Cliente General"}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500 capitalize">{order.client?.direccion || (order as any).address || ""}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500">{new Date(order.date || (order as any).fecha || Date.now()).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500">
+                    {(() => {
+                      const type = String(order.saleType || (order as any).sale_type || "").trim();
+                      if (!type) return "-";
+                      return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+                    })()}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-bold text-slate-800">
+                    {formatOrderTotal(Number(order.totalreal !== undefined ? order.totalreal : (order as any).total_real) || 0)}
+                  </td>
                   <td className="px-6 py-4">
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-black rounded-md uppercase">
-                      {order.saleStatus === 'Completed' ? 'Completado' : order.saleStatus}
+                    <span className={`px-3 py-1 text-[10px] font-black rounded-md uppercase ${
+                      (() => {
+                        const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
+                        if (status === "completed" || status === "completada" || status === "entregada") return "bg-emerald-100 text-emerald-600";
+                        if (status === "cancelled" || status === "cancelada") return "bg-rose-100 text-rose-600";
+                        return "bg-amber-100 text-amber-600";
+                      })()
+                    }`}>
+                      {(() => {
+                        const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
+                        if (status === "completed" || status === "completada" || status === "entregada") return "Completado";
+                        if (status === "cancelled" || status === "cancelada") return "Cancelado";
+                        if (status === "pending" || status === "pendiente") return "Pendiente";
+                        return status || "Pendiente";
+                      })()}
                     </span>
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>

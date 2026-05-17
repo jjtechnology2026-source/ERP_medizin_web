@@ -1,9 +1,10 @@
 "use client";
 import React from "react";
-import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle } from "react-icons/hi";
+import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle, HiOutlineRefresh } from "react-icons/hi";
 import { motion } from "framer-motion";
 import { useNotifications } from "@/modules/core/providers/NotificationProvider";
 import { cn } from "@/modules/core/utils/ui";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export const SearchBar = ({ value, onChange }: any) => (
   <div className="relative flex-1 max-w-md hidden md:block group">
@@ -12,14 +13,78 @@ export const SearchBar = ({ value, onChange }: any) => (
   </div>
 );
 
-export const CurrencySwitch = ({ currency, setCurrency }: any) => (
-  <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
-    <span className="text-[11px] font-black text-blue-600">48.26 Bs</span>
-    <button onClick={() => setCurrency(currency === "BS" ? "USD" : "BS")} className={cn("relative w-11 h-6 rounded-full transition-all flex items-center px-1", currency === "USD" ? "bg-slate-300" : "bg-blue-600")}>
-      <div className={cn("w-4 h-4 bg-white rounded-full shadow transition-transform", currency === "USD" ? "translate-x-5" : "translate-x-0")} />
-    </button>
-  </div>
-);
+export const CurrencySwitch = () => {
+  const { isDollar, getEffectiveRate, toggleCurrency, setManualRate, fetchRate, isLoading } = useCurrencyStore();
+  const effectiveRate = getEffectiveRate();
+
+  const handleSyncRate = async () => {
+    await fetchRate();
+    const currentRate = useCurrencyStore.getState().rate;
+    if (currentRate > 0) {
+      setManualRate(currentRate);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">Tasa:</span>
+        <input
+          type="number"
+          step="0.01"
+          min="1"
+          value={effectiveRate || ""}
+          onChange={(e) => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val) && val > 0) {
+              setManualRate(val);
+            } else if (e.target.value === "") {
+              setManualRate(0);
+            }
+          }}
+          className="w-24 bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all shadow-sm"
+        />
+        <span className="text-[11px] font-bold text-slate-500 select-none">Bs</span>
+        <button
+          onClick={handleSyncRate}
+          disabled={isLoading}
+          title="Sincronizar tasa oficial de Internet"
+          className={cn(
+            "p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-200/50 rounded-lg transition-all cursor-pointer flex items-center justify-center disabled:opacity-50",
+            isLoading && "animate-spin text-blue-600"
+          )}
+        >
+          <HiOutlineRefresh size={14} />
+        </button>
+      </div>
+
+      <div className="h-4 w-[1px] bg-slate-200" />
+
+      <button
+        onClick={toggleCurrency}
+        className={cn(
+          "relative w-14 h-7 rounded-full transition-all flex items-center px-1 shadow-sm",
+          isDollar ? "bg-blue-600" : "bg-slate-300"
+        )}
+      >
+        <span
+          className={cn(
+            "absolute text-[10px] font-black text-white transition-all select-none",
+            isDollar ? "left-2" : "right-2"
+          )}
+        >
+          {isDollar ? "$" : "Bs"}
+        </span>
+        <div
+          className={cn(
+            "w-5 h-5 bg-white rounded-full shadow transition-transform",
+            isDollar ? "translate-x-7" : "translate-x-0"
+          )}
+        />
+      </button>
+    </div>
+  );
+};
 
 export const NotificationsDropdown = ({ onShowAll, onClose }: any) => {
   const { notifications, markAllAsRead } = useNotifications();
