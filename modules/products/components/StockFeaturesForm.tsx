@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { HiArrowLeft, HiOutlineCash, HiOutlineAdjustments, HiOutlineInformationCircle, HiOutlineCube, HiOutlineTag, HiOutlineShieldCheck } from "react-icons/hi";
+import { HiArrowLeft, HiOutlineCash, HiOutlineAdjustments, HiOutlineInformationCircle, HiOutlineCube, HiOutlineTag, HiOutlineShieldCheck, HiCheckCircle } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
@@ -26,6 +26,7 @@ export default function StockFeaturesForm({
   const [minStock, setMinStock] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
   useEffect(() => {
     if (!currentMedicine) return;
@@ -67,11 +68,7 @@ export default function StockFeaturesForm({
 
     const success = await saveMedicine(medicine);
     if (success) {
-      setFeedback({ type: "success", message: "Producto guardado exitosamente" });
-      setTimeout(() => {
-        setCurrentMedicine(null);
-        setView("LIST");
-      }, 1000);
+      setShowSuccessDialog(true);
     } else {
       setFeedback({ type: "error", message: "Error al guardar el producto" });
     }
@@ -357,6 +354,32 @@ export default function StockFeaturesForm({
           </div>
         </div>
       </div>
+
+      {showSuccessDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full mx-4 text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+              <HiCheckCircle className="text-emerald-500" size={36} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-800">Producto Agregado</h3>
+              <p className="text-sm text-slate-400 font-medium leading-relaxed">
+                El producto se agregó al inventario correctamente{editMode ? " (actualizado)" : ""}.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setShowSuccessDialog(false);
+                setCurrentMedicine(null);
+                setView("LIST");
+              }}
+              className="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+            >
+              Ver inventario
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
