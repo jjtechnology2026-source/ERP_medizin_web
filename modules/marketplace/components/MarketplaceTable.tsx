@@ -135,12 +135,28 @@ export default function MarketplaceTable({
                       </td>
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-2">
+                          <Tooltip content="Aceptar Orden">
+                            <button 
+                              onClick={() => onAccept?.(order.id)}
+                              className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
+                            >
+                              <HiOutlineCheck size={18} />
+                            </button>
+                          </Tooltip>
                           <Tooltip content="Ver Detalles">
                             <button 
                               onClick={() => onView(order)}
                               className="p-2.5 border border-blue-500 rounded-xl text-blue-500 hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
                             >
                               <HiOutlineEye size={18} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Rechazar Orden">
+                            <button 
+                              onClick={() => onReject?.(order.id)}
+                              className="p-2.5 bg-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all active:scale-95"
+                            >
+                              <HiOutlineX size={18} />
                             </button>
                           </Tooltip>
                         </div>

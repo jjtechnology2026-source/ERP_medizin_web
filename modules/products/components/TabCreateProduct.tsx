@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocumentDownload, HiOutlineTable, HiTrash } from "react-icons/hi";
 import { useCreateMedication } from "../hook/useCreateProduct";
 import BulkImportDialog from "../components/BulkImportDialog";
@@ -9,6 +9,113 @@ export interface LocalImage {
   name: string;
   data: number[];
   previewUrl: string;
+}
+
+const CATEGORY_MAP: Record<string, string[]> = {
+  "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
+  "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
+  "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
+  "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"]
+};
+
+const CATEGORY_KEYS = Object.keys(CATEGORY_MAP);
+
+interface SearchableSelectProps {
+  label: string;
+  placeholder: string;
+  required?: boolean;
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+}
+
+function SearchableSelect({ label, placeholder, required, value, options, onChange }: SearchableSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const showAddCustom = search && !options.some(o => o.toLowerCase() === search.toLowerCase());
+
+  return (
+    <div className="space-y-2 relative" ref={containerRef}>
+      <label className="text-[11px] font-black text-slate-400 uppercase ml-1">
+        {label}: {required && <span className="text-red-500">*</span>}
+      </label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 text-sm transition-all cursor-pointer flex justify-between items-center"
+      >
+        <span className={value ? "text-slate-800 font-bold" : "text-slate-400"}>
+          {value || placeholder}
+        </span>
+        <HiOutlineChevronDown className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-3xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[300px]">
+          <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+            <input
+              type="text"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-blue-500/20"
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto flex-1 py-2">
+            {filteredOptions.length === 0 && !showAddCustom && (
+              <div className="px-6 py-3 text-xs text-slate-400 italic">No se encontraron opciones</div>
+            )}
+            {filteredOptions.map((opt) => (
+              <div
+                key={opt}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(opt);
+                  setSearch("");
+                  setIsOpen(false);
+                }}
+                className={`px-6 py-3 text-xs font-bold cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors ${
+                  value === opt ? "bg-blue-50/50 text-blue-600 font-black" : "text-slate-700"
+                }`}
+              >
+                {opt}
+              </div>
+            ))}
+            {showAddCustom && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(search);
+                  setSearch("");
+                  setIsOpen(false);
+                }}
+                className="px-6 py-3 text-xs font-black cursor-pointer text-blue-600 hover:bg-blue-50 border-t border-slate-100 transition-colors"
+              >
+                + Agregar "{search}"
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CreateProductPage({ setView }: any) {
@@ -25,19 +132,23 @@ export default function CreateProductPage({ setView }: any) {
       const headers = [
         "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
         "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
-        "Descripción", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+        "Descripción", "Precio", "Stock Inicial", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
       ];
       const dummyData = [
         {
-          "Nombre Comercial": "Acetabiofen",
-          "Marca": "Biovenezuela",
-          "Código de Barras": "8904187880023",
+          "Nombre Comercial": "Acetaminofen Genfar",
+          "Marca": "Genfar",
+          "Código de Barras": "7591234567890",
           "Principio Activo": "Acetaminofen",
           "Dosis": "500 mg",
-          "Presentación/Tabletas": "Dispensador x 10 blister",
-          "Categoría": "malestar general",
-          "Subcategoría": "Dolor",
+          "Presentación/Tabletas": "10 tabletas",
+          "Categoría": "Medicamentos",
+          "Subcategoría": "Analgesicos",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
+          "Precio": 3.5,
+          "Stock Inicial": 20,
+          "Mínimo Stock": 5,
+          "IVA": 16,
           "Controlado (SI/NO)": "NO",
           "Antibiótico (SI/NO)": "NO"
         },
@@ -55,28 +166,23 @@ export default function CreateProductPage({ setView }: any) {
   const [images, setImages] = useState<LocalImage[]>([]);
 
   const [formData, setFormData] = useState({
-    brand: "Genfar",
-    activeIngredient: "Acetaminofen",
-    doseValue: "500",
+    brand: "",
+    activeIngredient: "",
+    doseValue: "",
     doseUnit: "mg",
-    barCode: "7591234567890",
-    name: "Acetaminofen",
-    category: "Analgesicos",
-    subcategory: "Tabletas",
-    description: "...",
-    controlled: false,
-    vat: 16,
-    antibiotic: false,
-    minimum: 5,
+    amount: "",
+    barCode: "",
+    name: "",
+    category: "",
+    subcategory: "",
+    description: "",
     presentation: "Tabletas",
   });
 
-  // Función para procesar y añadir imágenes (hasta un máximo de 10)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Validar límite
     if (images.length + files.length > 10) {
       alert("Solo puedes subir un máximo de 10 imágenes.");
       return;
@@ -122,17 +228,14 @@ export default function CreateProductPage({ setView }: any) {
     });
   };
 
-  // Eliminar una imagen por su ID
   const removeImage = (id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
   };
 
-  // Limpiar todas las imágenes
   const clearAllImages = () => {
     setImages([]);
   };
 
-  // Manejar el orden de las imágenes (subir y bajar en la lista)
   const moveImage = (index: number, direction: "up" | "down") => {
     if (direction === "up" && index === 0) return;
     if (direction === "down" && index === images.length - 1) return;
@@ -153,6 +256,12 @@ export default function CreateProductPage({ setView }: any) {
     const payload = {
       ...formData,
       doseUnit: selectedUnit,
+      price: "0",
+      stock: "0",
+      minimum: "0",
+      vat: 0,
+      controlled: false,
+      antibiotic: false,
     };
 
     const result = await createMedication(payload, images);
@@ -162,6 +271,8 @@ export default function CreateProductPage({ setView }: any) {
       setTimeout(() => setView("LIST"), 1500);
     }
   };
+
+  const subcategoryOptions = CATEGORY_MAP[formData.category] || [];
 
   return (
     <div className="w-full max-w-[1600px] flex flex-col space-y-4">
@@ -270,19 +381,21 @@ export default function CreateProductPage({ setView }: any) {
             )}
 
             <div className="space-y-5">
-              <InputField
+              <SearchableSelect
                 label="Categoría"
                 placeholder="Seleccione una categoría"
+                required
                 value={formData.category}
-                onChange={(e: any) => setFormData({ ...formData, category: e.target.value })}
-                isSelect
+                options={CATEGORY_KEYS}
+                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
               />
-              <InputField
-                label="Subcategorías"
+              <SearchableSelect
+                label="Subcategoría"
                 placeholder="Seleccione una subcategoría"
+                required
                 value={formData.subcategory}
-                onChange={(e: any) => setFormData({ ...formData, subcategory: e.target.value })}
-                isSelect
+                options={subcategoryOptions}
+                onChange={(val) => setFormData({ ...formData, subcategory: val })}
               />
             </div>
           </div>
@@ -294,37 +407,45 @@ export default function CreateProductPage({ setView }: any) {
             <div className="grid grid-cols-1 gap-5">
               <InputField
                 label="Código de barras"
-                placeholder="ej: 12345678"
+                placeholder="ej: 7591234567890"
                 value={formData.barCode}
                 onChange={(e: any) => setFormData({ ...formData, barCode: e.target.value })}
                 required
               />
               <InputField
                 label="Marca"
-                placeholder="ej: marca"
+                placeholder="ej: Genfar"
                 value={formData.brand}
                 onChange={(e: any) => setFormData({ ...formData, brand: e.target.value })}
                 required
               />
               <InputField
                 label="Principio activo"
-                placeholder="ej: Carbidopa / Levodopa"
+                placeholder="ej: Acetaminofen"
                 value={formData.activeIngredient}
                 onChange={(e: any) => setFormData({ ...formData, activeIngredient: e.target.value })}
                 required
               />
               <InputField
                 label="Nombre comercial"
-                placeholder="Coloca el nombre"
+                placeholder="ej: Acetaminofen 500mg"
                 value={formData.name}
                 onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
               <InputField
                 label="Dosis"
-                placeholder="ej: 100"
+                placeholder="ej: 500"
                 value={formData.doseValue}
                 onChange={(e: any) => setFormData({ ...formData, doseValue: e.target.value })}
+                required
+              />
+
+              <InputField
+                label="Cantidad"
+                placeholder="Cantidad de presentación (ej: 10)"
+                value={formData.amount}
+                onChange={(e: any) => setFormData({ ...formData, amount: e.target.value })}
                 required
               />
 
@@ -372,7 +493,7 @@ export default function CreateProductPage({ setView }: any) {
                 <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
                 <textarea
                   className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
-                  placeholder="Escribe la descripción aquí..."
+                  placeholder="ej: Escribe la descripción de tu producto..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
@@ -417,7 +538,7 @@ export default function CreateProductPage({ setView }: any) {
   );
 }
 
-function InputField({ label, placeholder, required, isSelect, value, onChange }: any) {
+function InputField({ label, placeholder, required, isSelect, value, onChange, type = "text", step }: any) {
   return (
     <div className="space-y-2">
       <label className="text-[11px] font-black text-slate-400 uppercase ml-1">
@@ -425,6 +546,8 @@ function InputField({ label, placeholder, required, isSelect, value, onChange }:
       </label>
       <div className="relative">
         <input
+          type={type}
+          step={step}
           className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm transition-all"
           placeholder={placeholder}
           value={value}

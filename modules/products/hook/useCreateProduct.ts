@@ -18,6 +18,8 @@ export interface MedicationData {
   vat: number;
   antibiotic: boolean;
   minimum: number;
+  image: string;
+  detalle: string;
 }
 
 export const useCreateMedication = () => {
@@ -33,13 +35,15 @@ export const useCreateMedication = () => {
       setError(null);
 
       try {
-        const dosage = `${baseData.doseValue || ""}${baseData.doseUnit || ""}`;
+        const dosage = `${baseData.doseValue || ""} ${baseData.doseUnit || ""}`.trim();
+        const tablets = `${baseData.amount || ""} ${baseData.presentation || ""}`.trim();
+        const mainImage = imagesList.length > 0 ? imagesList[0].name : "";
 
         const payloadData: MedicationData = {
           brand: baseData.brand || "",
           activeIngredient: baseData.activeIngredient || "",
           dosage,
-          tablets: baseData.presentation || baseData.tablets || "",
+          tablets,
           barCode: baseData.barCode || "",
           name: baseData.name || "",
           category: baseData.category || "",
@@ -49,9 +53,11 @@ export const useCreateMedication = () => {
           quantity: parseInt(baseData.stock) || 0,
           description: baseData.description || "",
           controlled: baseData.controlled || false,
-          vat: parseFloat(baseData.vat) || 16,
+          vat: Math.round(parseFloat(baseData.vat)) || 0,
           antibiotic: baseData.antibiotic || false,
           minimum: parseInt(baseData.minimum) || 0,
+          image: mainImage,
+          detalle: "",
         };
 
         const { data: medResult } = await api.post(
@@ -61,7 +67,7 @@ export const useCreateMedication = () => {
 
         const uploadedImages = await Promise.all(
           imagesList.map((imgFile) =>
-            api.post("/admin/image/save", imgFile).then((res) => res.data)
+            api.post("/admin/MedicationImage/Upload", imgFile).then((res) => res.data)
           )
         );
 
@@ -82,3 +88,4 @@ export const useCreateMedication = () => {
 
   return { createMedication, isLoading, error };
 };
+

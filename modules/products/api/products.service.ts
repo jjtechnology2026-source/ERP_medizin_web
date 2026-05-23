@@ -39,7 +39,7 @@ export const productsService = {
       tablets: medication.tablets || "",
       barCode: medication.barCode || "",
       name: medication.name || "",
-      image: medication.image && typeof medication.image === "string" && (medication.image.startsWith("http") || medication.image.startsWith("data:")) ? medication.image : "",
+      image: medication.image && typeof medication.image === "string" ? medication.image : "",
       category: medication.category || "",
       subcategory: medication.subcategory || "",
       price: Number(medication.price) || 0,
@@ -47,9 +47,10 @@ export const productsService = {
       stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
       description: medication.description || "",
       controlled: Boolean(medication.controlled),
-      vat: Number(medication.vat) || 0,
+      vat: Math.round(Number(medication.vat)) || 0,
       antibiotic: Boolean(medication.antibiotic),
-      minimum: Number(medication.minimum) || 0,
+      minimum: Math.round(Number(medication.minimum)) || 0,
+      detalle: (medication as any).detalle || "",
     }];
 
     const { data } = await api.post("/Medications/Create", payload);
@@ -64,7 +65,7 @@ export const productsService = {
       tablets: medication.tablets || "",
       barCode: medication.barCode || "",
       name: medication.name || "",
-      image: medication.image && typeof medication.image === "string" && (medication.image.startsWith("http") || medication.image.startsWith("data:")) ? medication.image : "",
+      image: medication.image && typeof medication.image === "string" ? medication.image : "",
       category: medication.category || "",
       subcategory: medication.subcategory || "",
       price: Number(medication.price) || 0,
@@ -72,16 +73,17 @@ export const productsService = {
       stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
       description: medication.description || "",
       controlled: Boolean(medication.controlled),
-      vat: Number(medication.vat) || 0,
+      vat: Math.round(Number(medication.vat)) || 0,
       antibiotic: Boolean(medication.antibiotic),
-      minimum: Number(medication.minimum) || 0,
+      minimum: Math.round(Number(medication.minimum)) || 0,
+      detalle: (medication as any).detalle || "",
     }));
 
     await api.post("/admin/Medications/upsert", payload);
   },
 
   async uploadImage(image: { name: string; data: number[] }): Promise<unknown> {
-    const { data } = await api.post("/admin/image/save", image);
+    const { data } = await api.post("/admin/MedicationImage/Upload", image);
     return data;
   },
 

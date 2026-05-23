@@ -82,19 +82,10 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
       const price = o.totalreal !== undefined ? o.totalreal : (o as any).total_real;
       const medications = o.medications || (o as any).medicines || [];
 
-      // 1. Pestañas (Tab)
-      if (activeTab === "incoming") {
-        // En entrantes mostramos Pendientes, Nuevas o Aceptadas (esperando pago)
-        const s = String(status).toUpperCase();
-        if (s !== "PENDING" && s !== "PENDIENTE" && s !== "NEW" && s !== "NUEVA" && s !== "ACCEPTED" && s !== "ACEPTADA") return false;
-      } else {
-        // El usuario solicitó no ver completadas aquí, sino solo lo que aceptó/rechazó directamente como lista visual.
-        // Ocultamos las completadas ya que van a "registro de órdenes".
-        if (status === "Completed" || status === "COMPLETADA" || status === "completada") return false;
-        
-        if (status !== "Cancelled" && status !== "CANCELADA" && status !== "cancelada" &&
-            status !== "Canceled" && status !== "CANCELED" && status !== "canceled" &&
-            status !== "Rejected" && status !== "RECHAZADA" && status !== "rechazada") return false;
+      // Only show PENDING, NEW, ACCEPTED, or PENDIENTE/NUEVA/ACEPTADA orders
+      const s = String(status).toUpperCase();
+      if (s !== "PENDING" && s !== "PENDIENTE" && s !== "NEW" && s !== "NUEVA" && s !== "ACCEPTED" && s !== "ACEPTADA" && s !== "") {
+        return false;
       }
 
       // 2. Buscador
@@ -136,7 +127,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
       const timeB = new Date(dateB).getTime();
       return filters.sortOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
-  }, [orders, activeTab, filters]);
+  }, [orders, filters]);
 
   // --- Estadísticas ---
   const stats = useMemo(() => {
