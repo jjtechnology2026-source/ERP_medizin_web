@@ -11,5 +11,3 @@ pnpm-debug.log*
 .env.production
 .env*.local
 README.md
-docs
-proto
