@@ -1,15 +1,15 @@
 # --- ETAPA 1: Dependencias ---
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm i --frozen-lockfile
 
 # --- ETAPA 2: Build ---
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 
 # Build args for NEXT_PUBLIC_* vars (inlined at build time)
 ARG NEXT_PUBLIC_API_URL
@@ -40,7 +40,7 @@ RUN pnpm run build
 RUN rm -rf .next/cache
 
 # --- ETAPA 3: Runner ---
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
