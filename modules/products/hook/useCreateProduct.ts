@@ -5,12 +5,14 @@ export interface MedicationData {
   brand: string;
   activeIngredient: string;
   dosage: string;
+  tablets: string;
   barCode: string;
   name: string;
   category: string;
   subcategory: string;
   price: number;
   stock: number;
+  quantity: number;
   description: string;
   controlled: boolean;
   vat: number;
@@ -34,15 +36,17 @@ export const useCreateMedication = () => {
         const dosage = `${baseData.doseValue || ""}${baseData.doseUnit || ""}`;
 
         const payloadData: MedicationData = {
-          brand: baseData.brand,
-          activeIngredient: baseData.activeIngredient,
+          brand: baseData.brand || "",
+          activeIngredient: baseData.activeIngredient || "",
           dosage,
-          barCode: baseData.barCode,
-          name: baseData.name,
-          category: baseData.category,
-          subcategory: baseData.subcategory,
+          tablets: baseData.presentation || baseData.tablets || "",
+          barCode: baseData.barCode || "",
+          name: baseData.name || "",
+          category: baseData.category || "",
+          subcategory: baseData.subcategory || "",
           price: parseFloat(baseData.price) || 0,
           stock: parseInt(baseData.stock) || 0,
+          quantity: parseInt(baseData.stock) || 0,
           description: baseData.description || "",
           controlled: baseData.controlled || false,
           vat: parseFloat(baseData.vat) || 16,
@@ -51,20 +55,17 @@ export const useCreateMedication = () => {
         };
 
         const { data: medResult } = await api.post(
-          "/admin/Medications/create",
-          payloadData
+          "/Medications/Create",
+          [payloadData]
         );
 
-        const uploadedImages = [];
-        for (const imgFile of imagesList) {
-          const { data: imageResult } = await api.post(
-            "/admin/image/save",
-            imgFile
-          );
-          uploadedImages.push(imageResult);
-        }
+        const uploadedImages = await Promise.all(
+          imagesList.map((imgFile) =>
+            api.post("/admin/image/save", imgFile).then((res) => res.data)
+          )
+        );
 
-        return { success: true, medication: medResult, images: uploadedImages };
+        return { success: true, medication: Array.isArray(medResult) && medResult.length > 0 ? medResult[0] : medResult, images: uploadedImages };
       } catch (err: any) {
         const msg =
           err.response?.data?.message ||

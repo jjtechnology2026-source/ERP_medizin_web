@@ -14,6 +14,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { mqttServer } from "@/modules/core/mqtt/advanced-service";
@@ -26,6 +27,7 @@ import {
   FeedbackState, 
   FeedbackType 
 } from "../types/mqtt-orders";
+import { useProductsStore } from "@/modules/products/store/products.store";
 
 const MqttOrdersContext = createContext<MqttOrdersContextValue | null>(null);
 
@@ -137,14 +139,34 @@ function normalizeIncomingOrder(payload: Uint8Array | string): MarketplaceOrderS
 
   // Normalizar items para asegurar que tengan name y price
   const rawItems = parsed.items ?? parsed.medicines ?? [];
-  const normalizedItems = Array.isArray(rawItems) ? rawItems.map((item: any) => ({
-    name: item.name || item.barcode || "Producto sin nombre",
-    barcode: item.barcode || "",
-    quantity: item.quantity || 0,
-    price: item.price ?? 0,
-  })) : [];
+    const normalizedItems = Array.isArray(rawItems) ? rawItems.map((item: any) => ({
+      name: item.name || item.barcode || "Producto sin nombre",
+      barcode: item.barcode || "",
+      quantity: item.quantity || 0,
+      price: item.price ?? 0,
+    })) : [];
 
-  const total = parsed.total ?? normalizedItems.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
+    // Si el payload no incluye precios, intentamos rellenarlos desde el inventario local
+    try {
+      const inventory = useProductsStore.getState().inventory || [];
+      for (const ni of normalizedItems) {
+        if (!ni.price || Number(ni.price) === 0) {
+          const byBarcode = inventory.find((p: any) => p.barCode && ni.barcode && p.barCode === ni.barcode);
+          if (byBarcode) {
+            ni.price = Number(byBarcode.price) || 0;
+            continue;
+          }
+          const byName = inventory.find((p: any) => p.name && ni.name && p.name.toLowerCase().includes(String(ni.name).toLowerCase()));
+          if (byName) {
+            ni.price = Number(byName.price) || 0;
+          }
+        }
+      }
+    } catch (e) {
+      // no bloquear decode si falla la búsqueda en el store
+    }
+
+    const total = parsed.total ?? normalizedItems.reduce((acc: number, item: any) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
 
   return {
     orderId,
@@ -165,6 +187,12 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
   const { profile } = useAuthStore();
   const { addNotification } = useNotifications();
   const [queuedOrders, setQueuedOrders] = useState<MarketplaceOrderSummary[]>([]);
+  const queuedOrdersRef = useRef<MarketplaceOrderSummary[]>([]);
+  
+  useEffect(() => {
+    queuedOrdersRef.current = queuedOrders;
+  }, [queuedOrders]);
+
   const [focusedOrderId, setFocusedOrderId] = useState<string | null>(null);
   const [mqttConnected, setMqttConnected] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
@@ -229,7 +257,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
 
     if (success) {
       setFeedback({
-        type: "error", // Visualmente usamos el estilo de error para rechazos
+        type: "success", 
         title: "Orden Rechazada",
         message: "La orden ha sido cancelada y retirada de tu cola."
       });
@@ -261,26 +289,132 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     });
 
     const unsubMessage = mqttServer.onMessage((topic, payload) => {
-      if (topic.startsWith("pharmacy/")) {
-        const normalized = normalizeIncomingOrder(payload);
-        if (normalized) {
-          addNotification({
-            type: 'order',
-            title: 'Nuevo pedido',
-            message: `Se ha registrado un nuevo pedido de ${normalized.clientName} (#${normalized.orderId.slice(-8)})`,
-            orderId: normalized.orderId
-          });
+      // ── PAGO ACEPTADO: orden pagada por el cliente ──────────────────────────
+      if (topic.includes("/payment_accepted") || topic.includes("/accepted_delivery")) {
+        const orderId = topic.split("/")[1]; // order_id/{orderId}/payment_accepted
+        if (!orderId) return;
 
-          setQueuedOrders((prev) => {
-            if (prev.some((o) => o.orderId === normalized.orderId)) return prev;
-            const newQueue = [...prev, normalized];
-            if (!focusedOrderId) setFocusedOrderId(normalized.orderId);
-            return newQueue;
-          });
-          setSecondsLeft(60);
+        addNotification({
+          type: 'order',
+          title: 'Pago confirmado',
+          message: `El pago de la orden #${orderId.slice(-8)} ha sido confirmado`,
+          orderId
+        });
+
+        // Remover de la cola de pendientes
+        setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+
+        // Descontar inventario local (como en Dart: publish remove_inventory + applyInventoryUpdate)
+        const order = queuedOrdersRef.current.find((o) => o.orderId === orderId);
+        if (order?.items?.length) {
+          const stockUpdates = order.items.map((item) => ({
+            barCode: item.barcode || "",
+            stock: 0, // Se marcará como vendido
+          })).filter((u) => u.barCode);
+
+          if (stockUpdates.length > 0) {
+            // Descontar stock local
+            useProductsStore.getState().decrementStock(
+              order.items.map((item) => ({
+                barCode: item.barcode || "",
+                quantity: item.quantity,
+              })).filter((u) => u.barCode)
+            );
+
+            // Notificar vía MQTT el descuento de inventario
+            if (profile?.pharmacyId) {
+              const invTopic = MQTT_TOPICS.inventoryRemove(profile.pharmacyId);
+              mqttServer.publish(invTopic, JSON.stringify({
+                medications: order.items.map((item) => ({
+                  barCode: item.barcode,
+                  quantity: item.quantity,
+                })),
+                idAgent: profile.id,
+                idPharmacy: profile.pharmacyId,
+              })).catch(() => {});
+            }
+          }
         }
+
+        setFeedback({
+          type: "success",
+          title: "¡Pago Confirmado!",
+          message: `El pago de la orden #${orderId.slice(-8)} ha sido procesado. Stock actualizado.`
+        });
+        return;
+      }
+
+      // ── NUEVA ORDEN ENTRANTE ──────────────────────────────────────────────
+      if (profile?.pharmacyId && topic === MQTT_TOPICS.marketplacePharmacy(profile.pharmacyId)) {
+        const normalized = normalizeIncomingOrder(payload);
+        if (!normalized) return;
+
+        // Añadimos la orden solo después de intentar rellenar precios.
+        (async () => {
+          try {
+            const needsPrice = (normalized.items || []).some((it) => !it.price || Number(it.price) === 0);
+            const productsState = useProductsStore.getState();
+            if (needsPrice) {
+              // Si no tenemos inventario local, forcemos una carga
+              if (!productsState.inventory || productsState.inventory.length === 0) {
+                try {
+                  await productsState.fetchInventory(true);
+                } catch {
+                  // ignore fetch errors
+                }
+              }
+
+              // Rellenar precios desde inventario (barcode -> exact match, luego name fuzzy)
+              const inv = useProductsStore.getState().inventory || [];
+              for (const ni of (normalized.items || [])) {
+                if (!ni.price || Number(ni.price) === 0) {
+                  const byBarcode = inv.find((p: any) => p.barCode && ni.barcode && p.barCode === ni.barcode);
+                  if (byBarcode) {
+                    ni.price = Number(byBarcode.price) || 0;
+                    continue;
+                  }
+                  const byName = inv.find((p: any) => p.name && ni.name && p.name.toLowerCase() === String(ni.name).toLowerCase());
+                  if (byName) {
+                    ni.price = Number(byName.price) || 0;
+                    continue;
+                  }
+                  // fuzzy fallback
+                  const byNameContain = inv.find((p: any) => p.name && ni.name && p.name.toLowerCase().includes(String(ni.name).toLowerCase()));
+                  if (byNameContain) ni.price = Number(byNameContain.price) || 0;
+                }
+              }
+            }
+
+            addNotification({
+              type: 'order',
+              title: 'Nuevo pedido',
+              message: `Se ha registrado un nuevo pedido de ${normalized.clientName} (#${normalized.orderId.slice(-8)})`,
+              orderId: normalized.orderId
+            });
+
+            setQueuedOrders((prev) => {
+              if (prev.some((o) => o.orderId === normalized.orderId)) return prev;
+              const newQueue = [...prev, normalized];
+              if (!focusedOrderId) setFocusedOrderId(normalized.orderId);
+              return newQueue;
+            });
+            setSecondsLeft(60);
+          } catch (e) {
+            // en caso de fallo, encolamos la orden sin precios para no perderla
+            setQueuedOrders((prev) => {
+              if (prev.some((o) => o.orderId === normalized.orderId)) return prev;
+              const newQueue = [...prev, normalized];
+              if (!focusedOrderId) setFocusedOrderId(normalized.orderId);
+              return newQueue;
+            });
+            setSecondsLeft(60);
+          }
+        })();
       }
     });
+
+    // Suscribirse también a confirmaciones de pago (como en Dart)
+    mqttServer.subscribe([MQTT_TOPICS.paymentAcceptedWildcard, MQTT_TOPICS.acceptedDeliveryWildcard]).catch(() => {});
 
     mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
     mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});

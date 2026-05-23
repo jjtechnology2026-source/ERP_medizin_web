@@ -34,6 +34,10 @@ export default function BulkImportDialog({
         "Categoría",
         "Subcategoría",
         "Descripción",
+        "Precio (USD)",
+        "Stock",
+        "Stock Mínimo",
+        "IVA (%)",
         "Controlado (SI/NO)",
         "Antibiótico (SI/NO)"
       ];
@@ -49,22 +53,13 @@ export default function BulkImportDialog({
           "Categoría": "malestar general",
           "Subcategoría": "Dolor",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
+          "Precio (USD)": "5.50",
+          "Stock": "100",
+          "Stock Mínimo": "10",
+          "IVA (%)": "16",
           "Controlado (SI/NO)": "NO",
           "Antibiótico (SI/NO)": "NO"
         },
-        {
-          "Nombre Comercial": "Ibuprofeno 400",
-          "Marca": "Genven",
-          "Código de Barras": "7591003001234",
-          "Principio Activo": "Ibuprofeno",
-          "Dosis": "400 mg",
-          "Presentación/Tabletas": "Caja de 10 tabletas",
-          "Categoría": "antiinflamatorio",
-          "Subcategoría": "Dolor",
-          "Descripción": "Tratamiento sintomático del dolor leve a moderado",
-          "Controlado (SI/NO)": "NO",
-          "Antibiótico (SI/NO)": "NO"
-        }
       ];
 
       const worksheet = XLSX.utils.json_to_sheet(dummyData, { header: headers });
@@ -121,6 +116,11 @@ export default function BulkImportDialog({
           return;
         }
 
+        const priceRaw = String(row["Precio (USD)"] || row["price"] || row["PRECIO"] || "").trim();
+        const stockRaw = String(row["Stock"] || row["stock"] || row["STOCK"] || "").trim();
+        const minRaw = String(row["Stock Mínimo"] || row["minimum"] || row["MINIMO"] || "").trim();
+        const vatRaw = String(row["IVA (%)"] || row["vat"] || row["IVA"] || "").trim();
+
         parsed.push({
           name,
           brand: String(row["Marca"] || row["brand"] || row["MARCA"] || "").trim(),
@@ -131,6 +131,10 @@ export default function BulkImportDialog({
           category: String(row["Categoría"] || row["category"] || row["Categoria"] || "").trim(),
           subcategory: String(row["Subcategoría"] || row["subcategory"] || row["SUBCATEGORIA"] || "").trim(),
           description: String(row["Descripción"] || row["description"] || row["DESCRIPCION"] || "").trim(),
+          price: priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined,
+          stock: stockRaw ? parseInt(stockRaw, 10) : undefined,
+          minimum: minRaw ? parseInt(minRaw, 10) : undefined,
+          vat: vatRaw ? parseInt(vatRaw, 10) : undefined,
           controlled: String(row["Controlado (SI/NO)"] || row["controlled"] || "").trim().toUpperCase() === "SI",
           antibiotic: String(row["Antibiótico (SI/NO)"] || row["antibiotic"] || "").trim().toUpperCase() === "SI",
         });

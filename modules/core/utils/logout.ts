@@ -5,16 +5,21 @@
  * de sesión impecable. Invocar antes de signOut().
  */
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useProductsStore } from "@/modules/products/store/products.store";
 
 export const clearAllStores = () => {
-  // Ejecuta la limpieza de cada store individualmente
+  // Limpia el store de auth
   useAuthStore.getState().setMedicinesCatalog([]);
   useAuthStore.getState().clearAuth();
 
-  // Opcional: Solo si son manejadas llaves manuales fuera de Zustand
+  // Limpia el store de productos (inventario, catálogo, filtros)
+  // useProductsStore.getState().clearStorage();
+
+  // Limpia localStorage persistido de productos
   try {
+    localStorage.removeItem("products-storage");
     localStorage.removeItem("startedSession");
   } catch (error) {
-    console.warn("No se pudo limpiar startedSession en localStorage", error);
+    console.warn("No se pudo limpiar localStorage", error);
   }
 };

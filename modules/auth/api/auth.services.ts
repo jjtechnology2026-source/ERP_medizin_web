@@ -26,6 +26,7 @@ export const authService = {
           lastLogin: new Date().toISOString(),
         },
       });
+      console.log(JSON.stringify(data, null, 2));
       return data;
     } else {
       const { data } = await loginApi.request({

@@ -31,4 +31,6 @@ export const MQTT_TOPICS = {
   rejectOrder: (pharmacyId: string, orderId: string) =>
     `pharmacy/${pharmacyId}/orden_id/${orderId}/negada_order`,
   paymentAccepted: (orderId: string) => `order_id/${orderId}/payment_accepted`,
+  paymentAcceptedWildcard: "order_id/+/payment_accepted",
+  acceptedDeliveryWildcard: "order_id/+/accepted_delivery",
 } as const;

@@ -284,6 +284,29 @@ class MqttServerService {
     );
   }
 
+  async subscribe(topics: string | string[]): Promise<void> {
+    const topicList = Array.isArray(topics) ? topics : [topics];
+
+    const client = await this.connect();
+    topicList.forEach((t) => this.activeSubscriptions.add(t));
+
+    return this.withTimeout(
+      new Promise<void>((resolve, reject) => {
+        client.subscribe(topicList, { qos: 1 }, (err) => {
+          if (err) {
+            this.log("error", ">>> [MQTT:SUB_GENERIC_FAIL]", err.message);
+            reject(err);
+          } else {
+            this.log("log", `>>> [MQTT:SUB_GENERIC_OK] Suscrito a: ${topicList.join(", ")}`);
+            resolve();
+          }
+        });
+      }),
+      10_000,
+      `Suscripción MQTT Genérica (${topicList.join(", ")})`,
+    );
+  }
+
   async publish(topic: string, payload: Buffer | Uint8Array | string): Promise<boolean> {
     try {
       const client = await this.connect();

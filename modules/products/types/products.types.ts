@@ -40,6 +40,10 @@ export interface BulkProductRow {
   description: string;
   controlled: boolean;
   antibiotic: boolean;
+  price?: number;
+  stock?: number;
+  minimum?: number;
+  vat?: number;
 }
 
 export interface BulkProductParseResult {

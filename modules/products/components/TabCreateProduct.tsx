@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocumentDownload, HiOutlineTable, HiTrash } from "react-icons/hi";
 import { useCreateMedication } from "../hook/useCreateProduct";
+import BulkImportDialog from "../components/BulkImportDialog";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -14,8 +15,41 @@ export default function CreateProductPage({ setView }: any) {
   const [selectedUnit, setSelectedUnit] = useState("mg");
   const { createMedication, isLoading, error } = useCreateMedication();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadTemplate = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const headers = [
+        "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
+        "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
+        "Descripción", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+      ];
+      const dummyData = [
+        {
+          "Nombre Comercial": "Acetabiofen",
+          "Marca": "Biovenezuela",
+          "Código de Barras": "8904187880023",
+          "Principio Activo": "Acetaminofen",
+          "Dosis": "500 mg",
+          "Presentación/Tabletas": "Dispensador x 10 blister",
+          "Categoría": "malestar general",
+          "Subcategoría": "Dolor",
+          "Descripción": "Medicamento para el alivio del dolor y la fiebre",
+          "Controlado (SI/NO)": "NO",
+          "Antibiótico (SI/NO)": "NO"
+        },
+      ];
+      const worksheet = XLSX.utils.json_to_sheet(dummyData, { header: headers });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla");
+      XLSX.writeFile(workbook, "plantilla_carga_masiva.xlsx");
+    } catch (err) {
+      console.error("Error al descargar plantilla:", err);
+    }
+  };
 
   // Estado para un arreglo de hasta 10 imágenes
   const [images, setImages] = useState<LocalImage[]>([]);
@@ -138,10 +172,10 @@ export default function CreateProductPage({ setView }: any) {
           <button onClick={() => setView("LIST")} className="hover:underline flex items-center gap-1">
             ‹ Regresar
           </button>
-          <button className="flex items-center gap-1 hover:underline">
+          <button onClick={downloadTemplate} className="flex items-center gap-1 hover:underline">
             <HiOutlineDocumentDownload size={16} /> Plantilla Excel
           </button>
-          <button className="flex items-center gap-2 bg-blue-50 px-4 py-1.5 rounded-2xl hover:bg-blue-100 transition-colors">
+          <button onClick={() => setShowBulkImport(true)} className="flex items-center gap-2 bg-blue-50 px-4 py-1.5 rounded-2xl hover:bg-blue-100 transition-colors">
             <HiOutlineTable size={16} /> Carga Masiva Excel
           </button>
         </div>
@@ -371,6 +405,14 @@ export default function CreateProductPage({ setView }: any) {
           </div>
         </form>
       </div>
+      <BulkImportDialog
+        isOpen={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onComplete={() => {
+          setShowBulkImport(false);
+          setView("LIST");
+        }}
+      />
     </div>
   );
 }

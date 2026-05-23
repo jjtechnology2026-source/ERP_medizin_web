@@ -32,12 +32,52 @@ export const productsService = {
   },
 
   async createProduct(medication: Partial<Medication>): Promise<Medication> {
-    const { data } = await api.post("/admin/Medications/create", medication);
-    return data;
+    const payload = [{
+      brand: medication.brand || "",
+      activeIngredient: medication.activeIngredient || "",
+      dosage: medication.dosage || "",
+      tablets: medication.tablets || "",
+      barCode: medication.barCode || "",
+      name: medication.name || "",
+      image: medication.image && typeof medication.image === "string" && (medication.image.startsWith("http") || medication.image.startsWith("data:")) ? medication.image : "",
+      category: medication.category || "",
+      subcategory: medication.subcategory || "",
+      price: Number(medication.price) || 0,
+      quantity: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
+      stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
+      description: medication.description || "",
+      controlled: Boolean(medication.controlled),
+      vat: Number(medication.vat) || 0,
+      antibiotic: Boolean(medication.antibiotic),
+      minimum: Number(medication.minimum) || 0,
+    }];
+
+    const { data } = await api.post("/Medications/Create", payload);
+    return Array.isArray(data) && data.length > 0 ? cleanImg(data[0]) : cleanImg(medication);
   },
 
   async upsertProducts(medications: Partial<Medication>[]): Promise<void> {
-    await api.post("/admin/Medications/upsert", { medications });
+    const payload = medications.map((medication) => ({
+      brand: medication.brand || "",
+      activeIngredient: medication.activeIngredient || "",
+      dosage: medication.dosage || "",
+      tablets: medication.tablets || "",
+      barCode: medication.barCode || "",
+      name: medication.name || "",
+      image: medication.image && typeof medication.image === "string" && (medication.image.startsWith("http") || medication.image.startsWith("data:")) ? medication.image : "",
+      category: medication.category || "",
+      subcategory: medication.subcategory || "",
+      price: Number(medication.price) || 0,
+      quantity: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
+      stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
+      description: medication.description || "",
+      controlled: Boolean(medication.controlled),
+      vat: Number(medication.vat) || 0,
+      antibiotic: Boolean(medication.antibiotic),
+      minimum: Number(medication.minimum) || 0,
+    }));
+
+    await api.post("/admin/Medications/upsert", payload);
   },
 
   async uploadImage(image: { name: string; data: number[] }): Promise<unknown> {
@@ -48,12 +88,7 @@ export const productsService = {
   async uploadMedicationImages(
     imagesList: { name: string; data: number[] }[]
   ): Promise<unknown[]> {
-    const results: unknown[] = [];
-    for (const img of imagesList) {
-      const result = await this.uploadImage(img);
-      results.push(result);
-    }
-    return results;
+    return Promise.all(imagesList.map((img) => this.uploadImage(img)));
   },
 
   async bulkImportWithProgress(
@@ -79,10 +114,10 @@ export const productsService = {
           description: product.description,
           controlled: product.controlled,
           antibiotic: product.antibiotic,
-          price: 0,
-          stock: 0,
-          vat: 16,
-          minimum: 0,
+          price: product.price ?? 0,
+          stock: product.stock ?? 0,
+          vat: product.vat ?? 16,
+          minimum: product.minimum ?? 0,
         });
         success++;
       } catch {

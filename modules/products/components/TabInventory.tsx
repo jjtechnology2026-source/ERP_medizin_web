@@ -6,6 +6,7 @@ import {
 } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
 
 function SkeletonRow() {
@@ -46,9 +47,11 @@ export default function InventoryList({
     setCurrentMedicine,
   } = useProductsStore();
 
+  const { medicinesCatalog } = useAuthStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const [localSearch, setLocalSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [isDownloading, setIsDownloading] = useState(false);
   const pageSize = 5;
 
   const hasFetched = useRef(false);
@@ -58,6 +61,12 @@ export default function InventoryList({
       fetchInventory(true);
     }
   }, [fetchInventory]);
+
+  useEffect(() => {
+    if (!isLoading && inventory.length === 0 && medicinesCatalog.length > 0) {
+      fetchInventory(true);
+    }
+  }, [isLoading, inventory.length, medicinesCatalog, fetchInventory]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -99,6 +108,106 @@ export default function InventoryList({
   const showLoadingState = isLoading || (isInitialLoad && inventory.length === 0);
   const showEmptyState = !isLoading && !isInitialLoad && filteredInventory.length === 0;
 
+  const formatReportDate = (date: Date) =>
+    date.toLocaleString("es-VE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const loadLogoAsPng = async (): Promise<string | null> => {
+    try {
+      const response = await fetch("/Logo.svg");
+      if (!response.ok) return null;
+      const svgText = await response.text();
+      const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const width = Math.min(220, image.width || 200);
+      const height = Math.max(60, Math.round((image.height || 80) * (width / (image.width || width))));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  };
+
+  const downloadInventoryReport = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({ unit: "pt", format: "letter" });
+      const today = new Date();
+      const headerTextY = 50;
+      const logoDataUrl = await loadLogoAsPng();
+
+      if (logoDataUrl) {
+        pdf.addImage(logoDataUrl, "PNG", 40, 20, 90, 40);
+      }
+
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Inventario de Productos", logoDataUrl ? 150 : 40, headerTextY);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`Fecha: ${formatReportDate(today)}`, 40, headerTextY + 25);
+      pdf.text(`Total de productos: ${filteredInventory.length}`, 40, headerTextY + 40);
+
+      const headers = ["Código", "Producto", "Stock", "Precio", "Categoría"];
+      const colX = [40, 160, 370, 430, 510];
+      let currentY = headerTextY + 70;
+      const rowHeight = 18;
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      headers.forEach((label, index) => {
+        pdf.text(label, colX[index], currentY);
+      });
+
+      currentY += rowHeight;
+      pdf.setFont("helvetica", "normal");
+
+      filteredInventory.forEach((item, index) => {
+        if (currentY + rowHeight > 750) {
+          pdf.addPage();
+          currentY = 40;
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(9);
+          headers.forEach((label, idx) => pdf.text(label, colX[idx], currentY));
+          currentY += rowHeight;
+          pdf.setFont("helvetica", "normal");
+        }
+
+        pdf.text(item.barCode || "-", colX[0], currentY);
+        pdf.text(item.name ? item.name.slice(0, 32) : "-", colX[1], currentY);
+        pdf.text(String(item.stock ?? 0), colX[2], currentY);
+        pdf.text(formatPrice(item.price), colX[3], currentY);
+        pdf.text(item.category || "-", colX[4], currentY);
+        currentY += rowHeight;
+      });
+
+      const filename = `inventario_${today.toISOString().slice(0, 10)}.pdf`;
+      pdf.save(filename);
+    } catch (error) {
+      console.error("Error al generar el PDF de inventario:", error);
+      alert("No se pudo generar el PDF. Intenta nuevamente.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     if (totalPages <= 7) {
@@ -125,9 +234,6 @@ export default function InventoryList({
             className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl font-black text-[10px] uppercase hover:border-blue-200 hover:text-blue-600 transition-all shadow-sm"
           >
             <HiOutlineCash size={14} /> Stock por impuesto
-          </button>
-          <button className="flex items-center gap-1 text-slate-400 text-[10px] font-black uppercase hover:text-blue-600 transition-colors">
-            <HiOutlineDownload size={14} /> Descargar Inventario
           </button>
           <button
             onClick={() => setView("SEARCH_CATALOG")}

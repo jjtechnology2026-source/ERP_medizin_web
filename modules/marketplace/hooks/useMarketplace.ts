@@ -84,13 +84,17 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
 
       // 1. Pestañas (Tab)
       if (activeTab === "incoming") {
-        // En entrantes mostramos Pendientes
-        if (status !== "Pending" && status !== "PENDIENTE" && status !== "pendiente") return false;
+        // En entrantes mostramos Pendientes, Nuevas o Aceptadas (esperando pago)
+        const s = String(status).toUpperCase();
+        if (s !== "PENDING" && s !== "PENDIENTE" && s !== "NEW" && s !== "NUEVA" && s !== "ACCEPTED" && s !== "ACEPTADA") return false;
       } else {
-        // En completadas mostramos Completadas o Canceladas
-        if (status !== "Completed" && status !== "COMPLETADA" && status !== "completada" &&
-            status !== "Cancelled" && status !== "CANCELADA" && status !== "cancelada" &&
-            status !== "Canceled" && status !== "CANCELED" && status !== "canceled") return false;
+        // El usuario solicitó no ver completadas aquí, sino solo lo que aceptó/rechazó directamente como lista visual.
+        // Ocultamos las completadas ya que van a "registro de órdenes".
+        if (status === "Completed" || status === "COMPLETADA" || status === "completada") return false;
+        
+        if (status !== "Cancelled" && status !== "CANCELADA" && status !== "cancelada" &&
+            status !== "Canceled" && status !== "CANCELED" && status !== "canceled" &&
+            status !== "Rejected" && status !== "RECHAZADA" && status !== "rechazada") return false;
       }
 
       // 2. Buscador
