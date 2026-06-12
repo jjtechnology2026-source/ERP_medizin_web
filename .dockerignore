@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+build
+pnpm-debug.log*
+.pnpm-store
+.pnpm-debug.log*
+.git
+.gitignore
+.env.local
+.env.production
+.env*.local
+README.md

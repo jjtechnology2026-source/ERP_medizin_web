@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  medizin-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://medizins.com}
+        NEXT_PUBLIC_MQTT_BROKER_HOST: ${NEXT_PUBLIC_MQTT_BROKER_HOST:-v1106ae1.ala.us-east-1.emqxsl.com}
+        NEXT_PUBLIC_MQTT_BROKER_PORT: ${NEXT_PUBLIC_MQTT_BROKER_PORT:-8084}
+        NEXT_PUBLIC_MQTT_PROTOCOL: ${NEXT_PUBLIC_MQTT_PROTOCOL:-wss}
+        NEXT_PUBLIC_MQTT_USERNAME: ${NEXT_PUBLIC_MQTT_USERNAME:-inventario_medizin}
+        NEXT_PUBLIC_MQTT_PASSWORD: ${NEXT_PUBLIC_MQTT_PASSWORD:-prueba1234}
+        NEXT_PUBLIC_MQTT_CLIENT_ID_PREFIX: ${NEXT_PUBLIC_MQTT_CLIENT_ID_PREFIX:-medizin_terminal_}
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+        NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://medizins.com}
+      NEXT_PUBLIC_MQTT_BROKER_HOST: ${NEXT_PUBLIC_MQTT_BROKER_HOST:-v1106ae1.ala.us-east-1.emqxsl.com}
+      NEXT_PUBLIC_MQTT_BROKER_PORT: ${NEXT_PUBLIC_MQTT_BROKER_PORT:-8084}
+      NEXT_PUBLIC_MQTT_PROTOCOL: ${NEXT_PUBLIC_MQTT_PROTOCOL:-wss}
+      NEXT_PUBLIC_MQTT_USERNAME: ${NEXT_PUBLIC_MQTT_USERNAME:-inventario_medizin}
+      NEXT_PUBLIC_MQTT_PASSWORD: ${NEXT_PUBLIC_MQTT_PASSWORD:-prueba1234}
+      NEXT_PUBLIC_MQTT_CLIENT_ID_PREFIX: ${NEXT_PUBLIC_MQTT_CLIENT_ID_PREFIX:-medizin_terminal_}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
