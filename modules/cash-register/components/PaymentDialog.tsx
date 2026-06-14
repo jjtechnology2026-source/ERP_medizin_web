@@ -40,6 +40,9 @@ const VENEZUELAN_BANKS = [
 
 const CARD_TYPES = ["Débito", "Crédito"];
 
+// Redondea a 2 decimales
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 export default function PaymentDialog({
   onClose,
   onComplete,
@@ -64,16 +67,16 @@ export default function PaymentDialog({
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
 
-  const formatPrice = (amount: number) => `Bs ${amount.toFixed(2)}`;
+  const formatPrice = (amount: number) => `Bs ${r2(amount).toFixed(2)}`;
 
   const baseAmount = totals.subtotal > 0
     ? totals.subtotal / (1 + totals.totalVat / totals.subtotal)
     : 0;
 
   const igtf = activePaymentMethods.length === 1 && activePaymentMethods[0] === "dolares"
-    ? totals.total * 0.03
+    ? r2(totals.total * 0.03)
     : 0;
-  const totalConIgtf = totals.total + igtf;
+  const totalConIgtf = r2(totals.total + igtf);
 
   const updatePayment = (method: PaymentMethod, partial: Record<string, any>) => {
     const base = payments[method];
@@ -86,8 +89,8 @@ export default function PaymentDialog({
     return sum + (p.amount || 0);
   }, 0);
 
-  const remaining = Math.max(0, totalConIgtf - totalPaid);
-  const exceso = totalPaid > totalConIgtf ? totalPaid - totalConIgtf : 0;
+  const remaining = Math.max(0, r2(totalConIgtf - totalPaid));
+  const exceso = totalPaid > totalConIgtf ? r2(totalPaid - totalConIgtf) : 0;
 
   const totalCambioAsignado = manualChanges.reduce((sum, entry) => {
     if (entry.tipo === "efectivoVes") return sum + entry.amount;
@@ -97,7 +100,7 @@ export default function PaymentDialog({
     return sum;
   }, 0);
 
-  const cambioPendiente = exceso - totalCambioAsignado;
+  const cambioPendiente = r2(exceso - totalCambioAsignado);
 
   const hasInvalidActiveMethod = activePaymentMethods.some((method) => {
     const p = payments[method];
@@ -137,12 +140,12 @@ export default function PaymentDialog({
           if (e.tipo === "credito") return sum + e.amount * rate;
           return sum;
         }, 0);
-        const maxForThis = Math.max(0, exceso - otherTotal);
+        const maxForThis = Math.max(0, r2(exceso - otherTotal));
         let maxInUnit = maxForThis;
         if (updated.tipo === "efectivoUsd" || updated.tipo === "movil" || updated.tipo === "credito") {
-          maxInUnit = maxForThis / (rate || 300);
+          maxInUnit = r2(maxForThis / (rate || 300));
         }
-        if (updated.amount > maxInUnit) updated.amount = Math.round(maxInUnit * 100) / 100;
+        if (updated.amount > maxInUnit) updated.amount = r2(maxInUnit);
         return updated;
       })
     );
@@ -247,13 +250,30 @@ export default function PaymentDialog({
       const controlNumber = `FAC-${Date.now()}`;
       const invoicePayments = getPaymentsForInvoice();
 
+      // Calcular detalles con precios redondeados a 2 decimales
+      const detalles = (order?.medications ?? []).map((m) => {
+        const unitPrice = r2(m.price / (1 + (m.vat || 0) / 100));
+        const lineTotal = r2(unitPrice * m.quantity * (1 + (m.vat || 0) / 100));
+        return {
+          producto_id: m.barCode,
+          descripcion: m.name,
+          cantidad: m.quantity,
+          precio_unitario_ves: unitPrice,
+          iva_porcentaje: m.vat || 0,
+          lineTotal, // solo para cálculo interno
+        };
+      });
+
+      // Total real de la factura (suma de líneas redondeadas)
+      const totalFactura = r2(detalles.reduce((sum, d) => sum + d.lineTotal, 0));
+
       let movimientoCaja: any;
       if (invoicePayments.length === 1) {
         const p = invoicePayments[0];
         const esDolar = p.type === "dolares";
         movimientoCaja = {
           moneda: esDolar ? "USD" : "VES",
-          monto_original: esDolar ? p.amount : totalConIgtf,
+          monto_original: esDolar ? r2(p.amount) : totalFactura,
           metodo_pago: esDolar ? "Efectivo" : p.type === "efectivo" ? "Efectivo" : p.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
           descripcion: `Cobro factura ${controlNumber}`,
         };
@@ -265,11 +285,11 @@ export default function PaymentDialog({
           return currMonto > prevMonto ? curr : prev;
         });
         const detalle = invoicePayments
-          .map((p) => `${p.type} ${p.amount.toFixed(2)} ${p.type === "dolares" ? "USD" : "VES"}`)
+          .map((p) => `${p.type} ${r2(p.amount).toFixed(2)} ${p.type === "dolares" ? "USD" : "VES"}`)
           .join(", ");
         movimientoCaja = {
           moneda: "VES",
-          monto_original: totalConIgtf,
+          monto_original: totalFactura,
           metodo_pago: principal.type === "efectivo" ? "Efectivo" : principal.type === "dolares" ? "Efectivo" : principal.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
           descripcion: `Cobro factura ${controlNumber} | Pago mixto: ${detalle}`,
         };
@@ -281,15 +301,17 @@ export default function PaymentDialog({
         cliente_nombre: clientData?.name || "Cliente General",
         cliente_rif: clientData?.documento || "V-00000000",
         tasa_cambio: rate,
-        detalles: (order?.medications ?? []).map((m) => ({
-          producto_id: m.barCode,
-          descripcion: m.name,
-          cantidad: m.quantity,
-          precio_unitario_ves: m.price / (1 + (m.vat || 0) / 100),
-          iva_porcentaje: m.vat || 0,
+        detalles: detalles.map((d) => ({
+          producto_id: d.producto_id,
+          descripcion: d.descripcion,
+          cantidad: d.cantidad,
+          precio_unitario_ves: d.precio_unitario_ves,
+          iva_porcentaje: d.iva_porcentaje,
         })),
         movimiento_caja: movimientoCaja,
       };
+
+      console.log("📤 [PaymentDialog] Enviando payload:", JSON.stringify(payload, null, 2));
 
       await registerSale(payload);
 
@@ -364,8 +386,8 @@ export default function PaymentDialog({
                         label="Monto en Bs"
                         value={String((payments.efectivo as CashPayment).amount || "")}
                         onChange={(v) => {
-                          const amt = parseFloat(v) || 0;
-                          updatePayment("efectivo", { amount: amt, change: Math.max(0, amt - totalConIgtf) });
+                          const amt = r2(parseFloat(v) || 0);
+                          updatePayment("efectivo", { amount: amt, change: r2(Math.max(0, amt - totalConIgtf)) });
                         }}
                         placeholder="0.00"
                       />
@@ -375,7 +397,7 @@ export default function PaymentDialog({
                         label="Monto en USD"
                         value={String((payments.dolares as DollarPayment).amount || "")}
                         onChange={(v) => {
-                          const amt = parseFloat(v) || 0;
+                          const amt = r2(parseFloat(v) || 0);
                           updatePayment("dolares", { amount: amt, change: 0 });
                         }}
                         placeholder="0.00"
@@ -383,7 +405,7 @@ export default function PaymentDialog({
                     )}
                     {method === "tarjeta" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: parseFloat(v) || 0 })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
                         <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.tarjeta as CardPayment).cardType}
@@ -397,7 +419,7 @@ export default function PaymentDialog({
                     )}
                     {method === "pagomovil" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: parseFloat(v) || 0 })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.pagomovil as MobilePayment).bank}
@@ -411,7 +433,7 @@ export default function PaymentDialog({
                     )}
                     {method === "biopago" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: parseFloat(v) || 0 })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
                         <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.biopago as BiopagoPayment).bank}
@@ -455,9 +477,10 @@ export default function PaymentDialog({
                       <div className="col-span-3">
                         <input
                           type="number"
+                          step="0.01"
                           value={entry.amount || ""}
-                          onChange={(e) => updateManualChange(idx, { amount: parseFloat(e.target.value) || 0 })}
-                          placeholder="Monto"
+                          onChange={(e) => updateManualChange(idx, { amount: r2(parseFloat(e.target.value) || 0) })}
+                          placeholder="0.00"
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none"
                         />
                       </div>
@@ -602,7 +625,8 @@ function PaymentField({ label, value, onChange, placeholder }: { label: string; 
     <div>
       <label className="text-[10px] font-bold text-slate-600 mb-1 block">{label}</label>
       <input
-        type="text"
+        type="number"
+        step="0.01"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

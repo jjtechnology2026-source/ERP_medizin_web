@@ -60,7 +60,8 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       let sessionInvoices: any[] = [];
       let sessionTransactions: any[] = [];
 
-      if (activeSession) {
+      // Solo consultar facturas y transacciones si la sesión está aprobada
+      if (activeSession && activeSession.approvalStatus === "approved") {
         const [inv, tx] = await Promise.all([
           cashierAccountantService.fetchSessionInvoices(activeSession.cashBoxId),
           cashierAccountantService.fetchSessionTransactions(activeSession.cashBoxId),
