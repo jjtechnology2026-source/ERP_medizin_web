@@ -130,6 +130,10 @@ export const productsService = {
     return { success: created.length, errors, created };
   },
 
+  async deleteProduct(barCode: string): Promise<void> {
+    await api.delete("/Medications/Delete", { data: { bar_code: barCode } });
+  },
+
   async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     return this.bulkImportWithProgress(products);
   },

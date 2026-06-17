@@ -29,7 +29,14 @@ export default function LoginForm() {
   // permitimos que se vea el formulario para re-autenticar
   const hasSessionError = (session as any)?.error === "RefreshAccessTokenError";
 
-  // Si ya estamos autenticados y no hay error, mostramos el overlay a pantalla completa
+  // Redirigir al panel si ya hay sesión activa
+  React.useEffect(() => {
+    if (status === "authenticated" && !hasSessionError) {
+      router.push("/panel");
+    }
+  }, [status, hasSessionError, router]);
+
+  // Si ya estamos autenticados y no hay error, mostramos el overlay mientras redirige
   if (status === "authenticated" && !hasSessionError) {
     return <LoadingOverlay message="¡Bienvenido de nuevo!" subtext="Entrando al panel de control..." />;
   }

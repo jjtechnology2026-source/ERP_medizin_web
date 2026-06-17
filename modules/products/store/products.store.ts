@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Medication, StockFilter } from "@/modules/products/types/products.types";
 import { productsService } from "@/modules/products/api/products.service";
-import api from "@/modules/core/api/client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
@@ -84,13 +83,25 @@ export const useProductsStore = create<ProductsStore>()(
         const { isInitialLoad, inventory } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
 
-        const localCatalog = useAuthStore.getState().medicinesCatalog || [];
+        set({ isLoading: true });
 
-        if (isInitialLoad && inventory.length === 0 && localCatalog.length > 0) {
-          set({ inventory: localCatalog.map(cleanImage), isLoading: true });
+        try {
+          const apiInventory = await productsService.getInventory();
+          if (apiInventory.length > 0) {
+            set({ inventory: apiInventory, isLoading: false, isInitialLoad: false });
+            useAuthStore.getState().setMedicinesCatalog(apiInventory);
+            return;
+          }
+        } catch (e) {
+          console.warn("No se pudo obtener inventario desde la API, usando catálogo local:", e);
         }
 
-        set({ isLoading: false, isInitialLoad: false });
+        const localCatalog = useAuthStore.getState().medicinesCatalog || [];
+        if (localCatalog.length > 0) {
+          set({ inventory: localCatalog.map(cleanImage), isLoading: false, isInitialLoad: false });
+        } else {
+          set({ isLoading: false, isInitialLoad: false });
+        }
       },
 
       addToInventory: (medications: Medication[]) => {
@@ -188,6 +199,12 @@ export const useProductsStore = create<ProductsStore>()(
 
       deleteMedicine: async (barCode) => {
         const { inventory } = get();
+        try {
+          await productsService.deleteProduct(barCode);
+        } catch (error) {
+          console.error("API error while deleting medicine:", error);
+          return;
+        }
         set({ inventory: inventory.filter((m) => m.barCode !== barCode) });
       },
 
@@ -269,11 +286,9 @@ export const useProductsStore = create<ProductsStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (state.inventory.length > 0) {
-          state.isInitialLoad = false;
-          state.isLoading = false;
-          setTimeout(() => state.fetchInventory(true), 500);
-        }
+        state.isInitialLoad = true;
+        state.isLoading = true;
+        setTimeout(() => state.fetchInventory(true), 500);
       },
     }
   )
