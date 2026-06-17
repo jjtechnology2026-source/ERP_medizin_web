@@ -2,9 +2,11 @@ import { create } from "zustand";
 import type { CashierWorkflowState, CashierClosePhysicalCount } from "@/modules/cash-register/types/cashier.types";
 import type { CreateInvoicePayload } from "@/modules/cash-register/types/cashier.types";
 import { cashierAccountantService } from "@/modules/cash-register/api/cashier-accountant.service";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
+  currentRate: number;
   load: (pharmacyId?: string) => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
@@ -20,7 +22,7 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   setInfo: (msg: string | null) => void;
 }
 
-const initialState: CashierWorkflowState = {
+const initialState: CashierWorkflowState & { currentRate: number } = {
   isLoading: false,
   isSubmitting: false,
   isCashierRole: true,
@@ -31,6 +33,7 @@ const initialState: CashierWorkflowState = {
   selectedCashBoxId: null,
   errorMessage: null,
   infoMessage: null,
+  currentRate: 0,
 };
 
 export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) => ({
@@ -45,6 +48,9 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     }
 
     set({ isLoading: true, errorMessage: null, pharmacyId: effectivePharmacyId });
+
+    const rate = useCurrencyStore.getState().getEffectiveRate();
+    set({ currentRate: rate });
 
     const [cashBoxes, rawSession] = await Promise.all([
       (async () => {
