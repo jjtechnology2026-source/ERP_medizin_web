@@ -10,25 +10,15 @@ const cleanImg = (item: any) => ({
 });
 
 export const productsService = {
-  async getInventory(): Promise<Medication[]> {
-    const { data } = await api.get("/admin/Inventory/Stock");
-    const rawItems = Array.isArray(data) ? data : data?.result ?? data?.data ?? data?.medications ?? [];
+  async getCatalog(signal?: AbortSignal): Promise<Medication[]> {
+    const { data } = await api.post("/Medications/list", { size: 1000 }, {
+      headers: { "Content-Type": "application/json" },
+      signal,
+    });
+    const rawItems = Array.isArray(data)
+      ? data
+      : data?.medications ?? data?.result ?? data?.data ?? [];
     return rawItems.map(cleanImg);
-  },
-
-  async getCatalog(): Promise<Medication[]> {
-    try {
-      const { data } = await api.post("/Medications/list", "null", {
-        headers: { "Content-Type": "application/json" },
-      });
-      const rawItems = Array.isArray(data)
-        ? data
-        : data?.medications ?? data?.result ?? data?.data ?? [];
-      return rawItems.map(cleanImg);
-    } catch (e) {
-      console.error("Error al obtener catálogo real de medicamentos:", e);
-      return [];
-    }
   },
 
   async createProduct(medication: Partial<Medication>): Promise<Medication> {
@@ -53,8 +43,8 @@ export const productsService = {
       detalle: (medication as any).detalle || "",
     }];
 
-    const { data } = await api.post("/Medications/Create", payload);
-    return Array.isArray(data) && data.length > 0 ? cleanImg(data[0]) : cleanImg(medication);
+    await api.post("/Medications/Create", payload);
+    return cleanImg(medication);
   },
 
   async upsertProducts(medications: Partial<Medication>[]): Promise<void> {

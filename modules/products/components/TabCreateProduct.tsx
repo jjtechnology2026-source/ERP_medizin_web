@@ -177,6 +177,10 @@ export default function CreateProductPage({ setView }: any) {
     subcategory: "",
     description: "",
     presentation: "Tabletas",
+    price: "",
+    stock: "",
+    vat: "16",
+    minimum: "0",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,10 +260,10 @@ export default function CreateProductPage({ setView }: any) {
     const payload = {
       ...formData,
       doseUnit: selectedUnit,
-      price: "0",
-      stock: "0",
-      minimum: "0",
-      vat: 0,
+      price: formData.price || "0",
+      stock: formData.stock || "0",
+      minimum: formData.minimum || "0",
+      vat: parseInt(formData.vat) || 16,
       controlled: false,
       antibiotic: false,
     };
@@ -499,7 +503,45 @@ export default function CreateProductPage({ setView }: any) {
                 onChange={(val) => setFormData({ ...formData, subcategory: val })}
               />
             </div>
-          </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6 mt-6">
+              <h3 className="text-lg font-black text-slate-800 mb-4">Precio y Stock</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <InputField
+                  label="Precio ($)"
+                  placeholder="ej: 5.00"
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e: any) => setFormData({ ...formData, price: e.target.value })}
+                />
+                <InputField
+                  label="Stock inicial"
+                  placeholder="ej: 10"
+                  type="number"
+                  step="1"
+                  value={formData.stock}
+                  onChange={(e: any) => setFormData({ ...formData, stock: e.target.value })}
+                />
+                <InputField
+                  label="IVA (%)"
+                  placeholder="16"
+                  type="number"
+                  step="1"
+                  value={formData.vat}
+                  onChange={(e: any) => setFormData({ ...formData, vat: e.target.value })}
+                />
+                <InputField
+                  label="Stock mínimo"
+                  placeholder="ej: 5"
+                  type="number"
+                  step="1"
+                  value={formData.minimum}
+                  onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
+                />
+              </div>
+            </div>
 
             {successMsg && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">

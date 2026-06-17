@@ -83,24 +83,29 @@ export const useProductsStore = create<ProductsStore>()(
         const { isInitialLoad, inventory } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
 
-        set({ isLoading: true });
-
-        try {
-          const apiInventory = await productsService.getInventory();
-          if (apiInventory.length > 0) {
-            set({ inventory: apiInventory, isLoading: false, isInitialLoad: false });
-            useAuthStore.getState().setMedicinesCatalog(apiInventory);
-            return;
-          }
-        } catch (e) {
-          console.warn("No se pudo obtener inventario desde la API, usando catálogo local:", e);
+        const catalog = useAuthStore.getState().medicinesCatalog || [];
+        if (catalog.length > 0 && !force) {
+          set({ inventory: catalog.map(cleanImage), isLoading: false, isInitialLoad: false });
+          return;
         }
 
-        const localCatalog = useAuthStore.getState().medicinesCatalog || [];
-        if (localCatalog.length > 0) {
-          set({ inventory: localCatalog.map(cleanImage), isLoading: false, isInitialLoad: false });
-        } else {
-          set({ isLoading: false, isInitialLoad: false });
+        if (inventory.length === 0) set({ isLoading: true });
+        set({ error: null });
+
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          const apiInventory = await productsService.getCatalog(controller.signal);
+          clearTimeout(timeout);
+          set({ inventory: apiInventory, isLoading: false, isInitialLoad: false });
+          useAuthStore.getState().setMedicinesCatalog(apiInventory);
+        } catch (e: any) {
+          if (inventory.length === 0 && catalog.length === 0) {
+            const msg = e?.name === "AbortError" ? "La consulta tardó demasiado. Intente de nuevo." : "Error al cargar inventario";
+            set({ error: msg, isLoading: false, isInitialLoad: false });
+          } else {
+            set({ isLoading: false });
+          }
         }
       },
 
@@ -132,27 +137,20 @@ export const useProductsStore = create<ProductsStore>()(
       setCurrentMedicine: (currentMedicine) => set({ currentMedicine }),
 
       saveMedicine: async (medicine) => {
-        const { editMode, inventory } = get();
-        const localCopy = { ...medicine };
+        const { inventory } = get();
+        const exists = inventory.some((m) => m.barCode === medicine.barCode && m.barCode);
         try {
-          if (!editMode) {
-            await productsService.createProduct(localCopy);
-          }
+          await productsService.createProduct(medicine);
         } catch (error) {
           console.error("API error while saving medicine:", error);
           return false;
         }
-        if (editMode) {
-          set({
-            inventory: inventory.map((m) =>
-              m.barCode === medicine.barCode ? medicine : m
-            ),
-          });
-        } else {
-          set({ inventory: [...inventory.filter(m => m.barCode !== medicine.barCode), medicine] });
-        }
+        set({
+          inventory: exists
+            ? inventory.map((m) => m.barCode === medicine.barCode ? medicine : m)
+            : [...inventory.filter(m => m.barCode !== medicine.barCode), medicine],
+        });
 
-        // Publish MQTT inventory update/insert to notify other clients
         try {
           const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
           if (pharmacyId) {
@@ -186,8 +184,7 @@ export const useProductsStore = create<ProductsStore>()(
             };
 
             const buf = DtoUpdateMedications.encode(dto).finish();
-            const topic = editMode ? MQTT_TOPICS.inventoryUpdate(pharmacyId) : MQTT_TOPICS.inventoryInsert(pharmacyId);
-            mqttServer.publish(topic, buf).catch(() => {});
+            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf).catch(() => {});
           }
         } catch (e) {
           // noop
@@ -255,11 +252,8 @@ export const useProductsStore = create<ProductsStore>()(
         const q = searchQuery.toLowerCase().trim();
         let filtered = [...inventory];
 
-        // Stock tabs: GENERAL => productos con stock > 0, LOW => productos con stock === 0
-        if (filter === "GENERAL") {
-          filtered = filtered.filter((m) => (m.stock ?? 0) > 0);
-        } else if (filter === "LOW") {
-          filtered = filtered.filter((m) => (m.stock ?? 0) === 0);
+        if (filter === "LOW") {
+          filtered = filtered.filter((m) => (m.stock ?? 0) <= (m.minimum ?? 0));
         }
 
         if (q) {
@@ -276,7 +270,7 @@ export const useProductsStore = create<ProductsStore>()(
       },
 
       getLowStockCount: () => {
-        return get().inventory.filter((m) => (m.stock ?? 0) === 0).length;
+        return get().inventory.filter((m) => (m.stock ?? 0) <= (m.minimum ?? 0)).length;
       },
     }),
     {

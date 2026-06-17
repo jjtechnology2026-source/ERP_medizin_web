@@ -1,27 +1,12 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   HiOutlinePencil, HiOutlineTrash, HiOutlineRefresh,
   HiPlus, HiCloudUpload, HiSearch, HiViewGrid, HiExclamationCircle,
-  HiOutlineDownload, HiOutlineCash
+  HiOutlineCash
 } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
-
-function SkeletonRow() {
-  return (
-    <tr className="animate-pulse">
-      <td className="px-8 py-4"><div className="size-10 bg-slate-200 rounded-lg" /></td>
-      <td className="px-8 py-4"><div className="h-4 bg-slate-200 rounded w-32 mb-2" /><div className="h-3 bg-slate-100 rounded w-20" /></td>
-      <td className="px-8 py-4"><div className="h-4 bg-slate-200 rounded w-24" /></td>
-      <td className="px-8 py-4"><div className="h-4 bg-slate-200 rounded w-16" /></td>
-      <td className="px-8 py-4"><div className="h-4 bg-slate-200 rounded w-10" /></td>
-      <td className="px-8 py-4"><div className="h-4 bg-slate-200 rounded w-40" /></td>
-      <td className="px-8 py-4"><div className="flex gap-2"><div className="size-8 bg-slate-200 rounded-lg" /><div className="size-8 bg-slate-200 rounded-lg" /><div className="size-8 bg-slate-200 rounded-lg" /></div></td>
-    </tr>
-  );
-}
 
 export default function InventoryList({
   setView,
@@ -36,6 +21,7 @@ export default function InventoryList({
     inventory,
     isLoading,
     isInitialLoad,
+    error,
     fetchInventory,
     setFilter,
     searchQuery,
@@ -47,7 +33,6 @@ export default function InventoryList({
     setCurrentMedicine,
   } = useProductsStore();
 
-  const { medicinesCatalog } = useAuthStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
   const [localSearch, setLocalSearch] = useState("");
@@ -55,19 +40,9 @@ export default function InventoryList({
   const [isDownloading, setIsDownloading] = useState(false);
   const pageSize = 5;
 
-  const hasFetched = useRef(false);
   useEffect(() => {
-    if (!hasFetched.current) {
-      hasFetched.current = true;
-      fetchInventory(true);
-    }
+    fetchInventory(true);
   }, [fetchInventory]);
-
-  useEffect(() => {
-    if (!isLoading && inventory.length === 0 && medicinesCatalog.length > 0) {
-      fetchInventory(true);
-    }
-  }, [isLoading, inventory.length, medicinesCatalog, fetchInventory]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -105,8 +80,8 @@ export default function InventoryList({
     setPage(1);
   };
 
-  const showLoadingState = isLoading || (isInitialLoad && inventory.length === 0);
-  const showEmptyState = !isLoading && !isInitialLoad && filteredInventory.length === 0;
+  const showLoadingState = (isLoading || (isInitialLoad && inventory.length === 0)) && !error;
+  const showEmptyState = !isLoading && !isInitialLoad && filteredInventory.length === 0 && !error;
 
   const formatReportDate = (date: Date) =>
     date.toLocaleString("es-VE", {
@@ -307,13 +282,31 @@ export default function InventoryList({
             </thead>
             <tbody className="divide-y divide-slate-50">
               {showLoadingState ? (
-                <>
-                  <SkeletonRow />
-                  <SkeletonRow />
-                  <SkeletonRow />
-                  <SkeletonRow />
-                  <SkeletonRow />
-                </>
+                <tr>
+                  <td colSpan={7} className="px-8 py-24 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <svg className="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span className="text-slate-500 font-bold text-sm">Cargando datos...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="px-8 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <span className="text-red-500 font-bold text-sm">{error}</span>
+                      <button
+                        onClick={() => fetchInventory(true)}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:scale-105 transition-all"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ) : showEmptyState ? (
                 <tr>
                   <td colSpan={7} className="px-8 py-16 text-center text-slate-400 font-bold text-sm">

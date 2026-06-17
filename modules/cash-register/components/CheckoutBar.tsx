@@ -34,7 +34,7 @@ export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void })
               {isDollar ? "USD" : "Bs"}
             </span>
             <span className="text-base font-black text-[#0055ff] font-mono leading-none">
-              {isDollar ? (totals.total / (rate || 1)).toFixed(2) : totals.total.toFixed(2)}
+              {isDollar ? totals.total.toFixed(2) : (totals.total * (rate || 1)).toFixed(2)}
             </span>
           </div>
         </div>

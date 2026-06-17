@@ -59,7 +59,7 @@ export default function PaymentDialog({
     getPaymentsForInvoice,
   } = useCurrentOrderStore();
   const { registerSale, activeSession, errorMessage, setError } = useCashierWorkflowStore();
-  const { getEffectiveRate } = useCurrencyStore();
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
@@ -67,14 +67,19 @@ export default function PaymentDialog({
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
 
-  const formatPrice = (amount: number) => `Bs ${r2(amount).toFixed(2)}`;
+  const formatPrice = (amountInUsd: number) => {
+    if (isDollar) return `$ ${r2(amountInUsd).toFixed(2)}`;
+    return `Bs ${r2(amountInUsd * rate).toFixed(2)}`;
+  };
 
-  const baseAmount = totals.total - totals.totalVat;
+  const totalVes = totals.total * rate;
+  const totalVatVes = totals.totalVat * rate;
+  const baseAmount = totalVes - totalVatVes;
 
   const igtf = activePaymentMethods.length === 1 && activePaymentMethods[0] === "dolares"
-    ? r2(totals.total * 0.03)
+    ? r2(totalVes * 0.03)
     : 0;
-  const totalConIgtf = r2(totals.total + igtf);
+  const totalConIgtf = r2(totalVes + igtf);
 
   const updatePayment = (method: PaymentMethod, partial: Record<string, any>) => {
     const base = payments[method];
@@ -248,17 +253,18 @@ export default function PaymentDialog({
       const controlNumber = `FAC-${Date.now()}`;
       const invoicePayments = getPaymentsForInvoice();
 
-      // Calcular detalles con precios redondeados a 2 decimales
+      // Calcular detalles con precios convertidos a VES
       const detalles = (order?.medications ?? []).map((m) => {
-        const unitPrice = r2(m.price / (1 + (m.vat || 0) / 100));
-        const lineTotal = r2(unitPrice * m.quantity * (1 + (m.vat || 0) / 100));
+        const unitPriceUsd = m.price / (1 + (m.vat || 0) / 100);
+        const unitPriceVes = r2(unitPriceUsd * rate);
+        const lineTotalVes = r2(unitPriceVes * m.quantity * (1 + (m.vat || 0) / 100));
         return {
           producto_id: m.barCode,
           descripcion: m.name,
           cantidad: m.quantity,
-          precio_unitario_ves: unitPrice,
+          precio_unitario_ves: unitPriceVes,
           iva_porcentaje: m.vat || 0,
-          lineTotal, // solo para cálculo interno
+          lineTotal: lineTotalVes,
         };
       });
 

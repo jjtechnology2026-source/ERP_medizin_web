@@ -22,22 +22,16 @@ export const useLoginForm = () => {
     setError("");
 
     try {
-      // 1. Call login directly on the client side to get the full API response
       const data = await authService.login({ username, password });
       
       if (data.success === false) {
         throw new Error(data.message || "Credenciales inválidas");
       }
 
-      // 2. Capture the medicines catalog and save it to Zustand useAuthStore
-      if (data.medicines && Array.isArray(data.medicines)) {
-        useAuthStore.getState().setMedicinesCatalog(data.medicines);
-        console.log(`Successfully saved ${data.medicines.length} medicines into Zustand catalog store.`);
-      } else {
-        console.warn("No medicines array found in the login response.");
+      if (data.medications && Array.isArray(data.medications)) {
+        useAuthStore.getState().setMedicinesCatalog(data.medications);
       }
 
-      // 3. Complete login session using next-auth with the direct login feature
       await login({
         isDirectLogin: "true",
         userData: JSON.stringify(data),

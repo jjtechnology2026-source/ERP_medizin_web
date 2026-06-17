@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { useProductSearch } from "@/modules/products/hooks/useProductSearch";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
@@ -6,7 +7,13 @@ import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
-  const { inventory } = useProductsStore();
+  const { inventory, fetchInventory } = useProductsStore();
+
+  useEffect(() => {
+    if (inventory.length === 0) {
+      fetchInventory(true);
+    }
+  }, [inventory.length, fetchInventory]);
   const { addMedication } = useCurrentOrderStore();
   const { query, setQuery, results, hasMore, loadMore } = useProductSearch({
     inventory,

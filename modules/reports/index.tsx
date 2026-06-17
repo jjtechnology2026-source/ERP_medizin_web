@@ -1,7 +1,7 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { MetricCard } from "./components/MetricCard";
-import { FaChartLine, FaRegClipboard, FaShoppingCart, FaChartBar } from "react-icons/fa";
+import { FaChartLine, FaRegClipboard } from "react-icons/fa";
 import { IoHandLeftOutline } from "react-icons/io5";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
@@ -132,27 +132,6 @@ export default function Reportes() {
     };
   }, [orders]);
 
-  const agentStats = useMemo(() => {
-    const agentMap = new Map<string, { name: string; total: number; count: number }>();
-    for (const order of orders) {
-      if (order.saleStatus !== "Completed") continue;
-      const id = order.idAgent || "unknown";
-      const existing = agentMap.get(id);
-      const total = order.totalreal || order.totalsystem || 0;
-      if (existing) {
-        existing.total += total;
-        existing.count += 1;
-      } else {
-        agentMap.set(id, {
-          name: order.nameAgent || "Sin nombre",
-          total,
-          count: 1,
-        });
-      }
-    }
-    return Array.from(agentMap.values()).sort((a, b) => b.total - a.total);
-  }, [orders]);
-
   const noteStats = useMemo(() => {
     let creditNotes = 0;
     let debitNotes = 0;
@@ -215,62 +194,6 @@ export default function Reportes() {
           bgColor="bg-[#4ade80]"
           icon={<IoHandLeftOutline />}
         />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-          <div className="bg-[#0052ff] grid grid-cols-3 text-white text-[11px] font-bold uppercase p-4 tracking-wider">
-            <div className="text-center">Nombre del Agente</div>
-            <div className="text-center">Órdenes</div>
-            <div className="text-center">Ventas Totales</div>
-          </div>
-          {agentStats.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-sm font-bold">
-              {orders.length === 0 ? "No hay datos de agentes disponibles" : "Sin ventas completadas"}
-            </div>
-          ) : (
-            agentStats.slice(0, 10).map((agent, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-3 p-4 text-center items-center border-b border-gray-50 last:border-0 hover:bg-slate-50/50 transition-colors"
-              >
-                <div className="font-medium text-left px-4 lowercase text-gray-700">
-                  {agent.name}
-                </div>
-                <div className="text-sm font-bold text-slate-500">{agent.count}</div>
-                <div className="font-bold text-gray-700 uppercase">
-                  {formatAmount(agent.total)}
-                </div>
-              </div>
-            ))
-          )}
-          {agentStats.length > 10 && (
-            <div className="p-3 text-center text-[10px] font-bold text-slate-400">
-              ...y {agentStats.length - 10} agentes más
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-          <div className="bg-slate-700 grid grid-cols-2 text-white text-[11px] font-bold uppercase p-4 tracking-wider">
-            <div className="text-center">Métrica</div>
-            <div className="text-center">Valor</div>
-          </div>
-          <div className="divide-y divide-gray-50">
-            <div className="grid grid-cols-2 p-4 text-center hover:bg-slate-50/50 transition-colors">
-              <div className="font-medium text-left px-4 text-sm text-slate-600">Total órdenes</div>
-              <div className="font-bold text-slate-800">{stats.totalOrders}</div>
-            </div>
-            <div className="grid grid-cols-2 p-4 text-center hover:bg-slate-50/50 transition-colors">
-              <div className="font-medium text-left px-4 text-sm text-slate-600">Ventas totales</div>
-              <div className="font-bold text-blue-600">{formatAmount(stats.totalSales)}</div>
-            </div>
-            <div className="grid grid-cols-2 p-4 text-center hover:bg-slate-50/50 transition-colors">
-              <div className="font-medium text-left px-4 text-sm text-slate-600">Tasa de cambio</div>
-              <div className="font-bold text-slate-800">1 USD = {rate.toFixed(2)} Bs</div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
