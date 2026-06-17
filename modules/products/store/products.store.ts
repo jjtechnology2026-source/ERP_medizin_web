@@ -28,6 +28,7 @@ interface ProductsActions {
   setEditMode: (mode: boolean) => void;
   setCurrentMedicine: (med: Partial<Medication> | null) => void;
   saveMedicine: (medicine: Medication) => Promise<boolean>;
+  addToInventory: (medications: Medication[]) => void;
   deleteMedicine: (barCode: string) => Promise<void>;
   decrementStock: (items: { barCode: string; quantity: number }[]) => void;
   applyInventoryUpdate: (updates: { barCode: string; stock: number }[]) => void;
@@ -87,42 +88,18 @@ export const useProductsStore = create<ProductsStore>()(
 
         if (isInitialLoad && inventory.length === 0 && localCatalog.length > 0) {
           set({ inventory: localCatalog.map(cleanImage), isLoading: true });
-        } else {
-          set({ isLoading: true });
         }
 
-        try {
-          const profile = useAuthStore.getState().profile;
-          if (profile?.id) {
-            const { data: userData } = await api.post(`/admin/User/searchuser/${profile.id}`);
-            
-            if (userData && userData.medicines && Array.isArray(userData.medicines)) {
-              const apiInventory = userData.medicines.map(cleanImage);
-              
-              const inventoryMap = new Map();
-              apiInventory.forEach((med: Medication) => {
-                inventoryMap.set(med.barCode, med);
-              });
-
-              if (!force) {
-                const currentLocal = get().inventory;
-                currentLocal.forEach((med) => {
-                  if (med.barCode && !inventoryMap.has(med.barCode)) {
-                    inventoryMap.set(med.barCode, med);
-                  }
-                });
-              }
-              const merged = Array.from(inventoryMap.values());
-              if (merged.length > 0) {
-                set({ inventory: merged });
-                useAuthStore.getState().setMedicinesCatalog(merged);
-              }
-            }
-          }
-        } catch {
-          // Fallback to persisted inventory on failure
-        }
         set({ isLoading: false, isInitialLoad: false });
+      },
+
+      addToInventory: (medications: Medication[]) => {
+        const { inventory } = get();
+        const map = new Map(inventory.map(m => [m.barCode, m]));
+        medications.forEach(m => { if (m.barCode) map.set(m.barCode, m); });
+        const merged = Array.from(map.values());
+        set({ inventory: merged });
+        useAuthStore.getState().setMedicinesCatalog(merged);
       },
 
       fetchCatalog: async () => {
@@ -205,6 +182,7 @@ export const useProductsStore = create<ProductsStore>()(
           // noop
         }
 
+        useAuthStore.getState().setMedicinesCatalog(get().inventory);
         return true;
       },
 

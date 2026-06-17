@@ -67,7 +67,7 @@ export default function PaymentDialog({
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
 
-  const formatPrice = (amount: number) => `Bs ${r2(amount * rate).toFixed(2)}`;
+  const formatPrice = (amount: number) => `Bs ${r2(amount).toFixed(2)}`;
 
   const baseAmount = totals.total - totals.totalVat;
 

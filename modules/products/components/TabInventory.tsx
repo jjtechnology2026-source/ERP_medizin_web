@@ -49,6 +49,7 @@ export default function InventoryList({
 
   const { medicinesCatalog } = useAuthStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
   const [localSearch, setLocalSearch] = useState("");
   const [page, setPage] = useState(1);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -76,8 +77,8 @@ export default function InventoryList({
     return () => clearTimeout(timer);
   }, [localSearch, setSearchQuery]);
 
-  const filteredInventory = useMemo(() => getFilteredInventory(), [getFilteredInventory]);
-  const lowStockCount = useMemo(() => getLowStockCount(), [getLowStockCount]);
+  const filteredInventory = getFilteredInventory();
+  const lowStockCount = getLowStockCount();
 
   const totalPages = Math.max(1, Math.ceil(filteredInventory.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -88,9 +89,8 @@ export default function InventoryList({
   );
 
   const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${price.toFixed(2)}`;
-    const rate = getEffectiveRate();
-    return `Bs ${(price * rate).toFixed(2)}`;
+    if (isDollar) return `$ ${(price / (rate || 1)).toFixed(2)}`;
+    return `Bs ${price.toFixed(2)}`;
   };
 
   const handleEdit = (med: Medication) => {

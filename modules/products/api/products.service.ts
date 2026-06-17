@@ -96,15 +96,15 @@ export const productsService = {
   async bulkImportWithProgress(
     products: BulkProductRow[],
     onProgress?: (current: number, total: number, status: string) => void
-  ): Promise<{ success: number; errors: string[] }> {
+  ): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     const errors: string[] = [];
-    let success = 0;
+    const created: Medication[] = [];
     const total = products.length;
     for (let i = 0; i < total; i++) {
       const product = products[i];
       onProgress?.(i + 1, total, product.name);
       try {
-        await this.createProduct({
+        const medication = await this.createProduct({
           brand: product.brand,
           activeIngredient: product.activeIngredient,
           dosage: product.dosage,
@@ -121,16 +121,16 @@ export const productsService = {
           vat: product.vat ?? 16,
           minimum: product.minimum ?? 0,
         });
-        success++;
+        created.push(medication);
       } catch (e: any) {
         const msg = e?.response?.data?.message || e?.message || "Error desconocido";
         errors.push(`Error al crear "${product.name}" (código: ${product.barCode}): ${msg}`);
       }
     }
-    return { success, errors };
+    return { success: created.length, errors, created };
   },
 
-  async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[] }> {
+  async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     return this.bulkImportWithProgress(products);
   },
 };

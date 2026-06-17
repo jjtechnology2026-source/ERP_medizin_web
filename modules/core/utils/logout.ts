@@ -8,16 +8,13 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 
 export const clearAllStores = () => {
-  // Limpia el store de auth
-  useAuthStore.getState().setMedicinesCatalog([]);
+  // Limpia el store de auth (pero conserva medicinesCatalog para que sobreviva al logout)
+  const savedCatalog = useAuthStore.getState().medicinesCatalog;
   useAuthStore.getState().clearAuth();
+  useAuthStore.getState().setMedicinesCatalog(savedCatalog);
 
-  // Limpia el store de productos (inventario, catálogo, filtros)
-  // useProductsStore.getState().clearStorage();
-
-  // Limpia localStorage persistido de productos
+  // Conserva products-storage para que cambios de precios sobrevivan al logout
   try {
-    localStorage.removeItem("products-storage");
     localStorage.removeItem("startedSession");
   } catch (error) {
     console.warn("No se pudo limpiar localStorage", error);

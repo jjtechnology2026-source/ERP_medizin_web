@@ -2,7 +2,8 @@
 import { useState, useCallback } from "react";
 import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocumentDownload } from "react-icons/hi";
 import { productsService } from "@/modules/products/api/products.service";
-import type { BulkProductRow } from "@/modules/products/types/products.types";
+import { useProductsStore } from "@/modules/products/store/products.store";
+import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
 
 interface BulkImportDialogProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ export default function BulkImportDialog({
   const [products, setProducts] = useState<BulkProductRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: string[]; created: Medication[] } | null>(null);
 
   const downloadTemplate = async () => {
     try {
@@ -167,6 +168,9 @@ export default function BulkImportDialog({
     const res = await productsService.bulkImportWithProgress(products, (current, total, name) => {
       setProgress({ current, total, productName: name || "" });
     });
+    if (res.created.length > 0) {
+      useProductsStore.getState().addToInventory(res.created);
+    }
     setResult(res);
     setIsSaving(false);
     if (res.errors.length === 0) {

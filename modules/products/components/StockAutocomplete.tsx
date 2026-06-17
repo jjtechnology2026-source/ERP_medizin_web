@@ -110,7 +110,7 @@ export default function StockAutocomplete({
               </div>
               <div className="ml-auto text-right shrink-0">
                 <p className="text-xs font-black text-blue-600">
-                  {isDollar ? `$${med.price.toFixed(2)}` : `Bs ${(med.price * rate).toFixed(2)}`}
+                  {isDollar ? `$${(med.price / (rate || 1)).toFixed(2)}` : `Bs ${med.price.toFixed(2)}`}
                 </p>
                 <span className="text-[10px] font-bold text-slate-400">{med.stock} u.</span>
               </div>
