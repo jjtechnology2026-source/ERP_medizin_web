@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
             ...user, 
             accessToken: data.token, 
             refreshToken: data.refresh_token, 
-            expiresAt: Date.now() + 3600000 
+            expiresAt: Date.now() + (data.expires_in || 3600) * 1000
           };
         }
 
@@ -78,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         const d = await authService.refresh(token.refreshToken);
         token.accessToken = d.token;
         token.refreshToken = d.refresh_token ?? token.refreshToken;
-        token.expiresAt = Date.now() + 3600000;
+        token.expiresAt = Date.now() + (d.expires_in || 3600) * 1000;
         return token;
       } catch (e) {
         return { ...token, error: "RefreshAccessTokenError" };

@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import api from "@/modules/core/api/client";
+import axios from "axios";
 
 interface CurrencyState {
   isDollar: boolean;
   rate: number;
-  manualRate: number;
+  initialized: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -13,7 +13,6 @@ interface CurrencyState {
 interface CurrencyActions {
   toggleCurrency: () => void;
   setCurrency: (val: boolean) => void;
-  setManualRate: (rate: number) => void;
   fetchRate: () => Promise<void>;
   getEffectiveRate: () => number;
 }
@@ -25,7 +24,7 @@ export const useCurrencyStore = create<CurrencyStore>()(
     (set, get) => ({
       isDollar: false,
       rate: 36.5,
-      manualRate: 0,
+      initialized: false,
       isLoading: false,
       error: null,
 
@@ -33,15 +32,13 @@ export const useCurrencyStore = create<CurrencyStore>()(
 
       setCurrency: (val: boolean) => set({ isDollar: val }),
 
-      setManualRate: (rate: number) => set({ manualRate: rate }),
-
       fetchRate: async () => {
         set({ isLoading: true, error: null });
         try {
           const now = new Date();
           const formattedDate = `${now.getFullYear().toString().padStart(4, "0")}-${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`;
 
-          const { data } = await api.request({
+          const { data } = await axios.post("/api/proxy", {
             url: "/Rate",
             method: "GET",
             data: { Moneda: "USD", Fechavalor: formattedDate },
@@ -50,25 +47,23 @@ export const useCurrencyStore = create<CurrencyStore>()(
 
           const rate = Number(data?.tipocambio) || 0;
           if (rate > 0) {
-            set({ rate, isLoading: false });
+            set({ rate, initialized: true, isLoading: false });
           } else {
-            set({ isLoading: false });
+            set({ initialized: true, isLoading: false });
           }
         } catch {
-          set({ isLoading: false, error: "Error al obtener tasa" });
+          set({ initialized: true, isLoading: false, error: "Error al obtener tasa" });
         }
       },
 
       getEffectiveRate: () => {
-        const { rate, manualRate } = get();
-        if (manualRate > 0) return manualRate;
-        if (rate > 0) return rate;
-        return 36.5;
+        const { rate } = get();
+        return rate > 0 ? rate : 36.5;
       },
     }),
     {
       name: "currency-storage",
-      partialize: (state) => ({ isDollar: state.isDollar, manualRate: state.manualRate }),
+      partialize: (state) => ({ isDollar: state.isDollar }),
     }
   )
 );

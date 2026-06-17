@@ -1,15 +1,23 @@
 "use client";
 import { useState } from "react";
-import { HiSearch, HiTrash, HiChartBar, HiShoppingBag, HiDocumentText } from "react-icons/hi";
+import {
+  HiSearch,
+  HiTrash,
+  HiShoppingBag,
+  HiDocumentText,
+  HiOutlineDocumentReport,
+} from "react-icons/hi";
 import ProductSearchDialog from "@/modules/cash-register/components/ProductSearchDialog";
 import ManualAddDialog from "@/modules/cash-register/components/ManualAddDialog";
 import PriceCheckDialog from "@/modules/cash-register/components/PriceCheckDialog";
+import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 
 export default function ActionButtons({ onCheckout }: { onCheckout: () => void }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showPriceCheck, setShowPriceCheck] = useState(false);
+  const [showZReport, setShowZReport] = useState(false);
   const { deleteOrder, getCurrentOrder, removeMedication } = useCurrentOrderStore();
 
   const order = getCurrentOrder();
@@ -59,10 +67,10 @@ export default function ActionButtons({ onCheckout }: { onCheckout: () => void }
           Eliminar Art.
         </button>
         <button
-          onClick={handleDeleteOrder}
+          onClick={() => setShowZReport(true)}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1f2937] hover:bg-[#111827] text-white rounded-xl font-black text-[11px] tracking-wider shadow-xs hover:scale-105 active:scale-95 transition-all"
         >
-          <HiChartBar size={15} />
+          <HiOutlineDocumentReport size={15} />
           Generar Z
         </button>
       </div>
@@ -70,6 +78,7 @@ export default function ActionButtons({ onCheckout }: { onCheckout: () => void }
       {showSearch && <ProductSearchDialog onClose={() => setShowSearch(false)} />}
       {showManual && <ManualAddDialog onClose={() => setShowManual(false)} />}
       {showPriceCheck && <PriceCheckDialog onClose={() => setShowPriceCheck(false)} />}
+      {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
     </>
   );
 }

@@ -26,7 +26,6 @@ const FISCAL_SUPPORT_DATA = [
 export default function FiscalConfigCard() {
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
-  const [exchangeRate, setExchangeRate] = useState("");
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
@@ -41,24 +40,10 @@ export default function FiscalConfigCard() {
         <div className="bg-white p-10 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Configuración fiscal</h2>
-            <p className="text-sm font-bold text-slate-400 max-w-2xl">Organiza la tasa, la implementación fiscal y las acciones operativas en un solo bloque.</p>
+            <p className="text-sm font-bold text-slate-400 max-w-2xl">Organiza la implementación fiscal y las acciones operativas en un solo bloque.</p>
           </div>
 
           <div className="flex flex-col gap-8 max-w-3xl">
-            {/* Input: Tipo de Cambio */}
-            <div className="flex flex-col gap-2.5">
-              <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
-                Ingrese el tipo de cambio: <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="tipo de cambio"
-                value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
-                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 placeholder:text-slate-400"
-              />
-            </div>
-
             {/* Select: Implementación Fiscal */}
             <div className="flex flex-col gap-2.5">
               <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
@@ -98,12 +83,6 @@ export default function FiscalConfigCard() {
           {/* Acciones */}
           <div className="flex flex-col gap-5 mt-2">
             <div className="flex flex-wrap items-center gap-4">
-              <button
-                onClick={() => handleAction("Guardar Tasa")}
-                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95"
-              >
-                Guardar Tasa
-              </button>
               <button
                 onClick={() => handleAction("Guardar Configuración Fiscal")}
                 className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95"

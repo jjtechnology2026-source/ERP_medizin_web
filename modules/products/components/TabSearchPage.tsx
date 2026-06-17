@@ -281,18 +281,18 @@ export default function CatalogSearchPage({
           )}
 
           {paginatedResults.length > 0 && (
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+            <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="bg-slate-800 text-white">
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Nombre</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Principio Activo</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Dosis</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Presentación</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Marca</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Precio</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Stock</th>
+                    <tr className="bg-white border-b border-slate-100">
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Nombre</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Principio Activo</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Dosis</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Presentación</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Marca</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Precio</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">

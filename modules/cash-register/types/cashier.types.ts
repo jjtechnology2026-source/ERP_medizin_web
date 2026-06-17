@@ -119,7 +119,6 @@ export interface CashierWorkflowState {
   sessionInvoices: CashierInvoice[];
   sessionTransactions: CashierTransaction[];
   selectedCashBoxId: string | null;
-  currentRate: number;
   errorMessage: string | null;
   infoMessage: string | null;
 }

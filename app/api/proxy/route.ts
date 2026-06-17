@@ -17,12 +17,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Rutas que forzamos a POST (p.ej., /Rate)
     let effectiveMethod = method;
-    if (["/Rate"].includes(url) && method.toUpperCase() === "GET") {
-      console.warn(`⚠️ [Proxy] Forzando POST para ${url}`);
-      effectiveMethod = "POST";
-    }
 
     const token = await getToken({
       req,

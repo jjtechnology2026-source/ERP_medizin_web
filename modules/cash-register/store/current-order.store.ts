@@ -242,21 +242,21 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     const order = get().orders[get().currentOrderIndex];
     if (!order) return { subtotal: 0, totalVat: 0, total: 0, itemCount: 0 };
 
-    let subtotal = 0;
+    let total = 0;
     let totalVat = 0;
     let itemCount = 0;
 
     for (const med of order.medications) {
       const lineTotal = med.price * med.quantity;
-      subtotal += lineTotal;
-      totalVat += lineTotal * (med.vat / 100);
+      total += lineTotal;
+      totalVat += lineTotal * med.vat / (100 + med.vat);
       itemCount += med.quantity;
     }
 
     return {
-      subtotal,
+      subtotal: total,
       totalVat,
-      total: subtotal + totalVat,
+      total,
       itemCount,
     };
   },

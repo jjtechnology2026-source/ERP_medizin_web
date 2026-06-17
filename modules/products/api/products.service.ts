@@ -111,8 +111,8 @@ export const productsService = {
           tablets: product.tablets,
           barCode: product.barCode,
           name: product.name,
-          category: product.category,
-          subcategory: product.subcategory,
+          category: product.category || "General",
+          subcategory: product.subcategory || "Varios",
           description: product.description,
           controlled: product.controlled,
           antibiotic: product.antibiotic,
@@ -122,8 +122,9 @@ export const productsService = {
           minimum: product.minimum ?? 0,
         });
         success++;
-      } catch {
-        errors.push(`Error al crear "${product.name}" (código: ${product.barCode})`);
+      } catch (e: any) {
+        const msg = e?.response?.data?.message || e?.message || "Error desconocido";
+        errors.push(`Error al crear "${product.name}" (código: ${product.barCode}): ${msg}`);
       }
     }
     return { success, errors };

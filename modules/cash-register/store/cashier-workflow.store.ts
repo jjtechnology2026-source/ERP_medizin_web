@@ -29,7 +29,6 @@ const initialState: CashierWorkflowState = {
   sessionInvoices: [],
   sessionTransactions: [],
   selectedCashBoxId: null,
-  currentRate: 0,
   errorMessage: null,
   infoMessage: null,
 };
@@ -46,43 +45,62 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     }
 
     set({ isLoading: true, errorMessage: null, pharmacyId: effectivePharmacyId });
-    try {
-      const [cashBoxes, rawSession, rawRate] = await Promise.all([
-        cashierAccountantService.fetchCashBoxes(effectivePharmacyId),
-        cashierAccountantService.fetchActiveSession(),
-        cashierAccountantService.fetchCurrentRate(),
+
+    const [cashBoxes, rawSession] = await Promise.all([
+      (async () => {
+        try {
+          return await cashierAccountantService.fetchCashBoxes(effectivePharmacyId);
+        } catch (e: any) {
+          console.error("❌ [Store load] fetchCashBoxes failed:", e.response?.data || e.message);
+          return [];
+        }
+      })(),
+      (async () => {
+        try {
+          return await cashierAccountantService.fetchActiveSession();
+        } catch (e: any) {
+          console.error("❌ [Store load] fetchActiveSession failed:", e.response?.data || e.message);
+          return null;
+        }
+      })(),
+    ]);
+
+    const activeSession = rawSession && (rawSession.id || rawSession.cashBoxId) ? rawSession : null;
+
+    let sessionInvoices: any[] = [];
+    let sessionTransactions: any[] = [];
+
+    if (activeSession && activeSession.approvalStatus === "approved") {
+      const [inv, tx] = await Promise.all([
+        (async () => {
+          try {
+            return await cashierAccountantService.fetchSessionInvoices(activeSession.cashBoxId);
+          } catch (e: any) {
+            console.error("❌ [Store load] fetchSessionInvoices failed:", e.response?.data || e.message);
+            return [];
+          }
+        })(),
+        (async () => {
+          try {
+            return await cashierAccountantService.fetchSessionTransactions(activeSession.cashBoxId);
+          } catch (e: any) {
+            console.error("❌ [Store load] fetchSessionTransactions failed:", e.response?.data || e.message);
+            return [];
+          }
+        })(),
       ]);
-
-      // Si la sesión no tiene id ni cashBoxId, la consideramos nula
-      const activeSession = rawSession && (rawSession.id || rawSession.cashBoxId) ? rawSession : null;
-      const currentRate = isNaN(rawRate) ? 0 : rawRate;
-
-      let sessionInvoices: any[] = [];
-      let sessionTransactions: any[] = [];
-
-      // Solo consultar facturas y transacciones si la sesión está aprobada
-      if (activeSession && activeSession.approvalStatus === "approved") {
-        const [inv, tx] = await Promise.all([
-          cashierAccountantService.fetchSessionInvoices(activeSession.cashBoxId),
-          cashierAccountantService.fetchSessionTransactions(activeSession.cashBoxId),
-        ]);
-        sessionInvoices = inv;
-        sessionTransactions = tx;
-      }
-
-      set({
-        isLoading: false,
-        cashBoxes,
-        activeSession,
-        sessionInvoices,
-        sessionTransactions,
-        currentRate,
-        selectedCashBoxId: activeSession?.cashBoxId ?? cashBoxes[0]?.id ?? null,
-      });
-    } catch (error: any) {
-      console.error("❌ [Store load] Error:", error.response?.data || error.message);
-      set({ isLoading: false, errorMessage: "Error al cargar datos de caja" });
+      sessionInvoices = inv;
+      sessionTransactions = tx;
     }
+
+    set({
+      isLoading: false,
+      cashBoxes,
+      activeSession,
+      sessionInvoices,
+      sessionTransactions,
+      selectedCashBoxId: activeSession?.cashBoxId ?? cashBoxes[0]?.id ?? null,
+    });
   },
 
   selectCashBox: (id) => set({ selectedCashBoxId: id }),

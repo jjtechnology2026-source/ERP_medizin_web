@@ -84,53 +84,51 @@ export default function BulkImportDialog({
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
 
+      function getCol(row: Record<string, string>, keys: string[]): string {
+        const rowKeys = Object.keys(row);
+        for (const key of keys) {
+          const match = rowKeys.find(
+            rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() === key.toLowerCase().trim()
+          );
+          if (match) return String(row[match] || "").trim();
+        }
+        return "";
+      }
+
       const parsed: BulkProductRow[] = [];
       const errs: string[] = [];
 
       rows.forEach((row, i) => {
         const line = i + 2;
-        const name = String(
-          row["Nombre Comercial"] || 
-          row["name"] || 
-          row["Nombre"] || 
-          row["NOMBRE"] || 
-          ""
-        ).trim();
+        const name = getCol(row, ["Nombre Comercial", "name", "Nombre", "NOMBRE"]);
 
         if (!name) {
           errs.push(`Fila ${line}: El "Nombre Comercial" es requerido.`);
           return;
         }
 
-        const barCode = String(
-          row["Código de Barras"] || 
-          row["barcode"] || 
-          row["barCode"] || 
-          row["Código"] || 
-          row["CODIGO"] || 
-          ""
-        ).trim();
+        const barCode = getCol(row, ["Código de Barras", "barcode", "barCode", "Código", "CODIGO"]);
 
         if (!barCode) {
           errs.push(`Fila ${line} (${name}): El "Código de Barras" es requerido.`);
           return;
         }
 
-        const priceRaw = String(row["Precio (USD)"] || row["price"] || row["PRECIO"] || "").trim();
-        const stockRaw = String(row["Stock"] || row["stock"] || row["STOCK"] || "").trim();
-        const minRaw = String(row["Stock Mínimo"] || row["minimum"] || row["MINIMO"] || "").trim();
-        const vatRaw = String(row["IVA (%)"] || row["vat"] || row["IVA"] || "").trim();
+        const priceRaw = getCol(row, ["Precio (USD)", "price", "PRECIO"]);
+        const stockRaw = getCol(row, ["Stock", "stock", "STOCK"]);
+        const minRaw = getCol(row, ["Stock Mínimo", "minimum", "MINIMO"]);
+        const vatRaw = getCol(row, ["IVA (%)", "vat", "IVA"]);
 
         parsed.push({
           name,
-          brand: String(row["Marca"] || row["brand"] || row["MARCA"] || "").trim(),
+          brand: getCol(row, ["Marca", "brand", "MARCA"]),
           barCode,
-          activeIngredient: String(row["Principio Activo"] || row["activeIngredient"] || row["PRINCIPIO_ACTIVO"] || "").trim(),
-          dosage: String(row["Dosis"] || row["dosage"] || row["DOSIS"] || "").trim(),
-          tablets: String(row["Presentación/Tabletas"] || row["tablets"] || row["Tabletas"] || "").trim(),
-          category: String(row["Categoría"] || row["category"] || row["Categoria"] || "").trim(),
-          subcategory: String(row["Subcategoría"] || row["subcategory"] || row["SUBCATEGORIA"] || "").trim(),
-          description: String(row["Descripción"] || row["description"] || row["DESCRIPCION"] || "").trim(),
+          activeIngredient: getCol(row, ["Principio Activo", "activeIngredient", "PRINCIPIO_ACTIVO"]),
+          dosage: getCol(row, ["Dosis", "dosage", "DOSIS"]),
+          tablets: getCol(row, ["Presentación/Tabletas", "Presentación", "tablets", "Tabletas"]),
+          category: getCol(row, ["Categoría", "category", "Categoria"]),
+          subcategory: getCol(row, ["Subcategoría", "subcategory", "SUBCATEGORIA"]),
+          description: getCol(row, ["Descripción", "description", "DESCRIPCION"]),
           price: priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined,
           stock: stockRaw ? parseInt(stockRaw, 10) : undefined,
           minimum: minRaw ? parseInt(minRaw, 10) : undefined,
@@ -324,9 +322,15 @@ export default function BulkImportDialog({
 
           {result && (
             <div className="text-center py-6 space-y-4">
-              <HiCheck className="mx-auto text-green-500" size={48} />
+              {result.success > 0 ? (
+                <HiCheck className="mx-auto text-green-500" size={48} />
+              ) : (
+                <HiExclamation className="mx-auto text-red-500" size={48} />
+              )}
               <p className="text-lg font-black text-slate-800">
-                {result.success} productos creados exitosamente
+                {result.success > 0
+                  ? `${result.success} productos creados exitosamente`
+                  : "No se pudieron crear productos"}
               </p>
               {result.errors.length > 0 && (
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-left">

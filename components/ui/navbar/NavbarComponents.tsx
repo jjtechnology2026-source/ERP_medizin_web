@@ -14,41 +14,28 @@ export const SearchBar = ({ value, onChange }: any) => (
 );
 
 export const CurrencySwitch = () => {
-  const { isDollar, getEffectiveRate, toggleCurrency, setManualRate, fetchRate, isLoading } = useCurrencyStore();
-  const effectiveRate = getEffectiveRate();
+  const { isDollar, toggleCurrency, fetchRate, isLoading } = useCurrencyStore();
+  const rate = useCurrencyStore((s) => s.getEffectiveRate());
+  const initialized = useCurrencyStore((s) => s.initialized);
 
-  const handleSyncRate = async () => {
-    await fetchRate();
-    const currentRate = useCurrencyStore.getState().rate;
-    if (currentRate > 0) {
-      setManualRate(currentRate);
-    }
-  };
+  const displayRate = !initialized ? null : rate;
 
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">Tasa:</span>
-        <input
-          type="number"
-          step="0.01"
-          min="1"
-          value={effectiveRate || ""}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value);
-            if (!isNaN(val) && val > 0) {
-              setManualRate(val);
-            } else if (e.target.value === "") {
-              setManualRate(0);
-            }
-          }}
-          className="w-24 bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all shadow-sm"
-        />
+        <span className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center shadow-sm tabular-nums">
+          {displayRate === null ? (
+            <span className="text-slate-300 animate-pulse">---</span>
+          ) : (
+            `${rate.toFixed(2)}`
+          )}
+        </span>
         <span className="text-[11px] font-bold text-slate-500 select-none">Bs</span>
         <button
-          onClick={handleSyncRate}
+          onClick={fetchRate}
           disabled={isLoading}
-          title="Sincronizar tasa oficial de Internet"
+          title="Sincronizar tasa oficial desde R4"
           className={cn(
             "p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-200/50 rounded-lg transition-all cursor-pointer flex items-center justify-center disabled:opacity-50",
             isLoading && "animate-spin text-blue-600"

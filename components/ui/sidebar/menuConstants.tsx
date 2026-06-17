@@ -36,7 +36,7 @@ export const MENU_ITEMS: MenuItem[] = [
     href: "/caja-ventas",
   },
   {
-    name: "Órdenes marketplace",
+    name: "Pedidos",
     icon: <HiOutlineShoppingCart size={iconSize} />,
     href: "/marketplace",
   },

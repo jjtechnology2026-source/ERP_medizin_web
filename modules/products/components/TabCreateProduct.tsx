@@ -280,8 +280,8 @@ export default function CreateProductPage({ setView }: any) {
 
       <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-10">
         <div className="flex gap-6 mb-10 text-[11px] font-black text-blue-600 uppercase tracking-widest">
-          <button onClick={() => setView("LIST")} className="hover:underline flex items-center gap-1">
-            ‹ Regresar
+          <button onClick={() => setView("LIST")} className="flex items-center gap-1 hover:text-blue-800 transition-colors">
+            ← Regresar
           </button>
           <button onClick={downloadTemplate} className="flex items-center gap-1 hover:underline">
             <HiOutlineDocumentDownload size={16} /> Plantilla Excel
@@ -380,24 +380,6 @@ export default function CreateProductPage({ setView }: any) {
               </div>
             )}
 
-            <div className="space-y-5">
-              <SearchableSelect
-                label="Categoría"
-                placeholder="Seleccione una categoría"
-                required
-                value={formData.category}
-                options={CATEGORY_KEYS}
-                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
-              />
-              <SearchableSelect
-                label="Subcategoría"
-                placeholder="Seleccione una subcategoría"
-                required
-                value={formData.subcategory}
-                options={subcategoryOptions}
-                onChange={(val) => setFormData({ ...formData, subcategory: val })}
-              />
-            </div>
           </div>
 
           {/* COLUMNA DERECHA */}
@@ -489,16 +471,35 @@ export default function CreateProductPage({ setView }: any) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
-                <textarea
-                  className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
-                  placeholder="ej: Escribe la descripción de tu producto..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
+              <textarea
+                className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
+                placeholder="ej: Escribe la descripción de tu producto..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <SearchableSelect
+                label="Categoría"
+                placeholder="Seleccione una categoría"
+                required
+                value={formData.category}
+                options={CATEGORY_KEYS}
+                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
+              />
+              <SearchableSelect
+                label="Subcategoría"
+                placeholder="Seleccione una subcategoría"
+                required
+                value={formData.subcategory}
+                options={subcategoryOptions}
+                onChange={(val) => setFormData({ ...formData, subcategory: val })}
+              />
+            </div>
+          </div>
 
             {successMsg && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">

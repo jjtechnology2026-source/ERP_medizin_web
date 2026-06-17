@@ -131,9 +131,23 @@ export const cashierAccountantService = {
   },
 
 async fetchCurrentRate(): Promise<number> {
-  const response = await api.get("/admin/tasas/actual");
-  const payload = response.data?.data ?? response.data;
-  return Number(payload?.tasa ?? payload?.rate ?? payload?.valor ?? 0);
+  try {
+    const now = new Date();
+    const formattedDate = `${now.getFullYear().toString().padStart(4, "0")}-${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`;
+    const { data } = await axios.post("/api/proxy", {
+      url: "/Rate",
+      method: "GET",
+      data: { Moneda: "USD", Fechavalor: formattedDate },
+      headers: { "Content-Type": "application/json" },
+    });
+    const rate = Number(data?.tipocambio) || 0;
+    if (rate > 0) return rate;
+    console.warn("❌ [fetchCurrentRate] /Rate returned 0");
+  } catch (e: any) {
+    console.error("❌ [fetchCurrentRate] /Rate failed:", e.response?.data || e.message);
+  }
+
+  return 0;
 },
 
   async openSession(cashBoxId: string): Promise<void> {

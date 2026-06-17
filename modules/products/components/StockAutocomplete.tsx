@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Medication } from "@/modules/products/types/products.types";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function StockAutocomplete({
   inventory,
@@ -9,6 +10,8 @@ export default function StockAutocomplete({
   inventory: Medication[];
   onSelect: (med: Medication) => void;
 }) {
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
   const [query, setQuery] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
@@ -105,9 +108,12 @@ export default function StockAutocomplete({
                   {med.activeIngredient} - {med.brand}
                 </p>
               </div>
-              <span className="ml-auto text-xs font-bold text-slate-400 shrink-0">
-                {med.stock} u.
-              </span>
+              <div className="ml-auto text-right shrink-0">
+                <p className="text-xs font-black text-blue-600">
+                  {isDollar ? `$${med.price.toFixed(2)}` : `Bs ${(med.price * rate).toFixed(2)}`}
+                </p>
+                <span className="text-[10px] font-bold text-slate-400">{med.stock} u.</span>
+              </div>
             </button>
           ))}
         </div>
