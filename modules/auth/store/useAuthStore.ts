@@ -11,6 +11,15 @@ export interface UserProfile {
   [key: string]: any; 
 }
 
+const loadMedicinesFromLocalStorage = (): any[] => {
+  try {
+    const data = localStorage.getItem("medicines-catalog");
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
 interface AuthState {
   profile: UserProfile | null;
   medicinesCatalog: any[];
@@ -24,19 +33,30 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       profile: null,
-      medicinesCatalog: [],
+      medicinesCatalog: typeof window !== "undefined" ? loadMedicinesFromLocalStorage() : [],
       isHydrated: false,
       syncWithSession: (user) => {
         if (JSON.stringify(get().profile) !== JSON.stringify(user)) {
           set({ profile: user });
         }
+        const lsMedicines = loadMedicinesFromLocalStorage();
+        if (lsMedicines.length) {
+          set({ medicinesCatalog: lsMedicines });
+        }
       },
       setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
-      clearAuth: () => set({ profile: null }),
+      clearAuth: () => {
+        try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
+        set({ profile: null, medicinesCatalog: [] });
+      },
     }),
     {
       name: "auth-storage",
       onRehydrateStorage: () => () => {
+        const lsMedicines = loadMedicinesFromLocalStorage();
+        if (lsMedicines.length) {
+          useAuthStore.setState({ medicinesCatalog: lsMedicines });
+        }
         useAuthStore.setState({ isHydrated: true });
       },
     }

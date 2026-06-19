@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/modules/core/hooks/useAuth";
 import { authService } from "@/modules/auth/api/auth.services";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
@@ -12,7 +11,6 @@ export const useLoginForm = () => {
   const [error, setError] = useState("");
 
   const { login } = useAuth();
-  const router = useRouter();
 
   const togglePassword = () => setShowPassword(!showPassword);
 
@@ -28,8 +26,13 @@ export const useLoginForm = () => {
         throw new Error(data.message || "Credenciales inválidas");
       }
 
-      if (data.medications && Array.isArray(data.medications)) {
-        useAuthStore.getState().setMedicinesCatalog(data.medications);
+      // Save medicines to localStorage for persistence across page reloads
+      const medicines = data.medicines || data.medications || [];
+      if (Array.isArray(medicines) && medicines.length) {
+        useAuthStore.getState().setMedicinesCatalog(medicines);
+        try {
+          localStorage.setItem("medicines-catalog", JSON.stringify(medicines));
+        } catch (e) {}
       }
 
       await login({
@@ -42,7 +45,7 @@ export const useLoginForm = () => {
       } catch (err) {
         console.warn("No se pudo guardar startedSession en localStorage", err);
       }
-      router.push("/panel");
+      setTimeout(() => window.location.assign("/panel"), 100);
     } catch (err: any) {
       setError(err.message || "Credenciales incorrectas o error de servidor");
     } finally {

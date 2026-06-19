@@ -30,6 +30,7 @@ export const useAuth = () => {
   }, []);
 
   const logout = useCallback(async () => {
+    try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
     clearAllStores();
     await signOut({ callbackUrl: "/" });
   }, []);

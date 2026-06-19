@@ -83,9 +83,12 @@ export const useProductsStore = create<ProductsStore>()(
         const { isInitialLoad, inventory } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
 
+        // Prefer pharmacy inventory from SurrealDB (login response) over Meilisearch catalog
         const catalog = useAuthStore.getState().medicinesCatalog || [];
-        if (catalog.length > 0 && !force) {
-          set({ inventory: catalog.map(cleanImage), isLoading: false, isInitialLoad: false });
+        if (catalog.length > 0) {
+          const merged = catalog.map(cleanImage);
+          set({ inventory: merged, isLoading: false, isInitialLoad: false });
+          useAuthStore.getState().setMedicinesCatalog(merged);
           return;
         }
 
@@ -97,8 +100,24 @@ export const useProductsStore = create<ProductsStore>()(
           const timeout = setTimeout(() => controller.abort(), 30000);
           const apiInventory = await productsService.getCatalog(controller.signal);
           clearTimeout(timeout);
-          set({ inventory: apiInventory, isLoading: false, isInitialLoad: false });
-          useAuthStore.getState().setMedicinesCatalog(apiInventory);
+
+          // Merge API data with existing inventory to preserve local stock/price
+          const localMap = new Map(inventory.map(m => [m.barCode, m]));
+          const merged = apiInventory.map((api: Medication) => {
+            const local = localMap.get(api.barCode);
+            if (local) {
+              return {
+                ...api,
+                stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
+                quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
+                price: (local.price ?? 0) > 0 ? local.price : api.price,
+              };
+            }
+            return api;
+          });
+
+          set({ inventory: merged, isLoading: false, isInitialLoad: false });
+          useAuthStore.getState().setMedicinesCatalog(merged);
         } catch (e: any) {
           if (inventory.length === 0 && catalog.length === 0) {
             const msg = e?.name === "AbortError" ? "La consulta tardó demasiado. Intente de nuevo." : "Error al cargar inventario";
@@ -200,9 +219,25 @@ export const useProductsStore = create<ProductsStore>()(
           await productsService.deleteProduct(barCode);
         } catch (error) {
           console.error("API error while deleting medicine:", error);
-          return;
         }
-        set({ inventory: inventory.filter((m) => m.barCode !== barCode) });
+        const updated = inventory.filter((m) => m.barCode !== barCode);
+        set({ inventory: updated });
+
+        // Publish MQTT to remove from SurrealDB inventory
+        try {
+          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+          if (pharmacyId) {
+            const dto: any = {
+              idAgent: "web",
+              idPharmacy: pharmacyId,
+              medications: [{ barCode, quantity: 0 }],
+            };
+            const buf = DtoUpdateMedications.encode(dto).finish();
+            mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf).catch(() => {});
+          }
+        } catch (e) {}
+
+        useAuthStore.getState().setMedicinesCatalog(updated);
       },
 
       decrementStock: (items) => {
@@ -280,9 +315,14 @@ export const useProductsStore = create<ProductsStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        state.isInitialLoad = true;
-        state.isLoading = true;
-        setTimeout(() => state.fetchInventory(true), 500);
+        if (state.inventory?.length) {
+          state.isLoading = false;
+          state.isInitialLoad = false;
+        } else {
+          state.isInitialLoad = true;
+          state.isLoading = true;
+          setTimeout(() => state.fetchInventory(true), 500);
+        }
       },
     }
   )
@@ -293,7 +333,11 @@ if (typeof window !== "undefined") {
   useAuthStore.subscribe((state) => {
     const pState = useProductsStore.getState();
     if (state.medicinesCatalog?.length && pState.inventory.length === 0) {
-      pState.fetchInventory(true);
+      useProductsStore.setState({
+        inventory: state.medicinesCatalog.map(cleanImage),
+        isLoading: false,
+        isInitialLoad: false,
+      });
     }
   });
 }

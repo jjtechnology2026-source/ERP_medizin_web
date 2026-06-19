@@ -63,7 +63,7 @@ export const useCurrencyStore = create<CurrencyStore>()(
     }),
     {
       name: "currency-storage",
-      partialize: (state) => ({ isDollar: state.isDollar }),
+      partialize: (state) => ({ isDollar: state.isDollar, rate: state.rate }),
     }
   )
 );

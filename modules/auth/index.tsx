@@ -32,13 +32,13 @@ export default function LoginForm() {
   // Redirigir al panel si ya hay sesión activa
   React.useEffect(() => {
     if (status === "authenticated" && !hasSessionError) {
-      router.push("/panel");
+      window.location.assign("/panel");
     }
-  }, [status, hasSessionError, router]);
+  }, [status, hasSessionError]);
 
   // Si ya estamos autenticados y no hay error, mostramos el overlay mientras redirige
   if (status === "authenticated" && !hasSessionError) {
-    return <LoadingOverlay message="¡Bienvenido de nuevo!" subtext="Entrando al panel de control..." />;
+    return <LoadingOverlay message="¡Bienvenido de vuelta!" subtext="Entrando al panel de control..." />;
   }
 
   const handleBypassLocal = () => {

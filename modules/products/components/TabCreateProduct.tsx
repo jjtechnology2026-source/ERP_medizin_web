@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocumentDownload, HiOutlineTable, HiTrash } from "react-icons/hi";
 import { useCreateMedication } from "../hook/useCreateProduct";
+import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 
 // Interfaz para el manejo de imágenes múltiples en local
@@ -271,6 +272,26 @@ export default function CreateProductPage({ setView }: any) {
     const result = await createMedication(payload, images);
 
     if (result.success) {
+      const newMed = {
+        barCode: payload.barCode,
+        name: payload.name,
+        brand: payload.brand,
+        activeIngredient: payload.activeIngredient,
+        dosage: `${payload.doseValue || ""} ${selectedUnit || ""}`.trim(),
+        tablets: `${payload.amount || ""} ${payload.presentation || ""}`.trim(),
+        price: parseFloat(payload.price) || 0,
+        stock: parseInt(payload.stock) || 0,
+        quantity: parseInt(payload.stock) || 0,
+        category: payload.category,
+        subcategory: payload.subcategory,
+        description: payload.description,
+        vat: typeof payload.vat === "number" ? payload.vat : (parseInt(payload.vat) || 16),
+        controlled: false,
+        antibiotic: false,
+        minimum: parseInt(payload.minimum) || 0,
+        image: images.length > 0 ? images[0].name : "",
+      };
+      useProductsStore.getState().addToInventory([newMed]);
       setSuccessMsg("Producto creado exitosamente. Redirigiendo...");
       setTimeout(() => setView("LIST"), 1500);
     }

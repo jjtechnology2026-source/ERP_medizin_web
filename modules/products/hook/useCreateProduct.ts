@@ -1,5 +1,9 @@
 import { useState, useCallback } from "react";
 import api from "@/modules/core/api/client";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { mqttServer } from "@/modules/core/mqtt/advanced-service";
+import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
+import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 
 export interface MedicationData {
   brand: string;
@@ -70,6 +74,44 @@ export const useCreateMedication = () => {
             api.post("/admin/MedicationImage/Upload", imgFile).then((res) => res.data)
           )
         );
+
+        // Publicar MQTT para actualizar inventario de la farmacia
+        try {
+          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+          if (pharmacyId) {
+            const quantityVal = parseInt(baseData.stock) || 0;
+            const medProto = {
+              barCode: payloadData.barCode,
+              name: payloadData.name,
+              price: payloadData.price,
+              quantity: quantityVal,
+              stock: quantityVal,
+              brand: payloadData.brand,
+              activeIngredient: payloadData.activeIngredient,
+              dosage: payloadData.dosage,
+              tablets: payloadData.tablets,
+              image: payloadData.image,
+              category: payloadData.category,
+              subcategory: payloadData.subcategory,
+              description: payloadData.description,
+              controlled: payloadData.controlled,
+              vat: payloadData.vat,
+              antibiotic: payloadData.antibiotic,
+              minimum: payloadData.minimum,
+            } as any;
+
+            const dto: any = {
+              idAgent: "web",
+              idPharmacy: pharmacyId,
+              medications: [medProto],
+            };
+
+            const buf = DtoUpdateMedications.encode(dto).finish();
+            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf).catch(() => {});
+          }
+        } catch (e) {
+          // noop - MQTT es secundario, no debe bloquear la creación
+        }
 
         return { success: true, medication: Array.isArray(medResult) && medResult.length > 0 ? medResult[0] : medResult, images: uploadedImages };
       } catch (err: any) {

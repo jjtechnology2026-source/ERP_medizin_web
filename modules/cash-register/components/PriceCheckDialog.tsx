@@ -26,8 +26,8 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
   };
 
   const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${(price / (rate || 300)).toFixed(2)}`;
-    return `Bs ${price.toFixed(2)}`;
+    if (isDollar) return `$ ${price.toFixed(2)}`;
+    return `Bs ${(price * rate).toFixed(2)}`;
   };
 
   return (

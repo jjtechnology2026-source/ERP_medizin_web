@@ -2,7 +2,6 @@ import mqtt, { MqttClient, IClientOptions } from "mqtt";
 import { OrderDto } from "@/proto/interfaces/present";
 import { OrderContactAndItems } from "@/proto/interfaces/dto";
 import { MQTT_TOPICS } from "./topics";
-import { logToServer } from "./server-logger.actions";
 
 function normalizePayloadText(payload: Uint8Array | string) {
   return typeof payload === "string" ? payload : new TextDecoder().decode(payload);
@@ -72,15 +71,7 @@ class MqttServerService {
   }
 
   private log(level: "log" | "warn" | "error", msg: string, ...args: any[]) {
-    const isServer = typeof window === "undefined";
-    if (isServer) {
-      console[level](msg, ...args);
-    } else {
-      // Redirect important logs to server, suppress local console
-      if (msg.includes("[MQTT:CONNECT]") || msg.includes("[MQTT:SUB]") || msg.includes("[MQTT:DECODE]") || msg.includes("[MQTT:PUB]")) {
-        logToServer(level, msg, args.length > 0 ? args : undefined);
-      }
-    }
+    console[level](msg, ...args);
   }
 
   /** Limpiar reconexión pendiente */
@@ -218,9 +209,7 @@ class MqttServerService {
         this.scheduleReconnect();
       });
 
-      c.on("packetreceive", (p) => {
-          this.log("log", `[MQTT:RAW] ← INBOUND on ${(p as any).topic}`);
-      });
+
     });
 
     this.connecting = this.withTimeout(connectPromise, 20_000, "Conexión MQTT");

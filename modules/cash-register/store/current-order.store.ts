@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment } from "@/modules/cash-register/types/cashier.types";
 import type { Medication, Order } from "@/modules/orders/types/orders";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 interface CurrentOrderState {
   orders: Order[];
@@ -221,7 +222,8 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       if (method === "efectivo") {
         newPayments[method] = { ...current, amount: share, change: Math.max(0, share - total) } as CashPayment;
       } else if (method === "dolares") {
-        const usdAmount = share / (rate || 300);
+        const effectiveRate = rate > 0 ? rate : useCurrencyStore.getState().getEffectiveRate();
+        const usdAmount = share / effectiveRate;
         newPayments[method] = { ...current, amount: usdAmount, change: 0 } as DollarPayment;
       } else if (method === "tarjeta") {
         newPayments[method] = { ...current, amount: share } as CardPayment;

@@ -43,6 +43,9 @@ const CARD_TYPES = ["Débito", "Crédito"];
 // Redondea a 2 decimales
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+const formatUsd = (n: number) => `$ ${r2(n).toFixed(2)}`;
+const formatBs = (n: number, rate: number) => `Bs ${r2(n * rate).toFixed(2)}`;
+
 export default function PaymentDialog({
   onClose,
   onComplete,
@@ -74,12 +77,12 @@ export default function PaymentDialog({
 
   const totalVes = totals.total * rate;
   const totalVatVes = totals.totalVat * rate;
-  const baseAmount = totalVes - totalVatVes;
+  const baseAmountVes = totalVes - totalVatVes;
 
-  const igtf = activePaymentMethods.length === 1 && activePaymentMethods[0] === "dolares"
+  const igtfVes = activePaymentMethods.length === 1 && activePaymentMethods[0] === "dolares"
     ? r2(totalVes * 0.03)
     : 0;
-  const totalConIgtf = r2(totalVes + igtf);
+  const totalConIgtfVes = r2(totalVes + igtfVes);
 
   const updatePayment = (method: PaymentMethod, partial: Record<string, any>) => {
     const base = payments[method];
@@ -92,8 +95,9 @@ export default function PaymentDialog({
     return sum + (p.amount || 0);
   }, 0);
 
-  const remaining = Math.max(0, r2(totalConIgtf - totalPaid));
-  const exceso = totalPaid > totalConIgtf ? r2(totalPaid - totalConIgtf) : 0;
+  const remaining = Math.max(0, r2(totalConIgtfVes - totalPaid));
+  const exceso = totalPaid > totalConIgtfVes ? r2(totalPaid - totalConIgtfVes) : 0;
+  const VES_TOLERANCE = rate * 0.01;
 
   const totalCambioAsignado = manualChanges.reduce((sum, entry) => {
     if (entry.tipo === "efectivoVes") return sum + entry.amount;
@@ -182,7 +186,7 @@ export default function PaymentDialog({
       }
     }
 
-    if (exceso > 0.01) {
+    if (exceso > VES_TOLERANCE) {
       if (manualChanges.length === 0) return "Debe asignar el cambio manualmente.";
 
       for (const entry of manualChanges) {
@@ -193,10 +197,10 @@ export default function PaymentDialog({
         }
       }
 
-      if (Math.abs(cambioPendiente) > 0.01) {
+      if (Math.abs(cambioPendiente) > VES_TOLERANCE) {
         const msg = cambioPendiente > 0
-          ? `Falta asignar ${formatPrice(cambioPendiente)} de cambio.`
-          : `Sobran ${formatPrice(Math.abs(cambioPendiente))} en el cambio.`;
+          ? `Falta asignar ${formatPrice(cambioPendiente / rate)} de cambio.`
+          : `Sobran ${formatPrice(Math.abs(cambioPendiente) / rate)} en el cambio.`;
         return msg;
       }
     }
@@ -220,8 +224,8 @@ export default function PaymentDialog({
       );
       return;
     }
-    if (remaining > 0.01) {
-      setLocalError(`Falta cubrir ${formatPrice(remaining)}`);
+    if (remaining > VES_TOLERANCE) {
+      setLocalError(`Falta cubrir ${formatPrice(remaining / rate)}`);
       return;
     }
 
@@ -277,7 +281,7 @@ export default function PaymentDialog({
         const esDolar = p.type === "dolares";
         movimientoCaja = {
           moneda: esDolar ? "USD" : "VES",
-          monto_original: esDolar ? r2(p.amount) : totalFactura,
+          monto_original: esDolar ? r2(totalFactura / rate) : totalFactura,
           metodo_pago: esDolar ? "Efectivo" : p.type === "efectivo" ? "Efectivo" : p.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
           descripcion: `Cobro factura ${controlNumber}`,
         };
@@ -391,7 +395,7 @@ export default function PaymentDialog({
                         value={String((payments.efectivo as CashPayment).amount || "")}
                         onChange={(v) => {
                           const amt = r2(parseFloat(v) || 0);
-                          updatePayment("efectivo", { amount: amt, change: r2(Math.max(0, amt - totalConIgtf)) });
+                          updatePayment("efectivo", { amount: amt, change: r2(Math.max(0, amt - totalConIgtfVes)) });
                         }}
                         placeholder="0.00"
                       />
@@ -453,12 +457,12 @@ export default function PaymentDialog({
                 ))}
               </div>
 
-              {exceso > 0.01 && (
+              {exceso > VES_TOLERANCE && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-base font-black text-slate-700">Asignar cambio (manual)</h3>
                     <span className="text-xs font-bold text-slate-500">
-                      Pendiente: {formatPrice(Math.max(0, cambioPendiente))}
+                      Pendiente: {formatPrice(Math.max(0, cambioPendiente) / rate)}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
@@ -520,7 +524,7 @@ export default function PaymentDialog({
                     <button onClick={addManualChange} className="text-xs font-bold text-blue-600 hover:underline">
                       + Agregar otro cambio
                     </button>
-                    {cambioPendiente > 0.01 && (
+                    {cambioPendiente > VES_TOLERANCE && (
                       <button
                         onClick={() =>
                           setManualChanges((prev) => [
@@ -540,45 +544,21 @@ export default function PaymentDialog({
 
             <div className="space-y-6">
               <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Resumen Fiscal</p>
-              <div className="bg-slate-50 rounded-2xl p-5 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">Monto base:</span>
-                  <span className="font-black text-slate-700">{formatPrice(baseAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">IVA:</span>
-                  <span className="font-black text-slate-700">{formatPrice(totals.totalVat)}</span>
-                </div>
+              <div className="bg-slate-50 rounded-2xl p-5 space-y-4">
+                <SummaryRow label="Monto base:" usd={baseAmountVes / rate} rate={rate} />
+                <SummaryRow label="IVA:" usd={totals.totalVat} rate={rate} />
                 <div className="h-px bg-slate-200" />
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">Total:</span>
-                  <span className="text-xl font-black text-blue-600">{formatPrice(totals.total)}</span>
-                </div>
-                {igtf > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-amber-600">IGTF 3%:</span>
-                    <span className="font-black text-amber-600">{formatPrice(igtf)}</span>
-                  </div>
+                <SummaryRow label="Total:" usd={totals.total} rate={rate} bold highlight />
+                {igtfVes > 0 && (
+                  <SummaryRow label="IGTF 3%:" usd={igtfVes / rate} rate={rate} amber />
                 )}
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">Total a cobrar:</span>
-                  <span className="text-lg font-black text-slate-800">{formatPrice(totalConIgtf)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">Total cubierto:</span>
-                  <span className={`text-lg font-black ${totalPaid >= totalConIgtf ? 'text-green-600' : 'text-red-500'}`}>{formatPrice(totalPaid)}</span>
-                </div>
+                <SummaryRow label="Total a cobrar:" usd={totalConIgtfVes / rate} rate={rate} large />
+                <SummaryRow label="Total cubierto:" usd={totalPaid / rate} rate={rate} large color={totalPaid >= totalConIgtfVes ? 'green' : 'red'} />
                 {remaining > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-red-500">Pendiente:</span>
-                    <span className="text-lg font-black text-red-500">{formatPrice(remaining)}</span>
-                  </div>
+                  <SummaryRow label="Pendiente:" usd={remaining / rate} rate={rate} large color="red" />
                 )}
-                {exceso > 0.01 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-amber-600">Vuelto:</span>
-                    <span className="text-lg font-black text-amber-600">{formatPrice(exceso)}</span>
-                  </div>
+                {exceso > VES_TOLERANCE && (
+                  <SummaryRow label="Vuelto:" usd={exceso / rate} rate={rate} large color="amber" />
                 )}
               </div>
             </div>
@@ -596,9 +576,9 @@ export default function PaymentDialog({
                 isProcessing ||
                 !activeSession ||
                 activeSession.approvalStatus !== "approved" ||
-                remaining > 0.01 ||
+                remaining > VES_TOLERANCE ||
                 hasInvalidActiveMethod ||
-                (exceso > 0.01 && Math.abs(cambioPendiente) > 0.01)
+                (exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE)
               }
               className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -608,11 +588,11 @@ export default function PaymentDialog({
                   ? "Sin sesión activa"
                   : activeSession.approvalStatus !== "approved"
                     ? "Sesión no aprobada"
-                    : remaining > 0.01
-                      ? `Falta ${formatPrice(remaining)}`
+                    : remaining > VES_TOLERANCE
+                      ? `Falta ${formatPrice(remaining / rate)}`
                       : hasInvalidActiveMethod
                         ? "Complete los métodos de pago"
-                        : exceso > 0.01 && Math.abs(cambioPendiente) > 0.01
+                        : exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE
                           ? "Asigne el cambio"
                           : "Cobrar e Imprimir"}
             </button>
@@ -621,6 +601,34 @@ export default function PaymentDialog({
       </div>
     </div>,
     document.body
+  );
+}
+
+function SummaryRow({ label, usd, rate, bold, highlight, amber, large, color }: {
+  label: string;
+  usd: number;
+  rate: number;
+  bold?: boolean;
+  highlight?: boolean;
+  amber?: boolean;
+  large?: boolean;
+  color?: 'green' | 'red' | 'amber';
+}) {
+  const primaryClass = large ? 'text-lg' : 'text-sm';
+  const colorClass = color === 'green' ? 'text-green-600' : color === 'red' ? 'text-red-500' : color === 'amber' ? 'text-amber-600' : highlight ? 'text-blue-600' : amber ? 'text-amber-600' : 'text-slate-700';
+  return (
+    <div className="flex justify-between items-start">
+      <span className="font-bold text-slate-500 text-sm">{label}</span>
+      <div className="text-right">
+        <span className={`${primaryClass} font-black ${colorClass} leading-tight`}>
+          {formatUsd(usd)}
+        </span>
+        <br />
+        <span className="text-[10px] font-bold text-slate-400 leading-tight">
+          {formatBs(usd, rate)}
+        </span>
+      </div>
+    </div>
   );
 }
 
