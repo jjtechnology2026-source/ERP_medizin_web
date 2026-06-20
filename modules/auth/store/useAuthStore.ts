@@ -1,0 +1,64 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  id_group?: string;
+  permits: string[];
+  [key: string]: any; 
+}
+
+const loadMedicinesFromLocalStorage = (): any[] => {
+  try {
+    const data = localStorage.getItem("medicines-catalog");
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+interface AuthState {
+  profile: UserProfile | null;
+  medicinesCatalog: any[];
+  isHydrated: boolean;
+  syncWithSession: (user: any) => void;
+  setMedicinesCatalog: (medicines: any[]) => void;
+  clearAuth: () => void;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      profile: null,
+      medicinesCatalog: typeof window !== "undefined" ? loadMedicinesFromLocalStorage() : [],
+      isHydrated: false,
+      syncWithSession: (user) => {
+        if (JSON.stringify(get().profile) !== JSON.stringify(user)) {
+          set({ profile: user });
+        }
+        const lsMedicines = loadMedicinesFromLocalStorage();
+        if (lsMedicines.length) {
+          set({ medicinesCatalog: lsMedicines });
+        }
+      },
+      setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
+      clearAuth: () => {
+        try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
+        set({ profile: null, medicinesCatalog: [] });
+      },
+    }),
+    {
+      name: "auth-storage",
+      onRehydrateStorage: () => () => {
+        const lsMedicines = loadMedicinesFromLocalStorage();
+        if (lsMedicines.length) {
+          useAuthStore.setState({ medicinesCatalog: lsMedicines });
+        }
+        useAuthStore.setState({ isHydrated: true });
+      },
+    }
+  )
+);
