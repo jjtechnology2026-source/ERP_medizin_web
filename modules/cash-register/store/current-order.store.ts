@@ -287,7 +287,6 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         case "tarjeta":  return { method: "Card", punto: (p as any).punto || "", type: (p as any).cardType || "", reference: (p as any).reference || "", amount: p.amount };
         case "pagomovil":return { method: "Mobile", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
         case "biopago":  return { method: "Biopago", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
-        default:         return { method: "Cash", currency: "VES", amount: p.amount };
       }
     });
 
