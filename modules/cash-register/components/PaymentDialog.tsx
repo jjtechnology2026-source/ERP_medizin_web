@@ -5,6 +5,7 @@ import { HiX } from "react-icons/hi";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import type {
