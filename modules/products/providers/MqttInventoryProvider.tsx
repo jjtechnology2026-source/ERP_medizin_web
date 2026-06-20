@@ -11,7 +11,6 @@
  *   - pharmacy/{pharmacyId}/insert_inventory  → add/upsert medications
  *   - pharmacy/{pharmacyId}/update_inventory  → update medications
  *   - pharmacy/{pharmacyId}/remove_inventory  → reduce stock after sale
- *   - farmacia/inventario/+                   → JSON stock update by barcode
  *
  * Payload format:
  *   Protobuf: DtoUpdateMedications { idAgent, idPharmacy, medications: MedicationProto[] }
@@ -55,7 +54,9 @@ function protoToMedication(proto: MedicationProtoLike): Medication {
     subcategory: proto.subcategory || "",
     price: typeof proto.price === "number" ? proto.price : 0,
     quantity: typeof proto.quantity === "number" ? proto.quantity : 0,
-    stock: typeof proto.stock === "number" ? proto.stock : 0,
+    stock: (typeof proto.stock === "number" && proto.stock > 0)
+        ? proto.stock
+        : (typeof proto.quantity === "number" ? proto.quantity : 0),
     description: proto.description || "",
     controlled: !!proto.controlled,
     vat: typeof proto.vat === "number" ? proto.vat : 16,
@@ -75,28 +76,11 @@ function tryDecodeDtoUpdateMedications(raw: Uint8Array): DtoUpdateMedications | 
   }
 }
 
-/** Try to parse a JSON stock update (farmacia/inventario/{barCode}) */
-function tryParseJsonStockUpdate(
-  raw: Uint8Array | string
-): { barCode: string; stock: number } | null {
-  try {
-    const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-    const json = JSON.parse(text.trim());
-    const barCode = json.barCode || json.bar_code || json.codigo || "";
-    // Dart docs: for farmacia/inventario/+, stockNuevo is the new stock value
-    const stock = json.stockNuevo ?? json.stock ?? json.stockActual ?? json.quantity ?? -1;
-    if (barCode && stock >= 0) return { barCode, stock };
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── Provider ───────────────────────────────────────────────────────────────
 
 export function MqttInventoryProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuthStore();
-  const { fetchInventory, applyInventoryUpdate } = useProductsStore();
+  const { fetchInventory } = useProductsStore();
   const initialFetchDone = useRef(false);
 
   // 1. Initial REST load — same as Dart does on startup
@@ -143,33 +127,25 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
       }
 
       // ── REMOVE: reduce stock after a sale ────────────────────────────────
-      // Dart note: 'quantity' field in remove_inventory = nuevo stock restante
+      // quantity = unidades vendidas, se descuenta del stock actual
       if (topic === MQTT_TOPICS.inventoryRemove(pharmacyId)) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 
-        const stockUpdates = dto.medications.map((med) => ({
-          barCode: med.barCode,
-          stock: typeof med.quantity === "number" ? med.quantity : 0,
+        const items = dto.medications.map((med) => ({
+          barCode: med.barCode ?? "",
+          quantity: typeof med.quantity === "number" ? med.quantity : 1,
         }));
 
-        applyInventoryUpdate(stockUpdates);
+        useProductsStore.getState().decrementStock(items);
         return;
-      }
-
-      // ── farmacia/inventario/{barCode}: JSON stock update ──────────────────
-      if (topic.startsWith("farmacia/inventario/")) {
-        const jsonUpdate = tryParseJsonStockUpdate(rawPayload);
-        if (jsonUpdate) {
-          applyInventoryUpdate([{ barCode: jsonUpdate.barCode, stock: jsonUpdate.stock }]);
-        }
       }
     });
 
     return () => {
       unsubMessage();
     };
-  }, [profile?.pharmacyId, applyInventoryUpdate]);
+  }, [profile?.pharmacyId]);
 
   return (
     <MqttInventoryContext.Provider value={true}>

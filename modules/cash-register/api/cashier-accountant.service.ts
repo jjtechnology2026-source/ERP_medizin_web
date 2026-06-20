@@ -163,6 +163,26 @@ async fetchCurrentRate(): Promise<number> {
     return parseInvoice(data?.factura ?? data);
   },
 
+  /** Envía la orden a /orders/local o /insertorder según el tipo */
+  async submitOrder(order: Record<string, any>, saleType: "local" | "digital" = "local"): Promise<{
+    facturacion: { success: boolean; numeroControl: string | null; urlPdf: string | null; error: string | null };
+    ordenId: string;
+  }> {
+    const endpoint = saleType === "digital" ? "/insertorder" : "/orders/local";
+    const { data } = await api.post(endpoint, [order]);
+    const result = Array.isArray(data) ? data[0] : data;
+    const fac = result?.facturacion ?? {};
+    return {
+      facturacion: {
+        success: fac?.success ?? false,
+        numeroControl: fac?.numeroControl ?? fac?.numero_control ?? fac?.resp?.numerocontrol ?? null,
+        urlPdf: fac?.resp?.urlpdf ?? fac?.url_pdf ?? null,
+        error: fac?.error ?? null,
+      },
+      ordenId: result?.id ?? result?.idOrder ?? "",
+    };
+  },
+
   async fetchSessionInvoices(cashBoxId?: string): Promise<CashierInvoice[]> {
     const response = await api.get("/admin/facturas/sesion-actual", {
       params: cashBoxId ? { caja_id: cashBoxId } : undefined,

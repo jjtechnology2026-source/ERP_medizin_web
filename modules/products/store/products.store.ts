@@ -83,25 +83,55 @@ export const useProductsStore = create<ProductsStore>()(
         const { isInitialLoad, inventory } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
 
-        // Prefer pharmacy inventory from SurrealDB (login response) over Meilisearch catalog
-        const catalog = useAuthStore.getState().medicinesCatalog || [];
-        if (catalog.length > 0) {
-          const merged = catalog.map(cleanImage);
-          set({ inventory: merged, isLoading: false, isInitialLoad: false });
-          useAuthStore.getState().setMedicinesCatalog(merged);
-          return;
+        const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+        if (!pharmacyId) {
+          // Sin pharmacyId: mantener Meilisearch como fallback
+          const catalog = useAuthStore.getState().medicinesCatalog || [];
+          if (catalog.length > 0) {
+            const merged = catalog.map(cleanImage);
+            set({ inventory: merged, isLoading: false, isInitialLoad: false });
+            return;
+          }
         }
 
         if (inventory.length === 0) set({ isLoading: true });
         set({ error: null });
 
         try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 30000);
-          const apiInventory = await productsService.getCatalog(controller.signal);
-          clearTimeout(timeout);
+          if (pharmacyId) {
+            // Cargar con cursor paginado desde SurrealDB
+            const allMeds: Medication[] = [];
+            let cursor: string | undefined;
+            let hasMore = true;
 
-          // Merge API data with existing inventory to preserve local stock/price
+            while (hasMore) {
+              const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
+              allMeds.push(...page.medications);
+              cursor = page.next_cursor ?? undefined;
+              hasMore = page.has_more && !!page.next_cursor;
+            }
+
+            const localMap = new Map(inventory.map(m => [m.barCode, m]));
+            const merged = allMeds.map((api: Medication) => {
+              const local = localMap.get(api.barCode);
+              if (local) {
+                return {
+                  ...api,
+                  stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
+                  quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
+                  price: (local.price ?? 0) > 0 ? local.price : api.price,
+                };
+              }
+              return api;
+            });
+
+            set({ inventory: merged, isLoading: false, isInitialLoad: false });
+            useAuthStore.getState().setMedicinesCatalog(merged);
+            return;
+          }
+
+          // Fallback: Meilisearch
+          const apiInventory = await productsService.getCatalog();
           const localMap = new Map(inventory.map(m => [m.barCode, m]));
           const merged = apiInventory.map((api: Medication) => {
             const local = localMap.get(api.barCode);
@@ -119,8 +149,8 @@ export const useProductsStore = create<ProductsStore>()(
           set({ inventory: merged, isLoading: false, isInitialLoad: false });
           useAuthStore.getState().setMedicinesCatalog(merged);
         } catch (e: any) {
-          if (inventory.length === 0 && catalog.length === 0) {
-            const msg = e?.name === "AbortError" ? "La consulta tardó demasiado. Intente de nuevo." : "Error al cargar inventario";
+          if (inventory.length === 0) {
+            const msg = "Error al cargar inventario";
             set({ error: msg, isLoading: false, isInitialLoad: false });
           } else {
             set({ isLoading: false });
@@ -250,23 +280,6 @@ export const useProductsStore = create<ProductsStore>()(
           return med;
         });
         set({ inventory: updated });
-
-        // Publish inventoryRemove with new stock values so other clients update
-        try {
-          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-          if (pharmacyId) {
-            const meds = updated
-              .map((m) => ({ barCode: m.barCode, quantity: m.stock ?? 0 }))
-              .filter((m) => items.some((it) => it.barCode === m.barCode));
-            if (meds.length > 0) {
-              const dto: any = { idAgent: "web", idPharmacy: pharmacyId, medications: meds };
-              const buf = DtoUpdateMedications.encode(dto).finish();
-              mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf).catch(() => {});
-            }
-          }
-        } catch (e) {
-          // noop
-        }
       },
 
 

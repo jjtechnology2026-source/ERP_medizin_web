@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import type { CashierWorkflowState, CashierClosePhysicalCount } from "@/modules/cash-register/types/cashier.types";
-import type { CreateInvoicePayload } from "@/modules/cash-register/types/cashier.types";
 import { cashierAccountantService } from "@/modules/cash-register/api/cashier-accountant.service";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -10,7 +11,7 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   load: (pharmacyId?: string) => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
-  registerSale: (payload: CreateInvoicePayload) => Promise<void>;
+  registerSale: () => Promise<{ facturacion: any; ordenId: string } | null>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
     options?: { observations?: string; openNewTurn?: boolean; nextCashierId?: string }
@@ -132,16 +133,36 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     }
   },
 
-  registerSale: async (payload) => {
+  registerSale: async (saleType: "local" | "digital" = "local") => {
+    const { activeSession } = get();
+    if (!activeSession?.id) {
+      set({ errorMessage: "No hay sesión de caja activa" });
+      return null;
+    }
+
+    const profile = useAuthStore.getState().profile;
+    if (!profile) {
+      set({ errorMessage: "No hay perfil de usuario" });
+      return null;
+    }
+
+    const order = useCurrentOrderStore.getState().buildModelOrder(profile, activeSession.id);
+    if (!order) {
+      set({ errorMessage: "No hay productos en la orden" });
+      return null;
+    }
+
     set({ isSubmitting: true, errorMessage: null });
     try {
-      await cashierAccountantService.createInvoiceFromOrder(payload);
-      set({ isSubmitting: false, infoMessage: "Factura emitida exitosamente" });
-      await get().load(); // ahora recuerda el pharmacyId
+      const result = await cashierAccountantService.submitOrder(order, saleType);
+      set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
+      await get().load();
+      return result;
     } catch (error: any) {
-      const mensaje = error.response?.data?.message || "Error al emitir factura";
+      const mensaje = error.response?.data?.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
+      return null;
     }
   },
 

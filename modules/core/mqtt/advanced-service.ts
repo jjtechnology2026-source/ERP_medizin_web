@@ -218,8 +218,6 @@ class MqttServerService {
 
   async subscribeToInventory(pharmacyId: string): Promise<void> {
     const topics = [
-      MQTT_TOPICS.inventoryWildcard,
-      MQTT_TOPICS.stockAlerts,
       MQTT_TOPICS.inventoryInsert(pharmacyId),
       MQTT_TOPICS.inventoryUpdate(pharmacyId),
       MQTT_TOPICS.inventoryRemove(pharmacyId),
@@ -248,7 +246,7 @@ class MqttServerService {
   }
 
   async subscribeToMarketplace(pharmacyId: string): Promise<void> {
-    const topics = [MQTT_TOPICS.marketplacePharmacy(pharmacyId), MQTT_TOPICS.pendingOrdersWildcard, MQTT_TOPICS.pendingOrdersConfirmationWildcard];
+    const topics = [MQTT_TOPICS.marketplacePharmacy(pharmacyId)];
 
     const client = await this.connect();
 
@@ -292,7 +290,25 @@ class MqttServerService {
         });
       }),
       10_000,
-      `Suscripción MQTT Genérica (${topicList.join(", ")})`,
+              `Suscripción MQTT Genérica (${topicList.join(", ")})`,
+    );
+  }
+
+  async unsubscribe(topics: string | string[]): Promise<void> {
+    const topicList = Array.isArray(topics) ? topics : [topics];
+    if (!topicList.length || !this.client) return;
+
+    topicList.forEach((t) => this.activeSubscriptions.delete(t));
+
+    return this.withTimeout(
+      new Promise<void>((resolve) => {
+        this.client!.unsubscribe(topicList, undefined, () => {
+          this.log("log", `>>> [MQTT:UNSUB] Desuscrito de: ${topicList.join(", ")}`);
+          resolve();
+        });
+      }),
+      5_000,
+      `Desuscripción MQTT (${topicList.join(", ")})`,
     );
   }
 

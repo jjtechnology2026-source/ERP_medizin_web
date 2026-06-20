@@ -59,10 +59,10 @@ export default function PaymentDialog({
     togglePaymentMethod,
     payments,
     setPayment,
-    getPaymentsForInvoice,
   } = useCurrentOrderStore();
   const { registerSale, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const profile = useAuthStore((s) => s.profile);
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
@@ -254,74 +254,19 @@ export default function PaymentDialog({
         } catch { /* no detener venta */ }
       }
 
-      const controlNumber = `FAC-${Date.now()}`;
-      const invoicePayments = getPaymentsForInvoice();
+      console.log("📤 [PaymentDialog] Enviando orden a /orders/local...");
 
-      // Calcular detalles con precios convertidos a VES
-      const detalles = (order?.medications ?? []).map((m) => {
-        const unitPriceUsd = m.price / (1 + (m.vat || 0) / 100);
-        const unitPriceVes = r2(unitPriceUsd * rate);
-        const lineTotalVes = r2(unitPriceVes * m.quantity * (1 + (m.vat || 0) / 100));
-        return {
-          producto_id: m.barCode,
-          descripcion: m.name,
-          cantidad: m.quantity,
-          precio_unitario_ves: unitPriceVes,
-          iva_porcentaje: m.vat || 0,
-          lineTotal: lineTotalVes,
-        };
-      });
+      const result = await registerSale(
+        (profile as any)?.usesDigitalBilling ? "digital" : "local"
+      );
 
-      // Total real de la factura (suma de líneas redondeadas)
-      const totalFactura = r2(detalles.reduce((sum, d) => sum + d.lineTotal, 0));
-
-      let movimientoCaja: any;
-      if (invoicePayments.length === 1) {
-        const p = invoicePayments[0];
-        const esDolar = p.type === "dolares";
-        movimientoCaja = {
-          moneda: esDolar ? "USD" : "VES",
-          monto_original: esDolar ? r2(totalFactura / rate) : totalFactura,
-          metodo_pago: esDolar ? "Efectivo" : p.type === "efectivo" ? "Efectivo" : p.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
-          descripcion: `Cobro factura ${controlNumber}`,
-        };
-        if (esDolar) movimientoCaja.tasa_cambio = rate;
-      } else {
-        const principal = invoicePayments.reduce((prev, curr) => {
-          const prevMonto = prev.type === "dolares" ? prev.amount * rate : prev.amount;
-          const currMonto = curr.type === "dolares" ? curr.amount * rate : curr.amount;
-          return currMonto > prevMonto ? curr : prev;
-        });
-        const detalle = invoicePayments
-          .map((p) => `${p.type} ${r2(p.amount).toFixed(2)} ${p.type === "dolares" ? "USD" : "VES"}`)
-          .join(", ");
-        movimientoCaja = {
-          moneda: "VES",
-          monto_original: totalFactura,
-          metodo_pago: principal.type === "efectivo" ? "Efectivo" : principal.type === "dolares" ? "Efectivo" : principal.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
-          descripcion: `Cobro factura ${controlNumber} | Pago mixto: ${detalle}`,
-        };
+      if (!result) {
+        throw new Error("No se pudo procesar la venta");
       }
 
-      const payload = {
-        sesion_caja_id: activeSession.id,
-        numero_control: controlNumber,
-        cliente_nombre: clientData?.name || "Cliente General",
-        cliente_rif: clientData?.documento || "V-00000000",
-        tasa_cambio: rate,
-        detalles: detalles.map((d) => ({
-          producto_id: d.producto_id,
-          descripcion: d.descripcion,
-          cantidad: d.cantidad,
-          precio_unitario_ves: d.precio_unitario_ves,
-          iva_porcentaje: d.iva_porcentaje,
-        })),
-        movimiento_caja: movimientoCaja,
-      };
-
-      console.log("📤 [PaymentDialog] Enviando payload:", JSON.stringify(payload, null, 2));
-
-      await registerSale(payload);
+      if (result.facturacion?.success) {
+        console.log("✅ Factura fiscal:", result.facturacion.numeroControl);
+      }
 
       const soldMeds = order?.medications ?? [];
       if (soldMeds.length > 0) {

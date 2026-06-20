@@ -21,6 +21,26 @@ export const productsService = {
     return rawItems.map(cleanImg);
   },
 
+  /** Carga inventario de una farmacia con cursor paginado */
+  async getCursorInventory(pharmacyId: string, cursor?: string, limit = 200): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number;
+  }> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set("cursor", cursor);
+    const { data } = await api.get(
+      `/admin/Pharmacy/${pharmacyId}/medications/cursor?${params}`
+    );
+    return {
+      medications: (data.medications ?? []).map(cleanImg),
+      next_cursor: data.next_cursor ?? null,
+      has_more: data.has_more ?? false,
+      total: data.total ?? 0,
+    };
+  },
+
   async createProduct(medication: Partial<Medication>): Promise<Medication> {
     const payload = [{
       brand: medication.brand || "",

@@ -188,6 +188,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
   const { addNotification } = useNotifications();
   const [queuedOrders, setQueuedOrders] = useState<MarketplaceOrderSummary[]>([]);
   const queuedOrdersRef = useRef<MarketplaceOrderSummary[]>([]);
+  const subscribedOrderIds = useRef<Set<string>>(new Set());
   
   useEffect(() => {
     queuedOrdersRef.current = queuedOrders;
@@ -321,18 +322,6 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               })).filter((u) => u.barCode)
             );
 
-            // Notificar vía MQTT el descuento de inventario
-            if (profile?.pharmacyId) {
-              const invTopic = MQTT_TOPICS.inventoryRemove(profile.pharmacyId);
-              mqttServer.publish(invTopic, JSON.stringify({
-                medications: order.items.map((item) => ({
-                  barCode: item.barcode,
-                  quantity: item.quantity,
-                })),
-                idAgent: profile.id,
-                idPharmacy: profile.pharmacyId,
-              })).catch(() => {});
-            }
           }
         }
 
@@ -413,9 +402,6 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       }
     });
 
-    // Suscribirse también a confirmaciones de pago (como en Dart)
-    mqttServer.subscribe([MQTT_TOPICS.paymentAcceptedWildcard, MQTT_TOPICS.acceptedDeliveryWildcard]).catch(() => {});
-
     mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
     mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
 
@@ -424,6 +410,31 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       unsubMessage();
     };
   }, [profile]);
+
+  // Sync per-order payment/accepted_delivery subscriptions
+  useEffect(() => {
+    const currentIds = new Set(queuedOrders.map((o) => o.orderId));
+
+    currentIds.forEach((orderId) => {
+      if (!subscribedOrderIds.current.has(orderId)) {
+        subscribedOrderIds.current.add(orderId);
+        mqttServer.subscribe([
+          MQTT_TOPICS.paymentAccepted(orderId),
+          MQTT_TOPICS.acceptedDelivery(orderId),
+        ]).catch(() => {});
+      }
+    });
+
+    subscribedOrderIds.current.forEach((orderId) => {
+      if (!currentIds.has(orderId)) {
+        subscribedOrderIds.current.delete(orderId);
+        mqttServer.unsubscribe([
+          MQTT_TOPICS.paymentAccepted(orderId),
+          MQTT_TOPICS.acceptedDelivery(orderId),
+        ]).catch(() => {});
+      }
+    });
+  }, [queuedOrders]);
 
   // Timer para la orden actual
   useEffect(() => {

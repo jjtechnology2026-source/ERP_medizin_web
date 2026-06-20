@@ -27,6 +27,8 @@ interface CurrentOrderActions {
   getCurrentOrder: () => Order;
   getComputedTotals: () => { subtotal: number; totalVat: number; total: number; itemCount: number };
   getPaymentsForInvoice: () => Payment[];
+  /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
+  buildModelOrder: (profile: Record<string, any>, activeSessionId: string) => Record<string, any> | null;
   resetPayments: () => void;
   clearCurrentOrder: () => void;
 }
@@ -268,6 +270,92 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     return activePaymentMethods
       .map((m) => payments[m])
       .filter((p) => p.amount > 0);
+  },
+
+  buildModelOrder: (profile, activeSessionId) => {
+    const order = get().orders[get().currentOrderIndex];
+    if (!order || order.medications.length === 0) return null;
+
+    const invoicePayments = get()
+      .activePaymentMethods.map((m) => get().payments[m])
+      .filter((p) => p.amount > 0);
+
+    const backendPayments = invoicePayments.map((p) => {
+      switch (p.type) {
+        case "efectivo": return { method: "Cash", currency: "VES", amount: p.amount };
+        case "dolares":  return { method: "Dollars", amount: p.amount };
+        case "tarjeta":  return { method: "Card", punto: (p as any).punto || "", type: (p as any).cardType || "", reference: (p as any).reference || "", amount: p.amount };
+        case "pagomovil":return { method: "Mobile", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
+        case "biopago":  return { method: "Biopago", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
+        default:         return { method: "Cash", currency: "VES", amount: p.amount };
+      }
+    });
+
+    const rate = useCurrencyStore.getState().getEffectiveRate();
+    const subtotal = order.medications.reduce((s, m) => s + m.price * m.quantity, 0);
+    const rif = (profile as any)?.rif || (profile as any)?.rifPharmacy || "J-00000000-0";
+
+    return {
+      date: new Date().toISOString(),
+      id: order.id,
+      nameGroup: (profile as any)?.name_group || "",
+      idAgent: (profile as any)?.id_agent || (profile as any)?.agentId || "",
+      nameAgent: profile?.name || "",
+      idPharmacy: (profile as any)?.pharmacyId || "",
+      idGroup: (profile as any)?.id_group || "",
+      pharmacy: (profile as any)?.pharmacyName || "",
+      medications: order.medications.map((m) => ({
+        brand: m.brand || "",
+        activeIngredient: m.activeIngredient || "",
+        dosage: m.dosage || "",
+        tablets: m.tablets || "",
+        barCode: m.barCode,
+        name: m.name,
+        image: m.image || "",
+        category: m.category || "",
+        subcategory: m.subcategory || "",
+        price: m.price,
+        quantity: m.quantity,
+        stock: m.stock,
+        description: m.description || "",
+        controlled: m.controlled || false,
+        vat: m.vat || 0,
+        antibiotic: m.antibiotic || false,
+        minimum: m.minimum || 0,
+      })),
+      totalreal: subtotal,
+      totalsystem: subtotal,
+      rate,
+      payments: backendPayments,
+      changes: [],
+      totalPaidIn: invoicePayments.reduce((s, p) => {
+        if (p.type === "dolares") return s + p.amount * rate;
+        return s + p.amount;
+      }, 0),
+      totalChangeOut: 0,
+      rifEmisor: rif,
+      client: {
+        id: order.client?.id || "",
+        documento: order.client?.documento || "V-00000000",
+        name: order.client?.name || "Cliente General",
+        email: order.client?.email || "",
+        direccion: order.client?.direccion || "",
+        phone: order.client?.phone || "0000000000",
+        retencion: (order.client as any)?.retencion || "0",
+      },
+      facturacion: null,
+      notaCredito: null,
+      notaDebito: null,
+      numeroControlInterno: null,
+      gender: order.gender || "Male",
+      saleStatus: "Completed",
+      isControlled: order.isControlled || false,
+      saleType: "Local",
+      address: order.address || "",
+      observation: order.observation || null,
+      sesion_caja_id: activeSessionId,
+      delivery: null,
+    };
   },
 
   resetPayments: () => {

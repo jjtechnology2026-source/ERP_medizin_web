@@ -89,6 +89,7 @@ export const authOptions: NextAuthOptions = {
       // 4. Inyectamos todo en la sesión
       session.user = token.user;
       session.accessToken = token.accessToken;
+      session.refreshToken = token.refreshToken;
       session.error = token.error;
       return session;
     },

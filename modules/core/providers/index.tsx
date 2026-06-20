@@ -8,9 +8,6 @@ import { MqttOrdersProvider } from "@/modules/marketplace/providers/MqttOrdersPr
 import GlobalOrderNotifications from "@/modules/marketplace/components/GlobalOrderNotifications";
 import { NotificationProvider } from "./NotificationProvider";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { setupInventoryMqttHandler } from "@/modules/core/mqtt/handlers/inventory-handler";
-
 function CurrencyRatePoller() {
   const fetchRate = useCurrencyStore((s) => s.fetchRate);
 
@@ -19,18 +16,6 @@ function CurrencyRatePoller() {
     const interval = setInterval(fetchRate, 60000);
     return () => clearInterval(interval);
   }, [fetchRate]);
-
-  return null;
-}
-
-function MqttInventorySync() {
-  const pharmacyId = useAuthStore((s) => s.profile?.pharmacyId);
-
-  useEffect(() => {
-    if (!pharmacyId) return;
-    const unsub = setupInventoryMqttHandler(pharmacyId);
-    return () => unsub?.();
-  }, [pharmacyId]);
 
   return null;
 }
@@ -61,7 +46,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           <MqttOrdersProvider>
             <GlobalOrderNotifications />
             <CurrencyRatePoller />
-            <MqttInventorySync />
             {children}
           </MqttOrdersProvider>
         </NotificationProvider>

@@ -34,7 +34,12 @@ api.interceptors.response.use(
 
     if (isAuthError && !req._retry) {
       req._retry = true;
-      const session: any = await getSession();
+      let session: any = await getSession();
+
+      if (session?.accessToken && !session?.error) {
+        req.headers.Authorization = `Bearer ${cleanToken(session.accessToken)}`;
+        return api(req);
+      }
 
       if (session?.refreshToken && !session?.error) {
         try {
@@ -47,9 +52,9 @@ api.interceptors.response.use(
 
           if (result?.error) throw new Error(result.error);
 
-          const newSession: any = await getSession();
-          if (newSession?.accessToken) {
-            req.headers.Authorization = `Bearer ${cleanToken(newSession.accessToken)}`;
+          session = await getSession();
+          if (session?.accessToken) {
+            req.headers.Authorization = `Bearer ${cleanToken(session.accessToken)}`;
             return api(req);
           }
         } catch {

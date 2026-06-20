@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
-import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle, HiOutlineRefresh } from "react-icons/hi";
+import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineCheckCircle, HiOutlineExclamationCircle } from "react-icons/hi";
 import { motion } from "framer-motion";
 import { useNotifications } from "@/modules/core/providers/NotificationProvider";
 import { cn } from "@/modules/core/utils/ui";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 export const SearchBar = ({ value, onChange }: any) => (
   <div className="relative flex-1 max-w-md hidden md:block group">
@@ -17,8 +18,10 @@ export const CurrencySwitch = () => {
   const { isDollar, toggleCurrency, fetchRate, isLoading } = useCurrencyStore();
   const rate = useCurrencyStore((s) => s.getEffectiveRate());
   const initialized = useCurrencyStore((s) => s.initialized);
+  const profile = useAuthStore((s) => s.profile);
 
   const displayRate = !initialized ? null : rate;
+  const isDigital = profile?.usesDigitalBilling ?? false;
 
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
@@ -43,6 +46,21 @@ export const CurrencySwitch = () => {
         >
           <HiOutlineRefresh size={14} />
         </button>
+      </div>
+
+      <div className="h-4 w-[1px] bg-slate-200" />
+
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider select-none",
+          isDigital
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+            : "bg-amber-50 text-amber-700 border border-amber-200"
+        )}
+        title={isDigital ? "Facturación electrónica activada" : "Facturación fiscal — máquina fiscal"}
+      >
+        {isDigital ? <HiOutlineCheckCircle size={14} /> : <HiOutlineExclamationCircle size={14} />}
+        {isDigital ? "Digital" : "Fiscal"}
       </div>
 
       <div className="h-4 w-[1px] bg-slate-200" />
