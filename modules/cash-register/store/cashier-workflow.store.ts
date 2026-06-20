@@ -11,7 +11,7 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   load: (pharmacyId?: string) => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
-  registerSale: () => Promise<{ facturacion: any; ordenId: string } | null>;
+  registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string } | null>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
     options?: { observations?: string; openNewTurn?: boolean; nextCashierId?: string }
