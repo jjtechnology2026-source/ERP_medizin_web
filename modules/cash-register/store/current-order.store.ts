@@ -341,7 +341,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         email: order.client?.email || "",
         direccion: order.client?.direccion || "",
         phone: order.client?.phone || "0000000000",
-        retencion: (order.client as any)?.retencion || "0",
+        retencion: parseFloat((order.client as any)?.retencion) || 0,
       },
       facturacion: null,
       notaCredito: null,
