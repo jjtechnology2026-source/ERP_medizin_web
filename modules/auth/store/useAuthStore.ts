@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface UserProfile {
   id: string;
@@ -29,39 +28,26 @@ interface AuthState {
   clearAuth: () => void;
 }
 
+// ponytail: no persistence — tab close = re-login. Simpler than storage edge cases.
 export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      profile: null,
-      medicinesCatalog: typeof window !== "undefined" ? loadMedicinesFromLocalStorage() : [],
-      isHydrated: false,
-      syncWithSession: (user) => {
-        if (JSON.stringify(get().profile) !== JSON.stringify(user)) {
-          set({ profile: user });
-        }
-        const lsMedicines = loadMedicinesFromLocalStorage();
-        if (lsMedicines.length) {
-          set({ medicinesCatalog: lsMedicines });
-        }
-      },
-      setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
-      clearAuth: () => {
-        try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
-        try { sessionStorage.removeItem("auth-storage"); } catch (e) {}
-        try { localStorage.removeItem("auth-storage"); } catch (e) {}
-        set({ profile: null, medicinesCatalog: [] });
-      },
-    }),
-    {
-      name: "auth-storage",
-      storage: createJSONStorage(() => sessionStorage),
-      onRehydrateStorage: () => () => {
-        const lsMedicines = loadMedicinesFromLocalStorage();
-        if (lsMedicines.length) {
-          useAuthStore.setState({ medicinesCatalog: lsMedicines });
-        }
-        useAuthStore.setState({ isHydrated: true });
-      },
-    }
-  )
+  (set, get) => ({
+    profile: null,
+    medicinesCatalog: typeof window !== "undefined" ? loadMedicinesFromLocalStorage() : [],
+    isHydrated: true,
+    syncWithSession: (user) => {
+      if (JSON.stringify(get().profile) !== JSON.stringify(user)) {
+        set({ profile: user });
+      }
+      const lsMedicines = loadMedicinesFromLocalStorage();
+      if (lsMedicines.length) {
+        set({ medicinesCatalog: lsMedicines });
+      }
+    },
+    setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
+    clearAuth: () => {
+      try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
+      try { localStorage.removeItem("auth-storage"); } catch (e) {}
+      set({ profile: null, medicinesCatalog: [] });
+    },
+  })
 );
