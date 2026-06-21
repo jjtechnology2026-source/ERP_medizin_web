@@ -1,6 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { authService, mapUserData } from "@/modules/auth/api/auth.services";
+import { authService, mapUserData, TOKEN_EXPIRY_FALLBACK_SECONDS } from "@/modules/auth/api/auth.services";
 
 export const authOptions: NextAuthOptions = {
  providers: [
@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
             ...user, 
             accessToken: data.token, 
             refreshToken: data.refresh_token ?? credentials.refreshToken, 
-            expiresAt: Date.now() + (data.expires_in || 3600) * 1000
+            expiresAt: Date.now() + (data.expires_in || TOKEN_EXPIRY_FALLBACK_SECONDS) * 1000
           };
         }
 
@@ -78,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         const d = await authService.refresh(token.refreshToken);
         token.accessToken = d.token;
         token.refreshToken = d.refresh_token ?? token.refreshToken;
-        token.expiresAt = Date.now() + (d.expires_in || 3600) * 1000;
+        token.expiresAt = Date.now() + (d.expires_in || TOKEN_EXPIRY_FALLBACK_SECONDS) * 1000;
         return token;
       } catch (e) {
         return { ...token, error: "RefreshAccessTokenError" };

@@ -13,6 +13,27 @@ interface LoginResponse {
   [key: string]: any;
 }
 
+export const TOKEN_EXPIRY_FALLBACK_SECONDS = 3600;
+
+export function decodeJwtExp(token: string | undefined): number {
+  try {
+    if (!token) return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+    const parts = token.split(".");
+    if (parts.length !== 3) return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+
+    // URL-safe base64 → standard base64
+    let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (payload.length % 4) payload += "=";
+
+    const decoded = JSON.parse(atob(payload));
+    if (typeof decoded.exp !== "number") return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+
+    return decoded.exp * 1000;
+  } catch {
+    return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+  }
+}
+
 export const authService = {
   async login(credentials: { username: string; password: string }): Promise<LoginResponse> {
     const isClient = typeof window !== "undefined";
@@ -82,7 +103,7 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
       pharmacies: group?.sucursales || [],
       accessToken: data.token,
       refreshToken: data.refresh_token,
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+      expiresAt: decodeJwtExp(data.token),
     };
   }
 
@@ -106,6 +127,6 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
     usesDigitalBilling: Boolean(agent.usesDigitalBilling),
     accessToken: data.token || agent.token,
     refreshToken: data.refresh_token || agent.refresh_token,
-    expiresAt: Date.now() + ((data.expires_in || agent.expires_in || 3600) as number) * 1000,
+    expiresAt: decodeJwtExp(data.token || agent.token),
   };
 };

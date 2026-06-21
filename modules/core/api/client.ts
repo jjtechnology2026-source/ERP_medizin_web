@@ -4,6 +4,9 @@ import { signOut, getSession, signIn } from "next-auth/react";
 const cleanToken = (t: string | undefined) =>
   t ? t.replace(/\s/g, "").replace(/[\x00-\x1F\x7F]/g, "") : "";
 
+// ponytail: global lock, per-user lock if concurrent-user starvation matters
+let refreshing: Promise<void> | null = null;
+
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL });
 
 api.interceptors.request.use(async (config) => {
@@ -16,7 +19,7 @@ api.interceptors.request.use(async (config) => {
     return config;
   }
 
-  const token = session?.accessToken || process.env.NEXT_PUBLIC_JWT;
+  const token = session?.accessToken;
   if (token) config.headers.Authorization = `Bearer ${cleanToken(token)}`;
 
   return config;
@@ -42,23 +45,35 @@ api.interceptors.response.use(
       }
 
       if (session?.refreshToken && !session?.error) {
-        try {
-          const result = await signIn("credentials", {
-            isRefresh: "true",
-            refreshToken: session.refreshToken,
-            userData: JSON.stringify(session.user),
-            redirect: false,
-          });
+        if (!refreshing) {
+          refreshing = (async () => {
+            const timeout = new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error("Refresh timeout")), 10_000)
+            );
+            try {
+              const result = await Promise.race([
+                signIn("credentials", {
+                  isRefresh: "true",
+                  refreshToken: session.refreshToken,
+                  userData: JSON.stringify(session.user),
+                  redirect: false,
+                }),
+                timeout,
+              ]);
+              if (result?.error) throw new Error(result.error);
+            } catch (e) {
+              console.error("[Auth] Token refresh failed:", e);
+            } finally {
+              refreshing = null;
+            }
+          })();
+        }
+        await refreshing;
 
-          if (result?.error) throw new Error(result.error);
-
-          session = await getSession();
-          if (session?.accessToken) {
-            req.headers.Authorization = `Bearer ${cleanToken(session.accessToken)}`;
-            return api(req);
-          }
-        } catch {
-          // Refresh failed - will sign out below
+        session = await getSession();
+        if (session?.accessToken) {
+          req.headers.Authorization = `Bearer ${cleanToken(session.accessToken)}`;
+          return api(req);
         }
       }
       signOut({ callbackUrl: "/" });
