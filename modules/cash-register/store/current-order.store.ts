@@ -280,13 +280,13 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       .activePaymentMethods.map((m) => get().payments[m])
       .filter((p) => p.amount > 0);
 
-    const backendPayments = invoicePayments.map((p) => {
+    const backendPayments = invoicePayments.map((p: any) => {
       switch (p.type) {
         case "efectivo": return { method: "cash", currency: "VES", amount: p.amount };
         case "dolares":  return { method: "dollars", amount: p.amount };
-        case "tarjeta":  return { method: "card", punto: (p as any).punto || "", type: (p as any).cardType || "", reference: (p as any).reference || "", amount: p.amount };
-        case "pagomovil":return { method: "mobile", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
-        case "biopago":  return { method: "biopago", amount: p.amount, reference: (p as any).reference || "", bank: (p as any).bank || "" };
+        case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount };
+        case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
+        case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         default:         return { method: "cash", currency: "VES", amount: p.amount };
       }
     });
