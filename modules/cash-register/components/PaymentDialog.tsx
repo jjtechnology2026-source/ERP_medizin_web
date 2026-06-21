@@ -60,7 +60,6 @@ export default function PaymentDialog({
     togglePaymentMethod,
     payments,
     setPayment,
-    getPaymentsForInvoice,
   } = useCurrentOrderStore();
   const { registerSale, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
@@ -257,72 +256,17 @@ export default function PaymentDialog({
 
       console.log("📤 [PaymentDialog] Enviando orden...");
 
-      const controlNumber = `FAC-${Date.now()}`;
-      const invoicePayments = getPaymentsForInvoice();
+      const result = await registerSale(
+        (profile as any)?.usesDigitalBilling ? "digital" : "local"
+      );
 
-      const detalles = (order?.medications ?? []).map((m) => {
-        const unitPriceUsd = m.price / (1 + (m.vat || 0) / 100);
-        const unitPriceVes = r2(unitPriceUsd * rate);
-        const lineTotalVes = r2(unitPriceVes * m.quantity * (1 + (m.vat || 0) / 100));
-        return {
-          producto_id: m.barCode,
-          descripcion: m.name,
-          cantidad: m.quantity,
-          precio_unitario_ves: unitPriceVes,
-          iva_porcentaje: m.vat || 0,
-          lineTotal: lineTotalVes,
-        };
-      });
-
-      const totalFactura = r2(detalles.reduce((sum, d) => sum + d.lineTotal, 0));
-
-      let movimientoCaja: any;
-      if (invoicePayments.length === 1) {
-        const p = invoicePayments[0];
-        const esDolar = p.type === "dolares";
-        movimientoCaja = {
-          moneda: esDolar ? "USD" : "VES",
-          monto_original: esDolar ? r2(p.amount) : totalFactura,
-          metodo_pago: esDolar ? "Efectivo" : p.type === "efectivo" ? "Efectivo" : p.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
-          descripcion: `Cobro factura ${controlNumber}`,
-        };
-        if (esDolar) movimientoCaja.tasa_cambio = rate;
-      } else {
-        const principal = invoicePayments.reduce((prev, curr) => {
-          const prevMonto = prev.type === "dolares" ? prev.amount * rate : prev.amount;
-          const currMonto = curr.type === "dolares" ? curr.amount * rate : curr.amount;
-          return currMonto > prevMonto ? curr : prev;
-        });
-        const detalle = invoicePayments
-          .map((p) => `${p.type} ${r2(p.amount).toFixed(2)} ${p.type === "dolares" ? "USD" : "VES"}`)
-          .join(", ");
-        movimientoCaja = {
-          moneda: "VES",
-          monto_original: totalFactura,
-          metodo_pago: principal.type === "efectivo" ? "Efectivo" : principal.type === "dolares" ? "Efectivo" : principal.type === "tarjeta" ? "TarjetaDebito" : "Transferencia",
-          descripcion: `Cobro factura ${controlNumber} | Pago mixto: ${detalle}`,
-        };
+      if (!result) {
+        throw new Error("No se pudo procesar la venta");
       }
 
-      const payload = {
-        sesion_caja_id: activeSession.id,
-        numero_control: controlNumber,
-        cliente_nombre: clientData?.name || "Cliente General",
-        cliente_rif: clientData?.documento || "V-00000000",
-        tasa_cambio: rate,
-        detalles: detalles.map((d) => ({
-          producto_id: d.producto_id,
-          descripcion: d.descripcion,
-          cantidad: d.cantidad,
-          precio_unitario_ves: d.precio_unitario_ves,
-          iva_porcentaje: d.iva_porcentaje,
-        })),
-        movimiento_caja: movimientoCaja,
-      };
-
-      console.log("📤 [PaymentDialog] Enviando payload:", JSON.stringify(payload, null, 2));
-
-      await registerSale(payload);
+      if (result.facturacion?.success) {
+        console.log("✅ Factura fiscal:", result.facturacion.numeroControl);
+      }
 
       const soldMeds = order?.medications ?? [];
       if (soldMeds.length > 0) {
@@ -399,6 +343,7 @@ export default function PaymentDialog({
                           updatePayment("efectivo", { amount: amt, change: r2(Math.max(0, amt - totalConIgtfVes)) });
                         }}
                         placeholder="0.00"
+                        fullAmount={totalConIgtfVes}
                       />
                     )}
                     {method === "dolares" && (
@@ -410,11 +355,12 @@ export default function PaymentDialog({
                           updatePayment("dolares", { amount: amt, change: 0 });
                         }}
                         placeholder="0.00"
+                        fullAmount={totalConIgtfVes / rate}
                       />
                     )}
                     {method === "tarjeta" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
                         <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.tarjeta as CardPayment).cardType}
@@ -428,7 +374,7 @@ export default function PaymentDialog({
                     )}
                     {method === "pagomovil" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.pagomovil as MobilePayment).bank}
@@ -442,7 +388,7 @@ export default function PaymentDialog({
                     )}
                     {method === "biopago" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" />
+                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
                         <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.biopago as BiopagoPayment).bank}
@@ -633,18 +579,30 @@ function SummaryRow({ label, usd, rate, bold, highlight, amber, large, color }: 
   );
 }
 
-function PaymentField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function PaymentField({ label, value, onChange, placeholder, fullAmount }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; fullAmount?: number }) {
   return (
     <div>
       <label className="text-[10px] font-bold text-slate-600 mb-1 block">{label}</label>
-      <input
-        type="number"
-        step="0.01"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
-      />
+      <div className="flex gap-2">
+        <input
+          type="number"
+          step="0.01"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+        />
+        {fullAmount !== undefined && fullAmount > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange(String(r2(fullAmount)))}
+            className="px-3 py-3 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 transition-all whitespace-nowrap"
+            title="Pago completo"
+          >
+            Total
+          </button>
+        )}
+      </div>
     </div>
   );
 }
