@@ -63,6 +63,7 @@ export default function PaymentDialog({
   } = useCurrentOrderStore();
   const { registerSale, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const { profile } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
