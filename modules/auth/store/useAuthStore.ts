@@ -47,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
       setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
       clearAuth: () => {
         try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
+        try { localStorage.removeItem("auth-storage"); } catch (e) {}
         set({ profile: null, medicinesCatalog: [] });
       },
     }),

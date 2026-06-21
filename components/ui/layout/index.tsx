@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // 3. Gestión del estado de carga (Spinner)
   const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === "true";
-  const showSpinner = (status === "loading" || (status === "authenticated" && !profile)) && !isTestMode;
+  const showSpinner = (!isHydrated || status === "loading" || (status === "authenticated" && !profile)) && !isTestMode;
 
   if (showSpinner) {
     return (
