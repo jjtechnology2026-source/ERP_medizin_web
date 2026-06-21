@@ -168,7 +168,7 @@ async fetchCurrentRate(): Promise<number> {
     facturacion: { success: boolean; numeroControl: string | null; urlPdf: string | null; error: string | null };
     ordenId: string;
   }> {
-    const endpoint = saleType === "digital" ? "/insertorder" : "/orders/local";
+    const endpoint = saleType === "digital" ? "/Orders/insertorder" : "/Orders/orders/local";
     const { data } = await api.post(endpoint, [order]);
     const result = Array.isArray(data) ? data[0] : data;
     const fac = result?.facturacion ?? {};
