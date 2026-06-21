@@ -43,7 +43,7 @@ export const authService = {
     }
   },
 
-  async refresh(token: string): Promise<{ token: string; refresh_token: string; expires_in?: number }> {
+  async refresh(token: string): Promise<{ token: string; refresh_token?: string; expires_in?: number }> {
     const { data } = await loginApi.post("/auth/refresh-token", { token });
     return data;
   },

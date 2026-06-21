@@ -27,7 +27,7 @@ export const authOptions: NextAuthOptions = {
           return { 
             ...user, 
             accessToken: data.token, 
-            refreshToken: data.refresh_token, 
+            refreshToken: data.refresh_token ?? credentials.refreshToken, 
             expiresAt: Date.now() + (data.expires_in || 3600) * 1000
           };
         }
