@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface UserProfile {
   id: string;
@@ -47,12 +47,14 @@ export const useAuthStore = create<AuthState>()(
       setMedicinesCatalog: (medicines) => set({ medicinesCatalog: medicines }),
       clearAuth: () => {
         try { localStorage.removeItem("medicines-catalog"); } catch (e) {}
+        try { sessionStorage.removeItem("auth-storage"); } catch (e) {}
         try { localStorage.removeItem("auth-storage"); } catch (e) {}
         set({ profile: null, medicinesCatalog: [] });
       },
     }),
     {
       name: "auth-storage",
+      storage: createJSONStorage(() => sessionStorage),
       onRehydrateStorage: () => () => {
         const lsMedicines = loadMedicinesFromLocalStorage();
         if (lsMedicines.length) {
