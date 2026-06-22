@@ -28,12 +28,18 @@ export interface Client {
   retencion?: string;
 }
 
-export interface Payment {
-  runtimeType: string;
-  amount: number;
-  reference?: string;
-  bank?: string;
-}
+export interface CashPaymentData { amount: number; currency?: { VES?: Record<string, never> } }
+export interface DollarsPaymentData { amount: number }
+export interface CardPaymentData { amount: number; punto?: string; type?: string; reference?: string }
+export interface MobilePaymentData { amount: number; reference?: string; bank?: string }
+export interface BiopagoPaymentData { amount: number; reference?: string; bank?: string }
+
+export type Payment =
+  | { Cash: CashPaymentData }
+  | { Dollars: DollarsPaymentData }
+  | { Card: CardPaymentData }
+  | { Mobile: MobilePaymentData }
+  | { Biopago: BiopagoPaymentData };
 
 export interface Facturacion {
   success: boolean;

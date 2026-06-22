@@ -9,6 +9,11 @@ interface OrderDetailModalProps {
   onClose: () => void;
 }
 
+const PAYMENT_LABELS: Record<string, string> = {
+  Cash: "Efectivo", Dollars: "Dólares", Card: "Tarjeta",
+  Mobile: "Pago Móvil", Biopago: "Biopago",
+};
+
 const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: string, value: any, isSmall?: boolean, isFull?: boolean }) => (
   <div className={`flex flex-col ${isFull ? 'col-span-2' : ''}`}>
     <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter mb-0.5">{label}</span>
@@ -67,9 +72,28 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               <DetailItem label="Tipo de entrega" value={visibleOrder.saleType} />
               <DetailItem label="Agente" value={visibleOrder.nameAgent || ''} />
               <DetailItem label="Fecha y hora de la orden" value={new Date(visibleOrder.date).toLocaleString('es-VE')} />
-              <DetailItem label="Tipo de pago" value={visibleOrder.payments?.[0]?.runtimeType || 'Dólares'} />
+              <div className="flex flex-col gap-2 col-span-2">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">Tipo de pago</span>
+                {visibleOrder.payments && visibleOrder.payments.length > 0 ? (
+                  visibleOrder.payments.map((p: any, i: number) => {
+                    const methodKey = Object.keys(p || {}).find(k =>
+                      ["Cash","Dollars","Card","Mobile","Biopago"].includes(k)
+                    );
+                    if (!methodKey) return null;
+                    const amount = p[methodKey]?.amount ?? 0;
+                    const label = PAYMENT_LABELS[methodKey] || methodKey;
+                    return (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="font-bold text-slate-700">{label}</span>
+                        <span className="font-black text-slate-600">{amount.toFixed(2)}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <span className="text-slate-400 text-sm">—</span>
+                )}
+              </div>
               <DetailItem label="Monto" value={`${visibleOrder.totalreal.toFixed(2)} USD`} />
-              <DetailItem label="Cambio" value="4.98 USD" />
               <DetailItem label="Controlado" value={visibleOrder.isControlled ? 'Sí' : 'No'} />
               <DetailItem label="Total de la orden" value={`${visibleOrder.totalreal.toFixed(2)} USD`} />
             </div>
