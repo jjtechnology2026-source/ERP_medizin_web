@@ -30,7 +30,7 @@ interface CurrentOrderActions {
   getComputedTotals: () => { subtotal: number; totalVat: number; total: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number> };
   getPaymentsForInvoice: () => Payment[];
   /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
-  buildModelOrder: (profile: Record<string, any>, activeSessionId: string) => Record<string, any> | null;
+  buildModelOrder: (profile: Record<string, any>) => Record<string, any> | null;
   resetPayments: () => void;
   clearCurrentOrder: () => void;
 }
@@ -290,7 +290,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       .filter((p) => p.amount > 0);
   },
 
-  buildModelOrder: (profile, activeSessionId) => {
+  buildModelOrder: (profile) => {
     const order = get().orders[get().currentOrderIndex];
     if (!order || order.medications.length === 0) return null;
 
@@ -371,7 +371,6 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       saleType: "Local",
       address: order.address || "",
       observation: order.observation || null,
-      sesion_caja_id: activeSessionId,
       delivery: null,
     };
   },

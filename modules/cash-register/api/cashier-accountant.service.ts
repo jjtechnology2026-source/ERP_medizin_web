@@ -164,12 +164,13 @@ async fetchCurrentRate(): Promise<number> {
   },
 
   /** Envía la orden a /orders/local o /insertorder según el tipo */
-  async submitOrder(order: Record<string, any>, saleType: "local" | "digital" = "local"): Promise<{
+  async submitOrder(order: Record<string, any>, saleType: "local" | "digital" = "local", sesionCajaId?: string): Promise<{
     facturacion: { success: boolean; numeroControl: string | null; urlPdf: string | null; error: string | null };
     ordenId: string;
   }> {
-    const endpoint = saleType === "digital" ? "/admin/Orders/insertorder" : "/admin/Orders/orders/local";
-    const { data } = await api.post(endpoint, [order]);
+    const baseUrl = saleType === "digital" ? "/admin/Orders/insertorder" : "/admin/Orders/orders/local";
+    const url = sesionCajaId ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}` : baseUrl;
+    const { data } = await api.post(url, [order]);
     const result = Array.isArray(data) ? data[0] : data;
     const fac = result?.facturacion ?? {};
     return {

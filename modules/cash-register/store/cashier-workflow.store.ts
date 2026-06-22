@@ -146,7 +146,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       return null;
     }
 
-    const order = useCurrentOrderStore.getState().buildModelOrder(profile, activeSession.id);
+    const order = useCurrentOrderStore.getState().buildModelOrder(profile);
     if (!order) {
       set({ errorMessage: "No hay productos en la orden" });
       return null;
@@ -154,7 +154,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({ isSubmitting: true, errorMessage: null });
     try {
-      const result = await cashierAccountantService.submitOrder(order, saleType);
+      const result = await cashierAccountantService.submitOrder(order, saleType, activeSession.id);
       set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
       await get().load();
       return result;
