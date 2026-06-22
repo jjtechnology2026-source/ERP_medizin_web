@@ -39,11 +39,6 @@ api.interceptors.response.use(
       req._retry = true;
       let session: any = await getSession();
 
-      if (session?.accessToken && !session?.error) {
-        req.headers.Authorization = `Bearer ${cleanToken(session.accessToken)}`;
-        return api(req);
-      }
-
       if (session?.refreshToken && !session?.error) {
         if (!refreshing) {
           refreshing = (async () => {

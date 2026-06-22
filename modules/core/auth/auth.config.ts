@@ -1,6 +1,9 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { authService, mapUserData, TOKEN_EXPIRY_FALLBACK_SECONDS } from "@/modules/auth/api/auth.services";
+import { authService, mapUserData, TOKEN_EXPIRY_FALLBACK_SECONDS, decodeJwtExp } from "@/modules/auth/api/auth.services";
+
+// ponytail: global lock, same purpose as the one in api/client.ts — prevent concurrent refreshes
+let tokenRefreshPromise: Promise<void> | null = null;
 
 export const authOptions: NextAuthOptions = {
  providers: [
@@ -23,12 +26,15 @@ export const authOptions: NextAuthOptions = {
         if (credentials.isRefresh === "true") {
           const data = await authService.refresh(credentials.refreshToken);
           const user = JSON.parse(credentials.userData as string);
+          const now = Date.now();
+          const expiresInSec = data.expires_in
+            ?? Math.max(60, (decodeJwtExp(data.token) - now) / 1000 || TOKEN_EXPIRY_FALLBACK_SECONDS);
           
           return { 
             ...user, 
             accessToken: data.token, 
             refreshToken: data.refresh_token ?? credentials.refreshToken, 
-            expiresAt: Date.now() + (data.expires_in || TOKEN_EXPIRY_FALLBACK_SECONDS) * 1000
+            expiresAt: now + expiresInSec * 1000
           };
         }
 
@@ -68,21 +74,38 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      // 2. Verificación de tiempo (usamos 'as number' para asegurar)
-      if (Date.now() < (token.expiresAt as number)) {
+      const now = Date.now();
+
+      // 2. Verificación de tiempo
+      if (now < (token.expiresAt as number)) {
         return token;
       }
 
-      // 3. Silent Refresh si el tiempo expiró
-      try {
-        const d = await authService.refresh(token.refreshToken);
-        token.accessToken = d.token;
-        token.refreshToken = d.refresh_token ?? token.refreshToken;
-        token.expiresAt = Date.now() + (d.expires_in || TOKEN_EXPIRY_FALLBACK_SECONDS) * 1000;
+      // 3. Si ya hay un refresh en curso, esperarlo sin lanzar otro
+      if (tokenRefreshPromise) {
+        await tokenRefreshPromise;
         return token;
-      } catch (e) {
-        return { ...token, error: "RefreshAccessTokenError" };
       }
+
+      // 4. Silent Refresh si el tiempo expiró
+      tokenRefreshPromise = (async () => {
+        try {
+          const d = await authService.refresh(token.refreshToken);
+          token.accessToken = d.token;
+          token.refreshToken = d.refresh_token ?? token.refreshToken;
+          const expiresInSec = d.expires_in
+            ?? Math.max(60, (decodeJwtExp(d.token) - now) / 1000 || TOKEN_EXPIRY_FALLBACK_SECONDS);
+          token.expiresAt = now + expiresInSec * 1000;
+        } catch (e) {
+          token.error = "RefreshAccessTokenError";
+          token.expiresAt = now + 300_000; // 5 min cooldown — no reintentar en cada request
+        } finally {
+          tokenRefreshPromise = null;
+        }
+      })();
+
+      await tokenRefreshPromise;
+      return token;
     },
 
     async session({ session, token }: any) {
