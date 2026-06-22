@@ -112,7 +112,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
           quantity: m.quantity,
           price: 0,
         })),
-        createdAt: null,
+        createdAt: undefined,
         saleType: "Marketplace",
       }));
     return [...queuedOrders, ...redisOnly];
