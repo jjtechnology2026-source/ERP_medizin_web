@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { HiOutlineExternalLink } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -26,6 +27,8 @@ const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: 
 export default function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
   const [visibleOrder, setVisibleOrder] = useState<Order | null>(order);
   const [isOpen, setIsOpen] = useState(!!order);
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
 
   useEffect(() => {
     if (order) {
@@ -72,24 +75,29 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               <DetailItem label="Tipo de entrega" value={visibleOrder.saleType} />
               <DetailItem label="Agente" value={visibleOrder.nameAgent || ''} />
               <DetailItem label="Fecha y hora de la orden" value={new Date(visibleOrder.date).toLocaleString('es-VE')} />
-              <div className="flex flex-col gap-2 col-span-2">
-                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">Tipo de pago</span>
+              <div className="flex flex-col col-span-2">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter mb-0.5">Tipo de pago</span>
                 {visibleOrder.payments && visibleOrder.payments.length > 0 ? (
-                  visibleOrder.payments.map((p: any, i: number) => {
-                    // Handle internally-tagged serde format: {"method":"cash","amount":123}
-                    const method = p?.method;
-                    const amount = p?.amount ?? 0;
-                    if (!method) return null;
-                    const label = PAYMENT_LABELS[method] || method;
-                    return (
-                      <div key={i} className="flex justify-between text-sm">
-                        <span className="font-bold text-slate-700">{label}</span>
-                        <span className="font-black text-slate-600">{Number(amount).toFixed(2)}</span>
-                      </div>
-                    );
-                  })
+                  <div className="flex flex-col gap-1">
+                    {visibleOrder.payments.map((p: any, i: number) => {
+                      const method = p?.method;
+                      const currency = p?.currency ?? "";
+                      const rawAmount = p?.amount ?? 0;
+                      if (!method) return null;
+                      const label = PAYMENT_LABELS[method] || method;
+                      const isUsd = currency === "USD" || currency === "usd";
+                      const displayAmount = isUsd
+                        ? `$ ${Number(rawAmount).toFixed(2)}`
+                        : `Bs ${Number(rawAmount).toFixed(2)}`;
+                      return (
+                        <span key={i} className="text-sm font-medium text-slate-600 leading-tight">
+                          {label}: {displayAmount}
+                        </span>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <span className="text-slate-400 text-sm">—</span>
+                  <span className="text-sm font-medium text-slate-400 leading-tight">—</span>
                 )}
               </div>
               <DetailItem label="Monto" value={`${visibleOrder.totalreal.toFixed(2)} USD`} />
