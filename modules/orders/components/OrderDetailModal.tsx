@@ -81,11 +81,10 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                   <div className="flex flex-col gap-1">
                     {visibleOrder.payments.map((p: any, i: number) => {
                       const method = p?.method;
-                      const currency = p?.currency ?? "";
                       const rawAmount = p?.amount ?? 0;
                       if (!method) return null;
                       const label = PAYMENT_LABELS[method] || method;
-                      const isUsd = currency === "USD" || currency === "usd";
+                      const isUsd = method === "dollars" || p?.currency === "USD";
                       const displayAmount = isUsd
                         ? `$ ${Number(rawAmount).toFixed(2)}`
                         : `Bs ${Number(rawAmount).toFixed(2)}`;
