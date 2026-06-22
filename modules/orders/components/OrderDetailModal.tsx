@@ -85,9 +85,9 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                       if (!method) return null;
                       const label = PAYMENT_LABELS[method] || method;
                       const isUsd = method === "dollars" || p?.currency === "USD";
-                      const displayAmount = isUsd
-                        ? `$ ${Number(rawAmount).toFixed(2)}`
-                        : `Bs ${Number(rawAmount).toFixed(2)}`;
+                      const orderRate = visibleOrder.rate || rate;
+                      const usdAmount = isUsd ? rawAmount : rawAmount / Math.max(orderRate, 1);
+                      const displayAmount = `$ ${Number(usdAmount).toFixed(2)}`;
                       return (
                         <span key={i} className="text-sm font-medium text-slate-600 leading-tight">
                           {label}: {displayAmount}

@@ -342,6 +342,7 @@ export default function PaymentDialog({
                         }}
                         placeholder="0.00"
                         fullAmount={totalConIgtfVes}
+                        rate={rate}
                       />
                     )}
                     {method === "dolares" && (
@@ -358,7 +359,7 @@ export default function PaymentDialog({
                     )}
                     {method === "tarjeta" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
+                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.tarjeta as CardPayment).cardType}
@@ -372,7 +373,7 @@ export default function PaymentDialog({
                     )}
                     {method === "pagomovil" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
+                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.pagomovil as MobilePayment).bank}
@@ -386,7 +387,7 @@ export default function PaymentDialog({
                     )}
                     {method === "biopago" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} />
+                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
                         <select
                           value={(payments.biopago as BiopagoPayment).bank}
@@ -584,7 +585,9 @@ function SummaryRow({ label, usd, rate, bold, highlight, amber, large, color }: 
   );
 }
 
-function PaymentField({ label, value, onChange, placeholder, fullAmount }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; fullAmount?: number }) {
+function PaymentField({ label, value, onChange, placeholder, fullAmount, rate }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; fullAmount?: number; rate?: number }) {
+  const numVal = parseFloat(value) || 0;
+  const showUsd = rate && rate > 1 && numVal > 0 && label.includes("Bs");
   return (
     <div>
       <label className="text-[10px] font-bold text-slate-600 mb-1 block">{label}</label>
@@ -608,6 +611,11 @@ function PaymentField({ label, value, onChange, placeholder, fullAmount }: { lab
           </button>
         )}
       </div>
+      {showUsd && (
+        <span className="text-[10px] text-slate-400 font-medium mt-1 block">
+          ≈ $ {(numVal / rate).toFixed(2)}
+        </span>
+      )}
     </div>
   );
 }

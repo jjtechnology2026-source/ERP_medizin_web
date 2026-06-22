@@ -220,21 +220,20 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     if (activePaymentMethods.length === 0) return;
     const share = total / activePaymentMethods.length;
     const newPayments = { ...get().payments };
+    const effectiveRate = rate > 0 ? rate : useCurrencyStore.getState().getEffectiveRate();
 
     activePaymentMethods.forEach((method) => {
       const current = newPayments[method];
       if (method === "efectivo") {
-        newPayments[method] = { ...current, amount: share, change: Math.max(0, share - total) } as CashPayment;
+        newPayments[method] = { ...current, amount: share * effectiveRate, change: Math.max(0, (share * effectiveRate) - (total * effectiveRate)) } as CashPayment;
       } else if (method === "dolares") {
-        const effectiveRate = rate > 0 ? rate : useCurrencyStore.getState().getEffectiveRate();
-        const usdAmount = share / effectiveRate;
-        newPayments[method] = { ...current, amount: usdAmount, change: 0 } as DollarPayment;
+        newPayments[method] = { ...current, amount: share, change: 0 } as DollarPayment;
       } else if (method === "tarjeta") {
-        newPayments[method] = { ...current, amount: share } as CardPayment;
+        newPayments[method] = { ...current, amount: share * effectiveRate } as CardPayment;
       } else if (method === "pagomovil") {
-        newPayments[method] = { ...current, amount: share } as MobilePayment;
+        newPayments[method] = { ...current, amount: share * effectiveRate } as MobilePayment;
       } else if (method === "biopago") {
-        newPayments[method] = { ...current, amount: share } as BiopagoPayment;
+        newPayments[method] = { ...current, amount: share * effectiveRate } as BiopagoPayment;
       }
     });
     set({ payments: newPayments });
