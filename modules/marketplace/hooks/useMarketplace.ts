@@ -24,6 +24,26 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   const [initialOrderHandled, setInitialOrderHandled] = useState(false);
 
   // --- API Data Fetching ---
+  const pendingQueryParams = useMemo(() => {
+    const pharmId = profile?.pharmacyId;
+    if (!pharmId) return "";
+    return `?pharmacy_id=${encodeURIComponent(pharmId)}`;
+  }, [profile?.pharmacyId]);
+
+  const {
+    data: pendingRedisOrders = [],
+    refetch: refetchPending,
+  } = useApiQuery<any[]>(
+    ["marketplace-pending-redis", profile?.pharmacyId || ""],
+    `/admin/Orders/marketplace/pending${pendingQueryParams}`,
+    {
+      enabled: !!profile?.pharmacyId,
+      staleTime: 5000,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
+    }
+  );
+
   const queryParams = useMemo(() => {
     if (!profile?.id_group) return "";
 
@@ -70,9 +90,33 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   useEffect(() => {
     if (mqttConnected && !prevMqtt.current) {
       refetch();
+      refetchPending();
     }
     prevMqtt.current = mqttConnected;
-  }, [mqttConnected, refetch]);
+  }, [mqttConnected, refetch, refetchPending]);
+
+  // Merge Redis pending orders with MQTT live queue
+  const allIncomingOrders = useMemo(() => {
+    const mqttIds = new Set(queuedOrders.map((o: any) => o.orderId));
+    const redisOnly = (pendingRedisOrders || [])
+      .filter((o: any) => !mqttIds.has(o.order_id || o.orderId))
+      .map((o: any) => ({
+        orderId: o.order_id || o.orderId,
+        clientName: o.client_info?.name || "Cliente",
+        clientAddress: o.client_info?.address || "",
+        clientPhone: o.client_info?.phone || "",
+        clientIdNumber: o.client_info?.cedula || "",
+        items: (o.medicines || []).map((m: any) => ({
+          name: m.name,
+          barcode: m.medicine_id,
+          quantity: m.quantity,
+          price: 0,
+        })),
+        createdAt: null,
+        saleType: "Marketplace",
+      }));
+    return [...queuedOrders, ...redisOnly];
+  }, [queuedOrders, pendingRedisOrders]);
 
   // --- Filtrado Local Interactivo ---
   const filteredOrders = useMemo(() => {
@@ -191,7 +235,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
     selectedOrder,
     setSelectedOrder,
     mqttConnected,
-    queuedOrders,
+    queuedOrders: allIncomingOrders,
     handleAccept,
     handleReject,
     handleViewRealtimeOrder,
