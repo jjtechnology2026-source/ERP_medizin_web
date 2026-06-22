@@ -10,8 +10,8 @@ interface OrderDetailModalProps {
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
-  Cash: "Efectivo", Dollars: "Dólares", Card: "Tarjeta",
-  Mobile: "Pago Móvil", Biopago: "Biopago",
+  cash: "Efectivo", dollars: "Dólares", card: "Tarjeta",
+  mobile: "Pago Móvil", biopago: "Biopago",
 };
 
 const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: string, value: any, isSmall?: boolean, isFull?: boolean }) => (
@@ -76,16 +76,15 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">Tipo de pago</span>
                 {visibleOrder.payments && visibleOrder.payments.length > 0 ? (
                   visibleOrder.payments.map((p: any, i: number) => {
-                    const methodKey = Object.keys(p || {}).find(k =>
-                      ["Cash","Dollars","Card","Mobile","Biopago"].includes(k)
-                    );
-                    if (!methodKey) return null;
-                    const amount = p[methodKey]?.amount ?? 0;
-                    const label = PAYMENT_LABELS[methodKey] || methodKey;
+                    // Handle internally-tagged serde format: {"method":"cash","amount":123}
+                    const method = p?.method;
+                    const amount = p?.amount ?? 0;
+                    if (!method) return null;
+                    const label = PAYMENT_LABELS[method] || method;
                     return (
                       <div key={i} className="flex justify-between text-sm">
                         <span className="font-bold text-slate-700">{label}</span>
-                        <span className="font-black text-slate-600">{amount.toFixed(2)}</span>
+                        <span className="font-black text-slate-600">{Number(amount).toFixed(2)}</span>
                       </div>
                     );
                   })
