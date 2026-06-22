@@ -89,7 +89,7 @@ export default function StatisticsPage() {
     return new URLSearchParams(cleanParams).toString();
   }, [profile?.id_group, profile?.pharmacyId, dateStart, dateEnd]);
 
-  const { data: orders = [], isLoading } = useApiQuery<Order[]>(
+  const { data: response, isLoading } = useApiQuery<any>(
     ["statistics-orders-v2", query],
     `/admin/Orders/SearchOrders?${query}`,
     {
@@ -99,6 +99,8 @@ export default function StatisticsPage() {
       refetchOnWindowFocus: false,
     }
   );
+
+  const orders = response?.orders ?? [];
 
   const products = useMemo(() => aggregateProductStats(orders), [orders]);
 

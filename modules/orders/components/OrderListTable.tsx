@@ -23,6 +23,9 @@ interface OrdersPageProps {
   };
   setFilters: React.Dispatch<React.SetStateAction<any>>;
   onRefresh: () => void;
+  loadMore: () => void;
+  hasMore: boolean;
+  total: number;
 }
 
 // --- COMPONENTES ATÓMICOS ---
@@ -42,7 +45,7 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
 
 // --- COMPONENTE PRINCIPAL ---
 
-export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh }: OrdersPageProps) {
+export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, loadMore, hasMore, total }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -57,8 +60,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteType, setNoteType] = useState<'Crédito' | 'Débito'>('Crédito');
   const [noteOrderId, setNoteOrderId] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
 
   // 1. Ordenar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
@@ -79,9 +80,8 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
     });
   }, [sortedOrders, filters.status]);
 
-  // 3. Lógica de Paginación
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const currentOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  // 3. Cursor-based pagination: display all loaded orders
+  const displayOrders = filteredOrders;
 
   const filterClass = "px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 flex items-center gap-2 hover:border-blue-400 transition-all min-w-[140px] outline-none shadow-sm";
 
@@ -103,7 +103,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
         onFiltersChange={setFilters} 
         onReset={() => {
           setFilters({ date_start: "", date_end: "", type_sale: "", status: "" });
-          setCurrentPage(1);
         }}
       />
 
@@ -123,7 +122,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                 <tr><td colSpan={9} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
               ) : !loading && filteredOrders.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
-              ) : currentOrders.map((order) => (
+              ) : displayOrders.map((order) => (
                 <tr key={order.id || (order as any).idOrder} className="hover:bg-blue-50/40 transition-colors group">
                   <td className="px-6 py-4 text-xs font-mono text-slate-400">{(order.id || (order as any).idOrder || "")?.slice(0, 8)}...</td>
                   <td className="px-6 py-4 text-sm font-semibold text-slate-700">{order.client?.name || (order as any).clientName || "Cliente General"}</td>
@@ -165,40 +164,18 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
           </table>
         </div>
 
-        {/* --- PAGINACIÓN --- */}
+        {/* --- CURSOR PAGINATION --- */}
         <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
           <p className="text-xs font-bold text-slate-400">
-            Mostrando {currentOrders.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
+            Mostrando {displayOrders.length} de {total} ordenes
           </p>
-          <div className="flex items-center gap-4">
-            <button 
-              disabled={currentPage === 1} 
-              onClick={() => setCurrentPage(p => p - 1)} 
-              className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
-            >
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-1 font-bold text-xs">
-              <span className="bg-[#4A69BD] text-white px-3 py-1.5 rounded-lg shadow-md shadow-blue-100 min-w-[32px] text-center">
-                {currentPage}
-              </span>
-              <span className="text-slate-400 px-1 text-[10px] uppercase">de</span>
-              <span className="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg min-w-[32px] text-center">
-                {totalPages || 1}
-              </span>
-            </div>
-            <button 
-              disabled={currentPage === totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)} 
-              className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
-            >
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          <button 
+            disabled={!hasMore || loading}
+            onClick={loadMore}
+            className="px-4 py-2 rounded-xl border border-[#4A69BD] bg-white text-[#4A69BD] text-sm font-bold disabled:opacity-30 hover:bg-[#4A69BD] hover:text-white shadow-sm transition-all active:scale-95"
+          >
+            {loading ? "Cargando..." : "Cargar más"}
+          </button>
         </div>
       </div>
 

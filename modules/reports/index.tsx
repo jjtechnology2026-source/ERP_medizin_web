@@ -42,7 +42,7 @@ export default function Reportes() {
 
   const dateRange = useMemo(() => getDateRange(90), []);
   
-  const { data: standardOrders = [] } = useApiQuery<Order[]>(
+  const { data: stdResponse } = useApiQuery<any>(
     ["reports-orders-std", dateRange.start, dateRange.end],
     "/admin/Orders/SearchOrders",
     {
@@ -53,8 +53,9 @@ export default function Reportes() {
       staleTime: 30000,
     }
   );
+  const standardOrders = stdResponse?.orders ?? [];
 
-  const { data: marketplaceOrders = [] } = useApiQuery<Order[]>(
+  const { data: mktResponse } = useApiQuery<any>(
     ["reports-orders-mkt", dateRange.start, dateRange.end],
     "/admin/Orders/SearchOrders",
     {
@@ -66,6 +67,7 @@ export default function Reportes() {
       staleTime: 30000,
     }
   );
+  const marketplaceOrders = mktResponse?.orders ?? [];
 
   const orders = useMemo(() => {
     const combined = [...standardOrders, ...marketplaceOrders];

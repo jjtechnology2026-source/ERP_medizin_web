@@ -57,10 +57,10 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   }, [profile, filters.status, filters.date_start, filters.date_end]);
 
   const {
-    data: orders = [],
+    data: response,
     isLoading,
     refetch,
-  } = useApiQuery<Order[]>(
+  } = useApiQuery<{ orders: Order[] }>(
     ["marketplace-orders-list", queryParams],
     `/admin/Orders/SearchOrders?${queryParams}`,
     {
@@ -70,6 +70,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
       refetchOnWindowFocus: false,
     }
   );
+  const orders = response?.orders ?? [];
 
   // Auto-fetch cuando el perfil esté disponible
   useEffect(() => {
