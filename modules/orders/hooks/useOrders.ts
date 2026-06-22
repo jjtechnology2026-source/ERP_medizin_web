@@ -8,11 +8,12 @@ export interface SearchOrdersResponse {
   total: number;
 }
 
+const ITEMS_PER_PAGE = 20;
+const MAX_CURSOR_PAGES = 15; // cap to prevent runaway loops
+
 export function useOrders(idGroup: string, idPharmacy: string) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({
     id_group: idGroup,
@@ -33,7 +34,7 @@ export function useOrders(idGroup: string, idPharmacy: string) {
   }, [idGroup, idPharmacy]);
 
   const buildParams = useCallback((cursor: string | null): Record<string, string> => {
-    const cleanParams: Record<string, string> = { limit: "20" };
+    const cleanParams: Record<string, string> = { limit: String(ITEMS_PER_PAGE) };
 
     if (cursor) {
       cleanParams.cursor = cursor;
@@ -60,61 +61,39 @@ export function useOrders(idGroup: string, idPharmacy: string) {
     return cleanParams;
   }, [filters]);
 
-  /**
-   * Fetch first page — replaces current orders array.
-   * Called on mount and when filters change.
-   */
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams(buildParams(null));
-      const response = await api.get<SearchOrdersResponse>(
-        `/admin/Orders/SearchOrders?${params}`
-      );
+      const allOrders: any[] = [];
+      let cursor: string | null = null;
+      let hasMore = true;
+      let pagesLoaded = 0;
 
-      const data = response.data;
-      setOrders(data.orders ?? []);
-      setNextCursor(data.next_cursor ?? null);
-      setHasMore(data.has_more ?? false);
-      setTotal(data.total ?? 0);
+      while (hasMore && pagesLoaded < MAX_CURSOR_PAGES) {
+        const params: URLSearchParams = new URLSearchParams(buildParams(cursor));
+        const response = await api.get<SearchOrdersResponse>(
+          `/admin/Orders/SearchOrders?${params}`
+        );
+
+        const data = response.data;
+        allOrders.push(...(data.orders ?? []));
+        cursor = data.next_cursor ?? null;
+        hasMore = data.has_more ?? false;
+        setTotal(data.total ?? 0);
+        pagesLoaded++;
+      }
+
+      setOrders(allOrders);
     } catch (error) {
       console.error("Error fetching orders", error);
       setOrders([]);
-      setNextCursor(null);
-      setHasMore(false);
       setTotal(0);
     } finally {
       setLoading(false);
     }
   }, [filters, buildParams]);
 
-  /**
-   * Load next page — appends to existing orders array.
-   * Only called via "Load More" UI button.
-   */
-  const loadMore = useCallback(async () => {
-    if (!hasMore || !nextCursor) return;
-
-    setLoading(true);
-    try {
-      const params = new URLSearchParams(buildParams(nextCursor));
-      const response = await api.get<SearchOrdersResponse>(
-        `/admin/Orders/SearchOrders?${params}`
-      );
-
-      const data = response.data;
-      setOrders(prev => [...prev, ...(data.orders ?? [])]);
-      setNextCursor(data.next_cursor ?? null);
-      setHasMore(data.has_more ?? false);
-      setTotal(data.total ?? 0);
-    } catch (error) {
-      console.error("Error loading more orders", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [hasMore, nextCursor, filters, buildParams]);
-
-  // Fetch first page on mount and when filters change
+  // Fetch on mount and when filters change
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
@@ -124,8 +103,6 @@ export function useOrders(idGroup: string, idPharmacy: string) {
     loading,
     setFilters,
     filters,
-    loadMore,
-    hasMore,
     total,
     refresh: fetchOrders,
   };
