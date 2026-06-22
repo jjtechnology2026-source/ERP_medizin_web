@@ -30,7 +30,6 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
     return new URLSearchParams({
       id_group: profile.id_group,
       id_pharmacy: profile.pharmacyId || "",
-      type_sale: "Marketplace",
       ...(filters.status && { status: filters.status }),
       ...(filters.date_start && { "date.start": new Date(filters.date_start).toISOString() }),
       ...(filters.date_end && { "date.end": new Date(filters.date_end).toISOString() }),

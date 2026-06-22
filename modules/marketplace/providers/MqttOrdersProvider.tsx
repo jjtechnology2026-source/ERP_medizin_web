@@ -223,7 +223,12 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       orderId: id,
       pharmacyId: profile.pharmacyId,
       status: "Accepted",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      id_agent: profile.id_agent || "",
+      name_agent: profile.name_agent || "",
+      id_group: profile.id_group || "",
+      name_group: profile.name_group || "",
+      rif_emisor: profile.rif_emisor || "",
     }));
 
     if (success) {
