@@ -77,9 +77,6 @@ export default function PaymentDialog({
   };
 
   const totalVes = totals.total * rate;
-  const totalVatVes = totals.totalVat * rate;
-  const baseAmountVes = totalVes - totalVatVes;
-
   const igtfVes = activePaymentMethods.length === 1 && activePaymentMethods[0] === "dolares"
     ? r2(totalVes * 0.03)
     : 0;
@@ -493,8 +490,15 @@ export default function PaymentDialog({
             <div className="space-y-6">
               <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Resumen Fiscal</p>
               <div className="bg-slate-50 rounded-2xl p-5 space-y-4">
-                <SummaryRow label="Monto base:" usd={baseAmountVes / rate} rate={rate} />
-                <SummaryRow label="IVA:" usd={totals.totalVat} rate={rate} />
+                <SummaryRow label="Base imponible:" usd={totals.taxableBase} rate={rate} />
+                {Object.entries(totals.vatByRate)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([vat, amount]) => (
+                    <SummaryRow key={vat} label={`IVA ${vat}%:`} usd={amount} rate={rate} />
+                  ))}
+                {totals.exemptTotal > 0 && (
+                  <SummaryRow label="Monto exento:" usd={totals.exemptTotal} rate={rate} />
+                )}
                 <div className="h-px bg-slate-200" />
                 <SummaryRow label="Total:" usd={totals.total} rate={rate} bold highlight />
                 {igtfVes > 0 && (

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import {
@@ -15,6 +15,8 @@ import {
   HiOutlineCheckCircle,
   HiOutlineXCircle,
 } from "react-icons/hi";
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago";
 
@@ -140,6 +142,34 @@ export default function CashClosurePage() {
     bg: METHOD_BG[method],
   }));
 
+  const fiscalResumen = useMemo(() => {
+    const result = sessionInvoices.flatMap((inv) => inv.lines).reduce(
+      (acc, line) => {
+        const lineTotal = line.unitPriceVes * line.quantity;
+        const taxAmount =
+          line.vatPercentage > 0
+            ? lineTotal * line.vatPercentage / (100 + line.vatPercentage)
+            : 0;
+        if (line.vatPercentage === 0) {
+          acc.exemptTotal += lineTotal;
+        } else {
+          acc.taxableBase += lineTotal - taxAmount;
+          acc.vatByRate[line.vatPercentage] = r2(
+            (acc.vatByRate[line.vatPercentage] || 0) + taxAmount
+          );
+        }
+        acc.grandTotal += lineTotal;
+        return acc;
+      },
+      { taxableBase: 0, exemptTotal: 0, vatByRate: {} as Record<number, number>, grandTotal: 0 }
+    );
+    return {
+      ...result,
+      taxableBase: r2(result.taxableBase),
+      exemptTotal: r2(result.exemptTotal),
+    };
+  }, [sessionInvoices]);
+
   useEffect(() => {
     if (!activeSession) {
       router.push("/caja-ventas");
@@ -224,6 +254,37 @@ export default function CashClosurePage() {
                 </div>
               ))}
             </div>
+
+            <section className="mt-8 pt-8 border-t border-slate-200">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-[#005eff]/10 text-[#005eff] rounded-2xl">
+                  <HiOutlineCalculator size={24} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800">Resumen Fiscal</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                  <span className="text-sm font-bold text-slate-500">Base imponible:</span>
+                  <span className="text-sm font-black text-slate-700">Bs {r2(fiscalResumen.taxableBase).toFixed(2)}</span>
+                </div>
+                {Object.entries(fiscalResumen.vatByRate)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([vat, amount]) => (
+                    <div key={vat} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                      <span className="text-sm font-bold text-slate-500">IVA {vat}%:</span>
+                      <span className="text-sm font-black text-slate-700">Bs {r2(amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                  <span className="text-sm font-bold text-slate-500">Monto exento:</span>
+                  <span className="text-sm font-black text-slate-700">Bs {r2(fiscalResumen.exemptTotal).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl md:col-span-2">
+                  <span className="text-sm font-bold text-slate-700">Total:</span>
+                  <span className="text-base font-black text-blue-600">Bs {r2(fiscalResumen.grandTotal).toFixed(2)}</span>
+                </div>
+              </div>
+            </section>
 
             <div className="mt-8 pt-8 border-t border-slate-200">
               <div className="flex items-center gap-3 mb-6">

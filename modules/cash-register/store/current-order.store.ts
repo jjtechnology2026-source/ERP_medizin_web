@@ -3,6 +3,8 @@ import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, M
 import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 interface CurrentOrderState {
   orders: Order[];
   currentOrderIndex: number;
@@ -25,7 +27,7 @@ interface CurrentOrderActions {
   setPayment: (payment: Payment) => void;
   autoDistributePayment: (total: number, rate: number) => void;
   getCurrentOrder: () => Order;
-  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; itemCount: number };
+  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number> };
   getPaymentsForInvoice: () => Payment[];
   /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
   buildModelOrder: (profile: Record<string, any>, activeSessionId: string) => Record<string, any> | null;
@@ -244,24 +246,40 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
   getComputedTotals: () => {
     const order = get().orders[get().currentOrderIndex];
-    if (!order) return { subtotal: 0, totalVat: 0, total: 0, itemCount: 0 };
+    if (!order) return { subtotal: 0, totalVat: 0, total: 0, itemCount: 0, exemptTotal: 0, taxableBase: 0, vatByRate: {} };
 
     let total = 0;
     let totalVat = 0;
     let itemCount = 0;
+    let exemptTotal = 0;
+    let taxableBase = 0;
+    const vatByRate: Record<number, number> = {};
 
     for (const med of order.medications) {
       const lineTotal = med.price * med.quantity;
       total += lineTotal;
-      totalVat += lineTotal * med.vat / (100 + med.vat);
+      const taxAmount = lineTotal * med.vat / (100 + med.vat);
+      totalVat += taxAmount;
       itemCount += med.quantity;
+
+      if (med.vat === 0) {
+        exemptTotal += lineTotal;
+      } else {
+        taxableBase += lineTotal - taxAmount;
+        vatByRate[med.vat] = r2((vatByRate[med.vat] || 0) + taxAmount);
+      }
     }
+    exemptTotal = r2(exemptTotal);
+    taxableBase = r2(taxableBase);
 
     return {
       subtotal: total,
       totalVat,
       total,
       itemCount,
+      exemptTotal,
+      taxableBase,
+      vatByRate,
     };
   },
 
