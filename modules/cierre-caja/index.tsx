@@ -420,12 +420,13 @@ export default function CashClosurePage() {
 
 function mapTransactionToMethod(tx: any): PaymentMethodKey | null {
   const method = (tx.paymentMethod || "").toLowerCase();
-  // Backend Rust enum variants: Efectivo, TarjetaDebito, TarjetaCredito, Transferencia, Biopago, Dolares/Divisas
-  if (method.includes("efectivo") || method === "efectivo") return "efectivo";
+  // Backend Rust enum variants: Efectivo, TarjetaDebito, TarjetaCredito, Transferencia, Cheque, Biopago
+  if (method.includes("efectivo") || method === "efectivo") {
+    return tx.currency === "USD" ? "dolares" : "efectivo";
+  }
   if (method.includes("tarjeta") || method.includes("debito") || method.includes("credito")) return "tarjeta";
   if (method.includes("transferencia") || method.includes("movil")) return "pagomovil";
   if (method.includes("biopago")) return "biopago";
-  if (method.includes("dolares") || method.includes("divisas")) return "dolares";
   if (tx.currency === "USD") return "dolares";
   return null;
 }
