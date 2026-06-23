@@ -85,8 +85,28 @@ function parseInvoice(raw: any): CashierInvoice {
   };
 }
 
+function parsePaymentMethod(metodoPago: any): string {
+  if (typeof metodoPago === "string") return metodoPago;
+  if (typeof metodoPago === "object" && metodoPago !== null) {
+    return Object.keys(metodoPago)[0] || "";
+  }
+  return "";
+}
+
+function parseCurrency(moneda: any): "VES" | "USD" {
+  if (typeof moneda === "string") return moneda.toUpperCase() === "USD" ? "USD" : "VES";
+  if (typeof moneda === "object" && moneda !== null) {
+    const key = Object.keys(moneda)[0] || "";
+    return key.toUpperCase() === "USD" ? "USD" : "VES";
+  }
+  return "VES";
+}
+
 function parseTransaction(raw: any): CashierTransaction {
-  const typeVal = (raw.tipo ?? raw.type ?? "").toLowerCase();
+  const tipoStr = typeof raw.tipo === "object" && raw.tipo !== null
+    ? Object.keys(raw.tipo)[0] || ""
+    : raw.tipo ?? raw.type ?? "";
+  const typeVal = tipoStr.toLowerCase();
   let type: CashierTransaction["type"] = "unknown";
   if (typeVal === "venta" || typeVal === "sale") type = "sale";
   else if (typeVal === "gasto" || typeVal === "expense") type = "expense";
@@ -96,8 +116,8 @@ function parseTransaction(raw: any): CashierTransaction {
     id: raw.id ?? raw._id ?? "",
     type,
     description: raw.descripcion ?? raw.description ?? "",
-    currency: (raw.moneda ?? raw.currency ?? "VES").toUpperCase() === "USD" ? "USD" : "VES",
-    paymentMethod: raw.metodo_pago ?? raw.paymentMethod ?? "",
+    currency: parseCurrency(raw.moneda ?? raw.currency ?? "VES"),
+    paymentMethod: parsePaymentMethod(raw.metodo_pago ?? raw.paymentMethod ?? ""),
     originalAmount: Number(raw.monto_original ?? raw.originalAmount ?? 0),
     amountVes: Number(raw.monto_ves ?? raw.amountVes ?? 0),
     occurredAt: raw.fecha ?? raw.occurredAt ?? null,
