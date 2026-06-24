@@ -170,8 +170,19 @@ export const useProductsStore = create<ProductsStore>()(
       fetchCatalog: async () => {
         set({ isLoading: true, error: null });
         try {
-          const catalog = await productsService.getCatalog();
-          set({ catalog, isLoading: false });
+          // ponytail: cursor pagination from SurrealDB — max 10 pages of 200
+          const allCatalog: Medication[] = [];
+          let cursor: string | undefined;
+          let pages = 0;
+          const maxPages = 10;
+          while (pages < maxPages) {
+            const page = await productsService.getCatalog(cursor, 200);
+            allCatalog.push(...page.medications);
+            cursor = page.next_cursor ?? undefined;
+            pages++;
+            if (!cursor || page.medications.length === 0) break;
+          }
+          set({ catalog: allCatalog, isLoading: false });
         } catch {
           set({ isLoading: false, error: "Error al cargar catálogo" });
         }
@@ -338,14 +349,10 @@ export const useProductsStore = create<ProductsStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (state.inventory?.length) {
-          state.isLoading = false;
-          state.isInitialLoad = false;
-        } else {
-          state.isInitialLoad = true;
-          state.isLoading = true;
-          setTimeout(() => state.fetchInventory(true), 500);
-        }
+        // ponytail: siempre refrescar del servidor — cache localStorage puede estar stale
+        state.isInitialLoad = true;
+        state.isLoading = true;
+        setTimeout(() => state.fetchInventory(true), 500);
       },
     }
   )

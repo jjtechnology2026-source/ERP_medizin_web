@@ -10,15 +10,23 @@ const cleanImg = (item: any) => ({
 });
 
 export const productsService = {
-  async getCatalog(signal?: AbortSignal): Promise<Medication[]> {
-    const { data } = await api.post("/Medications/list", { size: 1000 }, {
+  /** Carga catálogo con cursor paginado desde SurrealDB */
+  async getCatalog(cursor?: string, size = 200): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+  }> {
+    const payload: any = { size };
+    if (cursor) payload.cursor = cursor;
+    const { data } = await api.post("/Medications/list", payload, {
       headers: { "Content-Type": "application/json" },
-      signal,
     });
-    const rawItems = Array.isArray(data)
-      ? data
-      : data?.medications ?? data?.result ?? data?.data ?? [];
-    return rawItems.map(cleanImg);
+    const rawItems = Array.isArray(data?.medications)
+      ? data.medications
+      : Array.isArray(data) ? data : [];
+    return {
+      medications: rawItems.map(cleanImg),
+      next_cursor: data?.cursor ?? null,
+    };
   },
 
   /** Carga inventario de una farmacia con cursor paginado */
