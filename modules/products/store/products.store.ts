@@ -133,7 +133,7 @@ export const useProductsStore = create<ProductsStore>()(
           // Fallback: Meilisearch
           const apiInventory = await productsService.getCatalog();
           const localMap = new Map(inventory.map(m => [m.barCode, m]));
-          const merged = apiInventory.map((api: Medication) => {
+          const merged = apiInventory.medications.map((api: Medication) => {
             const local = localMap.get(api.barCode);
             if (local) {
               return {
