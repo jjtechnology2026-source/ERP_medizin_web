@@ -173,12 +173,17 @@ export const useProductsStore = create<ProductsStore>()(
       saveMedicine: async (medicine) => {
         const { inventory } = get();
         const existing = inventory.find((m) => m.barCode === medicine.barCode && m.barCode);
-        try {
-          await productsService.createProduct(medicine);
-        } catch (error) {
-          console.error("API error while saving medicine:", error);
-          return false;
+
+        // ponytail: solo crear en catalogo si es producto NUEVO (evita duplicados)
+        if (!existing) {
+          try {
+            await productsService.createProduct(medicine);
+          } catch (error) {
+            console.error("API error while saving medicine:", error);
+            return false;
+          }
         }
+
         // ponytail: add stock instead of replacing — backend uses quantity as increment
         const updatedInventory = existing
           ? inventory.map((m) => {
