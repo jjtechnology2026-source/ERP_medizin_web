@@ -224,40 +224,20 @@ export const useProductsStore = create<ProductsStore>()(
         try {
           const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
           if (pharmacyId) {
-            const quantityVal = typeof medicine.quantity === "number" ? medicine.quantity : (typeof medicine.stock === "number" ? medicine.stock : 0);
-            const stockVal = typeof medicine.stock === "number" ? medicine.stock : (typeof medicine.quantity === "number" ? medicine.quantity : 0);
-            
-            const medProto = {
-              barCode: medicine.barCode || "",
-              name: medicine.name || "",
-              price: medicine.price || 0,
-              quantity: quantityVal > 0 ? quantityVal : stockVal,
-              stock: stockVal,
-              brand: medicine.brand || "",
-              activeIngredient: medicine.activeIngredient || "",
-              dosage: medicine.dosage || "",
-              tablets: medicine.tablets || "",
-              image: medicine.image || "",
-              category: medicine.category || "",
-              subcategory: medicine.subcategory || "",
-              description: medicine.description || "",
-              controlled: Boolean(medicine.controlled),
-              vat: Number(medicine.vat) || 0,
-              antibiotic: Boolean(medicine.antibiotic),
-              minimum: Number(medicine.minimum) || 0,
-            } as any;
-
-            const dto: any = {
-              idAgent: "web",
-              idPharmacy: pharmacyId,
-              medications: [medProto],
-            };
-
-            const buf = DtoUpdateMedications.encode(dto).finish();
-            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf).catch(() => {});
+            const stockVal = typeof medicine.stock === "number" ? medicine.stock : 0;
+            if (stockVal > 0) {
+              productsService.increaseInventory(pharmacyId, [{
+                bar_code: medicine.barCode || "",
+                stock: stockVal,
+                price: medicine.price || 0,
+                minimum: Number(medicine.minimum) || 0,
+              }]).catch((e) => {
+                console.error("[saveMedicine] HTTP increaseInventory failed:", e);
+              });
+            }
           }
         } catch (e) {
-          // noop
+          console.error("[saveMedicine] increaseInventory error:", e);
         }
 
         useAuthStore.getState().setMedicinesCatalog(get().inventory);

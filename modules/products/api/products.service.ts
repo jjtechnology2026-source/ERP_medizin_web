@@ -152,6 +152,14 @@ export const productsService = {
     await api.delete("/Medications/Delete", { data: { bar_code: barCode } });
   },
 
+  /** Aumenta inventario vía HTTP (reemplaza MQTT) */
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number }[]): Promise<void> {
+    await api.post("/admin/MedicationsAgent/increase", {
+      pharmacy_id: pharmacyId,
+      medications,
+    });
+  },
+
   async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     return this.bulkImportWithProgress(products);
   },
