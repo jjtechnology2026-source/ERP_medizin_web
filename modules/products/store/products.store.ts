@@ -85,55 +85,28 @@ export const useProductsStore = create<ProductsStore>()(
 
         const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
         if (!pharmacyId) {
-          // Sin pharmacyId: mantener Meilisearch como fallback
-          const catalog = useAuthStore.getState().medicinesCatalog || [];
-          if (catalog.length > 0) {
-            const merged = catalog.map(cleanImage);
-            set({ inventory: merged, isLoading: false, isInitialLoad: false });
-            return;
-          }
+          set({ isLoading: false, isInitialLoad: false, error: "Sin farmacia asignada" });
+          return;
         }
 
         if (inventory.length === 0) set({ isLoading: true });
         set({ error: null });
 
         try {
-          if (pharmacyId) {
-            // Cargar con cursor paginado desde SurrealDB
-            const allMeds: Medication[] = [];
-            let cursor: string | undefined;
-            let hasMore = true;
+          // Cargar con cursor paginado desde SurrealDB
+          const allMeds: Medication[] = [];
+          let cursor: string | undefined;
+          let hasMore = true;
 
-            while (hasMore) {
-              const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
-              allMeds.push(...page.medications);
-              cursor = page.next_cursor ?? undefined;
-              hasMore = page.has_more && !!page.next_cursor;
-            }
-
-            const localMap = new Map(inventory.map(m => [m.barCode, m]));
-            const merged = allMeds.map((api: Medication) => {
-              const local = localMap.get(api.barCode);
-              if (local) {
-                return {
-                  ...api,
-                  stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
-                  quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
-                  price: (local.price ?? 0) > 0 ? local.price : api.price,
-                };
-              }
-              return api;
-            });
-
-            set({ inventory: merged, isLoading: false, isInitialLoad: false });
-            useAuthStore.getState().setMedicinesCatalog(merged);
-            return;
+          while (hasMore) {
+            const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
+            allMeds.push(...page.medications);
+            cursor = page.next_cursor ?? undefined;
+            hasMore = page.has_more && !!page.next_cursor;
           }
 
-          // Fallback: Meilisearch
-          const apiInventory = await productsService.getCatalog();
           const localMap = new Map(inventory.map(m => [m.barCode, m]));
-          const merged = apiInventory.medications.map((api: Medication) => {
+          const merged = allMeds.map((api: Medication) => {
             const local = localMap.get(api.barCode);
             if (local) {
               return {
