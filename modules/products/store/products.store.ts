@@ -85,7 +85,8 @@ export const useProductsStore = create<ProductsStore>()(
 
         const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
         if (!pharmacyId) {
-          set({ isLoading: false, isInitialLoad: false, error: "Sin farmacia asignada" });
+          // ponytail: no hacer nada — MqttInventoryProvider reintentará cuando el perfil esté listo
+          if (inventory.length === 0) set({ isLoading: true });
           return;
         }
 
