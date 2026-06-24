@@ -37,7 +37,7 @@ export default function StockFeaturesForm({
     const priceExVat = vat > 0 ? p / (1 + vat / 100) : p;
     setPriceWithoutVat(priceExVat.toFixed(2));
     setSelectedVat(vat);
-    setQuantity(String(currentMedicine.stock ?? 0));
+    setQuantity(""); // ponytail: start empty — stock is added, not replaced
     setMinStock(String(currentMedicine.minimum ?? 0));
   }, [currentMedicine]);
 
@@ -212,7 +212,10 @@ export default function StockFeaturesForm({
               <div className="border-t border-slate-100 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Existencias en stock</label>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
+                      Agregar al stock (+)
+                      {medStock > 0 && <span className="ml-2 font-normal text-[10px] text-slate-400">(actual: {medStock})</span>}
+                    </label>
                     <input type="text" inputMode="numeric" value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       placeholder="0"

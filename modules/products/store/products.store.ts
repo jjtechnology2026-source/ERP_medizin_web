@@ -187,18 +187,28 @@ export const useProductsStore = create<ProductsStore>()(
 
       saveMedicine: async (medicine) => {
         const { inventory } = get();
-        const exists = inventory.some((m) => m.barCode === medicine.barCode && m.barCode);
+        const existing = inventory.find((m) => m.barCode === medicine.barCode && m.barCode);
         try {
           await productsService.createProduct(medicine);
         } catch (error) {
           console.error("API error while saving medicine:", error);
           return false;
         }
-        set({
-          inventory: exists
-            ? inventory.map((m) => m.barCode === medicine.barCode ? medicine : m)
-            : [...inventory.filter(m => m.barCode !== medicine.barCode), medicine],
-        });
+        // ponytail: add stock instead of replacing — backend uses quantity as increment
+        const updatedInventory = existing
+          ? inventory.map((m) => {
+              if (m.barCode === medicine.barCode) {
+                return {
+                  ...m,
+                  ...medicine,
+                  stock: (m.stock ?? 0) + (medicine.stock ?? 0),
+                  quantity: (m.quantity ?? 0) + (medicine.quantity ?? 0),
+                };
+              }
+              return m;
+            })
+          : [...inventory.filter(m => m.barCode !== medicine.barCode), medicine];
+        set({ inventory: updatedInventory });
 
         try {
           const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
