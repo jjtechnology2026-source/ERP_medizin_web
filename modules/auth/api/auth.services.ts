@@ -114,7 +114,7 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
     name: getSafeString(agent.agentUsername || agent.username || agent.user || agent.name),
     email: getSafeString(agent.email),
     role: getSafeString(agent.role || "agent"),
-    id_group: String(agent.groupId || agent.id_group || agent.idGroup || ""),
+    id_group: String(agent.groupId || agent.id_group || agent.idGroup || agent.group_id || ""),
     name_group: String(agent.groupName || agent.name_group || agent.nameGroup || ""),
     pharmacyId: String(agent.pharmacyId || agent.pharmacy_id || agent.idPharmacy || ""),
     pharmacyName: String(agent.pharmacyName || agent.pharmacy_name || agent.namePharmacy || ""),
