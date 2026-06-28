@@ -24,6 +24,8 @@ interface OrdersPageProps {
   setFilters: React.Dispatch<React.SetStateAction<any>>;
   onRefresh: () => void;
   total: number;
+  fetchNextPage?: () => void;
+  hasNextPage?: boolean;
 }
 
 // --- COMPONENTES ATÓMICOS ---
@@ -43,7 +45,7 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
 
 // --- COMPONENTE PRINCIPAL ---
 
-export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total }: OrdersPageProps) {
+export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -199,7 +201,14 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
             </div>
             <button 
               disabled={currentPage === totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)} 
+              onClick={() => {
+                setCurrentPage(p => p + 1);
+                // ponytail: pre-fetch when approaching the edge of loaded data (2 pages ahead)
+                const next = currentPage + 1;
+                if ((next + 1) * itemsPerPage > orders.length && hasNextPage && fetchNextPage) {
+                  fetchNextPage();
+                }
+              }} 
               className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
             >
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

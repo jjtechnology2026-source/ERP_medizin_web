@@ -11,7 +11,7 @@ export default function CatalogSearchPage({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { inventory, catalog, fetchCatalog, setCurrentMedicine, setEditMode } = useProductsStore();
+  const { inventory, catalog, fetchCatalog, isLoading, setCurrentMedicine, setEditMode } = useProductsStore();
   const { medicinesCatalog } = useAuthStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -237,6 +237,31 @@ export default function CatalogSearchPage({
           </div>
         )}
       </div>
+
+      {isLoading && catalogList.length === 0 && (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-3">
+            <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span className="text-sm font-bold text-slate-400">Cargando catálogo de productos...</span>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && catalogList.length === 0 && (
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-12 text-center">
+          <p className="text-sm font-bold text-slate-400">No se pudo cargar el catálogo de productos.</p>
+          <p className="text-xs text-slate-300 mt-2">Verifica tu conexión o intenta nuevamente.</p>
+          <button
+            onClick={() => fetchCatalog()}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-black text-blue-600 uppercase hover:text-blue-700 transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {debouncedQuery && (
         <div className="space-y-4">
