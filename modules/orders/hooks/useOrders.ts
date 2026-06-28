@@ -68,6 +68,7 @@ export function useOrders(idGroup: string, idPharmacy: string) {
       let cursor: string | null = null;
       let hasMore = true;
       let pagesLoaded = 0;
+      let firstPage = true;
 
       while (hasMore && pagesLoaded < MAX_CURSOR_PAGES) {
         const params: URLSearchParams = new URLSearchParams(buildParams(cursor));
@@ -81,9 +82,19 @@ export function useOrders(idGroup: string, idPharmacy: string) {
         hasMore = data.has_more ?? false;
         setTotal(data.total ?? 0);
         pagesLoaded++;
+
+        // Show first page immediately, load the rest in background
+        if (firstPage) {
+          setOrders([...allOrders]);
+          setLoading(false);
+          firstPage = false;
+        }
       }
 
-      setOrders(allOrders);
+      // Update with all accumulated orders after background load finishes
+      if (!firstPage) {
+        setOrders(allOrders);
+      }
     } catch (error) {
       console.error("Error fetching orders", error);
       setOrders([]);

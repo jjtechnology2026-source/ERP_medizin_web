@@ -28,7 +28,8 @@ export default function InventoryManagement() {
 
   const { medicinesCatalog } = useAuthStore();
 
-  const autocompleteInventory = medicinesCatalog && medicinesCatalog.length > 0 ? medicinesCatalog : inventory;
+  // ponytail: inventory recibe MQTT en tiempo real; medicinesCatalog es respaldo localStorage
+  const autocompleteInventory = inventory.length > 0 ? inventory : (medicinesCatalog || []);
 
   const handleStockAutocompleteSelect = (med: Medication) => {
     setCurrentMedicine(med);

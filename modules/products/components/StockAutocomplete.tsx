@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Medication } from "@/modules/products/types/products.types";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
@@ -18,20 +18,31 @@ export default function StockAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const suggestions = query.trim()
-    ? inventory
-        .filter(
-          (m) =>
-            m.name.toLowerCase().includes(query.toLowerCase()) ||
-            m.barCode.toLowerCase().includes(query.toLowerCase()) ||
-            m.activeIngredient.toLowerCase().includes(query.toLowerCase())
-        )
-        .slice(0, 4)
-    : [];
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 200);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const { suggestions, totalMatches } = useMemo(() => {
+    if (!debouncedQuery.trim()) return { suggestions: [], totalMatches: 0 };
+    const q = debouncedQuery.toLowerCase();
+    const allMatches = inventory.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.barCode.toLowerCase().includes(q) ||
+        m.activeIngredient.toLowerCase().includes(q)
+    );
+    return {
+      suggestions: allMatches.slice(0, 10),
+      totalMatches: allMatches.length,
+    };
+  }, [inventory, debouncedQuery]);
 
   useEffect(() => {
     setFocusedIndex(-1);
-  }, [query]);
+  }, [debouncedQuery]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -86,6 +97,11 @@ export default function StockAutocomplete({
           ref={listRef}
           className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-50"
         >
+          {totalMatches > suggestions.length && (
+            <div className="px-4 py-2 text-[10px] font-bold text-slate-400 bg-slate-50 border-b border-slate-100">
+              Mostrando {suggestions.length} de {totalMatches} coincidencias
+            </div>
+          )}
           {suggestions.map((med, i) => (
             <button
               key={med.barCode || i}
