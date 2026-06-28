@@ -94,22 +94,43 @@ export const useProductsStore = create<ProductsStore>()(
         set({ error: null });
 
         try {
-          // Cargar con cursor paginado desde SurrealDB
+          // Snapshot local data for final merge — progressive sets overwrite inventory
+          const localInventory = [...inventory];
+
           const allMeds: Medication[] = [];
           let cursor: string | undefined;
           let hasMore = true;
+          let retries = 0;
+          const maxRetries = 3;
 
           while (hasMore) {
             const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
+
+            // ponytail: retry when backend reports items but returns nothing
+            if (page.total > 0 && page.medications.length === 0 && retries < maxRetries) {
+              retries++;
+              continue;
+            }
+            retries = 0;
+
             allMeds.push(...page.medications);
+
+            // ponytail: show items as they arrive — don't wait for all 150 pages
+            set({
+              inventory: [...allMeds],
+              isLoading: true,
+              isInitialLoad: false,
+            });
+
             cursor = page.next_cursor ?? undefined;
             hasMore = page.has_more && !!page.next_cursor;
           }
 
-          const localMap = new Map(inventory.map(m => [m.barCode, m]));
+          const localMap = new Map(localInventory.map(m => [m.barCode, m]));
           const merged = allMeds.map((api: Medication) => {
             const local = localMap.get(api.barCode);
             if (local) {
+              localMap.delete(api.barCode);
               return {
                 ...api,
                 stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
@@ -119,6 +140,10 @@ export const useProductsStore = create<ProductsStore>()(
             }
             return api;
           });
+          // ponytail: preserve local-only products not yet in BE response
+          for (const [, local] of localMap) {
+            merged.push(local);
+          }
 
           set({ inventory: merged, isLoading: false, isInitialLoad: false });
           useAuthStore.getState().setMedicinesCatalog(merged);
@@ -205,14 +230,12 @@ export const useProductsStore = create<ProductsStore>()(
           if (pharmacyId) {
             const stockVal = typeof medicine.stock === "number" ? medicine.stock : 0;
             if (stockVal > 0) {
-              productsService.increaseInventory(pharmacyId, [{
+              await productsService.increaseInventory(pharmacyId, [{
                 bar_code: medicine.barCode || "",
                 stock: stockVal,
                 price: medicine.price || 0,
                 minimum: Number(medicine.minimum) || 0,
-              }]).catch((e) => {
-                console.error("[saveMedicine] HTTP increaseInventory failed:", e);
-              });
+              }]);
             }
           }
         } catch (e) {

@@ -80,7 +80,7 @@ export default function InventoryList({
     setPage(1);
   };
 
-  const showLoadingState = (isLoading || (isInitialLoad && inventory.length === 0)) && !error;
+  const showLoadingState = inventory.length === 0 && (isLoading || isInitialLoad) && !error;
   const showEmptyState = !isLoading && !isInitialLoad && filteredInventory.length === 0 && !error;
 
   const formatReportDate = (date: Date) =>
@@ -416,6 +416,14 @@ export default function InventoryList({
                 Siguiente
               </button>
             </div>
+          </div>
+        )}
+
+        {isLoading && inventory.length > 0 && (
+          <div className="p-2 border-t border-slate-50 text-center">
+            <span className="text-xs text-slate-400 font-bold">
+              Cargando más productos...
+            </span>
           </div>
         )}
       </div>
