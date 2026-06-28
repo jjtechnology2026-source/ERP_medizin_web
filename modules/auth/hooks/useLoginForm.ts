@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/modules/core/hooks/useAuth";
 import { authService } from "@/modules/auth/api/auth.services";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 export const useLoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,18 +20,9 @@ export const useLoginForm = () => {
 
     try {
       const data = await authService.login({ username, password });
-      
+
       if (data.success === false) {
         throw new Error(data.message || "Credenciales inválidas");
-      }
-
-      // Save medicines to localStorage for persistence across page reloads
-      const medicines = data.medicines || data.medications || [];
-      if (Array.isArray(medicines) && medicines.length) {
-        useAuthStore.getState().setMedicinesCatalog(medicines);
-        try {
-          localStorage.setItem("medicines-catalog", JSON.stringify(medicines));
-        } catch (e) {}
       }
 
       await login({

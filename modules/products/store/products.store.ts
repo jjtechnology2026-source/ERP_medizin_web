@@ -38,14 +38,6 @@ interface ProductsActions {
 
 type ProductsStore = ProductsState & ProductsActions;
 
-const cleanImage = (item: any) => ({
-  ...item,
-  image: item.image && typeof item.image === "string" && item.image.startsWith("http") ? item.image : "",
-  stock: item.stock !== undefined ? Number(item.stock) : (item.quantity !== undefined ? Number(item.quantity) : 0),
-  quantity: item.quantity !== undefined ? Number(item.quantity) : (item.stock !== undefined ? Number(item.stock) : 0),
-  price: Number(item.price) || 0,
-});
-
 export const useProductsStore = create<ProductsStore>()(
   persist(
     (set, get) => ({
@@ -59,7 +51,6 @@ export const useProductsStore = create<ProductsStore>()(
       editMode: false,
       currentMedicine: null,
 
-      // Clear persisted products and reset state
       clearStorage: () => {
         set({
           inventory: [],
@@ -85,7 +76,6 @@ export const useProductsStore = create<ProductsStore>()(
 
         const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
         if (!pharmacyId) {
-          // ponytail: no hacer nada — MqttInventoryProvider reintentará cuando el perfil esté listo
           if (inventory.length === 0) set({ isLoading: true });
           return;
         }
@@ -94,7 +84,6 @@ export const useProductsStore = create<ProductsStore>()(
         set({ error: null });
 
         try {
-          // Snapshot local data for final merge — progressive sets overwrite inventory
           const localInventory = [...inventory];
 
           const allMeds: Medication[] = [];
@@ -106,7 +95,6 @@ export const useProductsStore = create<ProductsStore>()(
           while (hasMore) {
             const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
 
-            // ponytail: retry when backend reports items but returns nothing
             if (page.total > 0 && page.medications.length === 0 && retries < maxRetries) {
               retries++;
               continue;
@@ -115,7 +103,6 @@ export const useProductsStore = create<ProductsStore>()(
 
             allMeds.push(...page.medications);
 
-            // ponytail: show items as they arrive — don't wait for all 150 pages
             set({
               inventory: [...allMeds],
               isLoading: true,
@@ -140,13 +127,11 @@ export const useProductsStore = create<ProductsStore>()(
             }
             return api;
           });
-          // ponytail: preserve local-only products not yet in BE response
           for (const [, local] of localMap) {
             merged.push(local);
           }
 
           set({ inventory: merged, isLoading: false, isInitialLoad: false });
-          useAuthStore.getState().setMedicinesCatalog(merged);
         } catch (e: any) {
           if (inventory.length === 0) {
             const msg = "Error al cargar inventario";
@@ -163,7 +148,6 @@ export const useProductsStore = create<ProductsStore>()(
         medications.forEach(m => { if (m.barCode) map.set(m.barCode, m); });
         const merged = Array.from(map.values());
         set({ inventory: merged });
-        useAuthStore.getState().setMedicinesCatalog(merged);
       },
 
       fetchCatalog: async () => {
@@ -195,7 +179,6 @@ export const useProductsStore = create<ProductsStore>()(
         const { inventory } = get();
         const existing = inventory.find((m) => m.barCode === medicine.barCode && m.barCode);
 
-        // ponytail: solo crear en catalogo si es producto NUEVO (evita duplicados)
         if (!existing) {
           try {
             await productsService.createProduct(medicine);
@@ -205,7 +188,6 @@ export const useProductsStore = create<ProductsStore>()(
           }
         }
 
-        // ponytail: add stock instead of replacing — backend uses quantity as increment
         const updatedInventory = existing
           ? inventory.map((m) => {
               if (m.barCode === medicine.barCode) {
@@ -238,7 +220,6 @@ export const useProductsStore = create<ProductsStore>()(
           console.error("[saveMedicine] increaseInventory error:", e);
         }
 
-        useAuthStore.getState().setMedicinesCatalog(get().inventory);
         return true;
       },
 
@@ -252,7 +233,6 @@ export const useProductsStore = create<ProductsStore>()(
         const updated = inventory.filter((m) => m.barCode !== barCode);
         set({ inventory: updated });
 
-        // Publish MQTT to remove from SurrealDB inventory
         try {
           const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
           if (pharmacyId) {
@@ -265,8 +245,6 @@ export const useProductsStore = create<ProductsStore>()(
             mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf).catch(() => {});
           }
         } catch (e) {}
-
-        useAuthStore.getState().setMedicinesCatalog(updated);
       },
 
       decrementStock: (items) => {
@@ -280,7 +258,6 @@ export const useProductsStore = create<ProductsStore>()(
         });
         set({ inventory: updated });
       },
-
 
       applyInventoryUpdate: (updates) => {
         const { inventory } = get();
@@ -327,7 +304,6 @@ export const useProductsStore = create<ProductsStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        // ponytail: siempre refrescar del servidor — cache localStorage puede estar stale
         state.isInitialLoad = true;
         state.isLoading = true;
         setTimeout(() => state.fetchInventory(true), 500);
@@ -335,17 +311,3 @@ export const useProductsStore = create<ProductsStore>()(
     }
   )
 );
-
-// Auto-sync when auth store's medicinesCatalog changes
-if (typeof window !== "undefined") {
-  useAuthStore.subscribe((state) => {
-    const pState = useProductsStore.getState();
-    if (state.medicinesCatalog?.length && pState.inventory.length === 0) {
-      useProductsStore.setState({
-        inventory: state.medicinesCatalog.map(cleanImage),
-        isLoading: false,
-        isInitialLoad: false,
-      });
-    }
-  });
-}

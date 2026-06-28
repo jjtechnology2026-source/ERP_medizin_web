@@ -7,7 +7,6 @@ import StockAutocomplete from "./components/StockAutocomplete";
 import StockFeaturesForm from "./components/StockFeaturesForm";
 import StockTaxBreakdown from "./components/StockTaxBreakdown";
 
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { MqttInventoryProvider } from "@/modules/products/providers/MqttInventoryProvider";
 import type { ViewState, StockFilter, Medication } from "@/modules/products/types/products.types";
@@ -25,11 +24,6 @@ export default function InventoryManagement() {
     setEditMode,
     setSearchQuery,
   } = useProductsStore();
-
-  const { medicinesCatalog } = useAuthStore();
-
-  // ponytail: inventory recibe MQTT en tiempo real; medicinesCatalog es respaldo localStorage
-  const autocompleteInventory = inventory.length > 0 ? inventory : (medicinesCatalog || []);
 
   const handleStockAutocompleteSelect = (med: Medication) => {
     setCurrentMedicine(med);
@@ -67,7 +61,7 @@ export default function InventoryManagement() {
                 </div>
               ) : (
                 <StockAutocomplete
-                  inventory={autocompleteInventory}
+                  inventory={inventory}
                   onSelect={handleStockAutocompleteSelect}
                 />
               )}
