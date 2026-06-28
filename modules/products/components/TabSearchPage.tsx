@@ -2,7 +2,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { HiSearch, HiX, HiPlus } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
 
@@ -12,7 +11,6 @@ export default function CatalogSearchPage({
   setView: (v: ViewState) => void;
 }) {
   const { inventory, catalog, fetchCatalog, isLoading, setCurrentMedicine, setEditMode } = useProductsStore();
-  const { medicinesCatalog } = useAuthStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
   const [query, setQuery] = useState("");
@@ -57,32 +55,6 @@ export default function CatalogSearchPage({
   const catalogList = useMemo(() => {
     const map = new Map<string, Medication>();
 
-    if (Array.isArray(medicinesCatalog)) {
-      medicinesCatalog.forEach((m: any) => {
-        if (m.barCode) {
-          map.set(m.barCode, {
-            name: m.name || "",
-            activeIngredient: m.activeIngredient || "",
-            dosage: m.dosage || "",
-            tablets: m.tablets || "",
-            brand: m.brand || "",
-            barCode: m.barCode,
-            category: m.category || "",
-            subcategory: m.subcategory || "",
-            price: Number(m.price) || 0,
-            stock: Number(m.stock) || 0,
-            quantity: Number(m.quantity) || 0,
-            minimum: Number(m.minimum) || 5,
-            vat: Number(m.vat) || 16,
-            controlled: !!m.controlled,
-            antibiotic: !!m.antibiotic,
-            image: m.image && typeof m.image === "string" && m.image.startsWith("http") ? m.image : "",
-            description: m.description || "",
-          });
-        }
-      });
-    }
-
     catalog.forEach(m => {
       if (m.barCode) map.set(m.barCode, m);
     });
@@ -92,7 +64,7 @@ export default function CatalogSearchPage({
     });
 
     return Array.from(map.values());
-  }, [inventory, catalog, medicinesCatalog]);
+  }, [inventory, catalog]);
 
   const [filterInStock, setFilterInStock] = useState<string>("all");
   const [filterBrand, setFilterBrand] = useState<string>("all");

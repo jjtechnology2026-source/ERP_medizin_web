@@ -169,16 +169,12 @@ export const useProductsStore = create<ProductsStore>()(
       fetchCatalog: async () => {
         set({ isLoading: true, error: null });
         try {
-          // ponytail: cursor pagination from SurrealDB — max 10 pages of 200
           const allCatalog: Medication[] = [];
           let cursor: string | undefined;
-          let pages = 0;
-          const maxPages = 10;
-          while (pages < maxPages) {
+          while (true) {
             const page = await productsService.getCatalog(cursor, 200);
             allCatalog.push(...page.medications);
             cursor = page.next_cursor ?? undefined;
-            pages++;
             if (!cursor || page.medications.length === 0) break;
           }
           set({ catalog: allCatalog, isLoading: false });
