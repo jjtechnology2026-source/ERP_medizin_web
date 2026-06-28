@@ -88,20 +88,21 @@ export function useOrders(idGroup: string, idPharmacy: string) {
   }, [filters]);
 
   // Pre-fetch next pages automatically when data arrives
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   useEffect(() => {
     if (
-      query.hasNextPage &&
-      !query.isFetchingNextPage &&
+      hasNextPage &&
+      !isFetchingNextPage &&
       prefetchRemaining.current > 0
     ) {
       prefetchRemaining.current--;
-      query.fetchNextPage();
+      fetchNextPage();
     }
   }, [
     query.data?.pages.length,
-    query.hasNextPage,
-    query.isFetchingNextPage,
-    query.fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
   ]);
 
   const orders = useMemo(
