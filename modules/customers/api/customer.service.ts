@@ -8,6 +8,7 @@ export interface Customer {
   phone: string;
   direccion: string;
   retencion?: string; // "0" | "75" | "100"
+  tipo_documento?: string; // "V" | "J" | "E"
 }
 
 // Quita cualquier prefijo alfabético (V, J, E) del documento
@@ -20,6 +21,9 @@ const toApiRetencion = (val?: string): number | null => {
   if (!val || val === "0") return null;
   return parseInt(val, 10); // 75 o 100
 };
+
+const tipoDocFromDoc = (doc: string) =>
+  (doc.match(/^[A-Za-z]+/)?.[0]?.toUpperCase()) || "V";
 
 export const customerService = {
   async searchByDocument(documento: string): Promise<Customer | null> {
@@ -37,6 +41,7 @@ export const customerService = {
         phone: data.phone || "",
         direccion: data.direccion || "",
         retencion: data.retencion != null ? String(data.retencion) : "0",
+        tipo_documento: tipoDocFromDoc(documento),
       };
     } catch {
       return null;
@@ -46,8 +51,10 @@ export const customerService = {
   async create(customer: Omit<Customer, "id">): Promise<Customer | null> {
     try {
       const docLimpio = cleanDocument(customer.documento);
+      const tipoDocumento = tipoDocFromDoc(customer.documento);
       const { data } = await api.post("/admin/User/createuser", {
         id: docLimpio,
+        tipo_documento: tipoDocumento,
         documento: docLimpio,
         name: customer.name,
         email: customer.email,
@@ -63,6 +70,7 @@ export const customerService = {
         phone: customer.phone,
         direccion: customer.direccion,
         retencion: customer.retencion || "0",
+        tipo_documento: tipoDocumento,
       };
     } catch {
       return null;

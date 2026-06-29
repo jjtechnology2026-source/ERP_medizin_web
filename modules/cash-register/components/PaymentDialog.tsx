@@ -248,6 +248,7 @@ export default function PaymentDialog({
             phone: clientData.phone || "",
             direccion: clientData.direccion || "",
             retencion: clientData.retencion || "0",
+            tipo_documento: (clientData as any)?.tipo_documento || "V",
           });
         } catch { /* no detener venta */ }
       }

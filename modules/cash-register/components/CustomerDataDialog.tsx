@@ -63,9 +63,10 @@ export default function CustomerDataDialog({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Actualizar documento y teléfono en el store cuando cambien
+  // Actualizar documento, tipo_documento y teléfono en el store cuando cambien
   const updateDocumento = useCallback(() => {
     setCustomerField("documento", combineDocument(docPrefix, docNumber));
+    setCustomerField("tipo_documento", docPrefix);
   }, [docPrefix, docNumber, setCustomerField]);
 
   const updatePhone = useCallback(() => {
@@ -176,6 +177,7 @@ export default function CustomerDataDialog({
         setUserFound(true);
 
         // Actualizar store
+        setCustomerField("tipo_documento", doc.prefix);
         setCustomerField("documento", combineDocument(doc.prefix, doc.number));
         setCustomerField("name", customer.name || "");
         setCustomerField("email", customer.email || "");

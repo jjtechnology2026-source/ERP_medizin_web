@@ -26,6 +26,7 @@ export interface Client {
   direccion: string;
   phone: string;
   retencion?: string;
+  tipo_documento?: string;
 }
 
 export interface CashPaymentData { amount: number; currency?: { VES?: Record<string, never> } }
