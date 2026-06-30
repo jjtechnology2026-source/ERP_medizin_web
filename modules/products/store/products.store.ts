@@ -166,6 +166,7 @@ export const useProductsStore = create<ProductsStore>()(
             allCatalog.push(...page.medications);
             pageCount++;
             cursor = page.next_cursor ?? undefined;
+            set({ catalog: [...allCatalog], isLoading: true });
             if (!cursor || page.medications.length === 0) break;
           }
           console.log(
