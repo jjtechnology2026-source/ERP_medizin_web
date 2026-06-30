@@ -83,7 +83,7 @@ export const useProductsStore = create<ProductsStore>()(
           return;
         }
 
-        const pharmacyChanged = !!(lastPharmacyId && lastPharmacyId !== pharmacyId);
+        const pharmacyChanged = lastPharmacyId !== pharmacyId;
 
         if (inventory.length === 0 || pharmacyChanged) set({ isLoading: true });
         set({ error: null });
@@ -160,14 +160,25 @@ export const useProductsStore = create<ProductsStore>()(
         try {
           const allCatalog: Medication[] = [];
           let cursor: string | undefined;
+          let pageCount = 0;
           while (true) {
-            const page = await productsService.getCatalog(cursor, 200);
+            const page = await productsService.getCatalog(cursor, 5000);
             allCatalog.push(...page.medications);
+            pageCount++;
             cursor = page.next_cursor ?? undefined;
             if (!cursor || page.medications.length === 0) break;
           }
+          console.log(
+            "[fetchCatalog] Loaded",
+            allCatalog.length,
+            "medications in",
+            pageCount,
+            "page(s)",
+            allCatalog.length > 0 ? `first: "${allCatalog[0]?.name}"` : "EMPTY"
+          );
           set({ catalog: allCatalog, isLoading: false });
-        } catch {
+        } catch (e) {
+          console.error("[fetchCatalog] Failed:", e);
           set({ isLoading: false, error: "Error al cargar catálogo" });
         }
       },

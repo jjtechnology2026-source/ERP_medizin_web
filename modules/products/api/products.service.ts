@@ -11,7 +11,7 @@ const cleanImg = (item: any) => ({
 
 export const productsService = {
   /** Carga catálogo con cursor paginado desde SurrealDB */
-  async getCatalog(cursor?: string, size = 200): Promise<{
+  async getCatalog(cursor?: string, size = 5000): Promise<{
     medications: Medication[];
     next_cursor: string | null;
   }> {
