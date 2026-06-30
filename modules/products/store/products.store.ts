@@ -161,7 +161,7 @@ export const useProductsStore = create<ProductsStore>()(
           const allCatalog: Medication[] = [];
           let cursor: string | undefined;
           let pageCount = 0;
-          while (true) {
+          for (let i = 0; i < 10; i++) {
             const page = await productsService.getCatalog(cursor, 5000);
             allCatalog.push(...page.medications);
             pageCount++;
