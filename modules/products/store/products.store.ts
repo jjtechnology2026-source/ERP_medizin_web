@@ -17,6 +17,7 @@ interface ProductsState {
   searchQuery: string;
   editMode: boolean;
   currentMedicine: Partial<Medication> | null;
+  lastPharmacyId: string | null;
 }
 
 interface ProductsActions {
@@ -50,6 +51,7 @@ export const useProductsStore = create<ProductsStore>()(
       searchQuery: "",
       editMode: false,
       currentMedicine: null,
+      lastPharmacyId: null,
 
       clearStorage: () => {
         set({
@@ -62,6 +64,7 @@ export const useProductsStore = create<ProductsStore>()(
           searchQuery: "",
           editMode: false,
           currentMedicine: null,
+          lastPharmacyId: null,
         });
         try {
           localStorage.removeItem("products-storage");
@@ -71,7 +74,7 @@ export const useProductsStore = create<ProductsStore>()(
       },
 
       fetchInventory: async (force = false) => {
-        const { isInitialLoad, inventory } = get();
+        const { isInitialLoad, inventory, lastPharmacyId } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
 
         const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
@@ -80,11 +83,13 @@ export const useProductsStore = create<ProductsStore>()(
           return;
         }
 
-        if (inventory.length === 0) set({ isLoading: true });
+        const pharmacyChanged = !!(lastPharmacyId && lastPharmacyId !== pharmacyId);
+
+        if (inventory.length === 0 || pharmacyChanged) set({ isLoading: true });
         set({ error: null });
 
         try {
-          const localInventory = [...inventory];
+          const localInventory = pharmacyChanged ? [] : [...inventory];
 
           const allMeds: Medication[] = [];
           let cursor: string | undefined;
@@ -131,7 +136,7 @@ export const useProductsStore = create<ProductsStore>()(
             merged.push(local);
           }
 
-          set({ inventory: merged, isLoading: false, isInitialLoad: false });
+          set({ inventory: merged, isLoading: false, isInitialLoad: false, lastPharmacyId: pharmacyId });
         } catch (e: any) {
           if (inventory.length === 0) {
             const msg = "Error al cargar inventario";
@@ -301,6 +306,7 @@ export const useProductsStore = create<ProductsStore>()(
       name: "products-storage",
       partialize: (state) => ({
         inventory: state.inventory,
+        lastPharmacyId: state.lastPharmacyId,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
