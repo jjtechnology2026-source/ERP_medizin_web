@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { HiSearch, HiX, HiPlus } from "react-icons/hi";
+import { HiSearch, HiX, HiPlus, HiOutlineRefresh } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
@@ -143,9 +143,20 @@ export default function CatalogSearchPage({
         <h1 className="text-3xl font-black text-slate-800 leading-tight">
           Agregar producto al inventario
         </h1>
-        <p className="text-blue-500 font-bold text-sm tracking-wide">
-          Busca en el catálogo nacional de medicamentos y agrégalo a tu stock con precio e IVA.
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-blue-500 font-bold text-sm tracking-wide">
+            Busca en el catálogo nacional de medicamentos y agrégalo a tu stock con precio e IVA.
+          </p>
+          {!isLoading && catalog.length > 0 && (
+            <button
+              onClick={() => fetchCatalog(true)}
+              className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors cursor-pointer"
+              title="Recargar catálogo"
+            >
+              <HiOutlineRefresh size={14} /> Recargar catálogo
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="relative max-w-3xl" ref={searchRef}>

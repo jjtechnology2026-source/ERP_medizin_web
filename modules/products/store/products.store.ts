@@ -22,7 +22,7 @@ interface ProductsState {
 
 interface ProductsActions {
   fetchInventory: (force?: boolean) => Promise<void>;
-  fetchCatalog: () => Promise<void>;
+  fetchCatalog: (force?: boolean) => Promise<void>;
   setFilter: (filter: StockFilter) => void;
   setSearchQuery: (query: string) => void;
   setEditMode: (mode: boolean) => void;
@@ -155,7 +155,9 @@ export const useProductsStore = create<ProductsStore>()(
         set({ inventory: merged });
       },
 
-      fetchCatalog: async () => {
+      fetchCatalog: async (force?: boolean) => {
+        const { catalog } = get();
+        if (!force && catalog.length > 0) return;
         set({ isLoading: true, error: null });
         try {
           const allCatalog: Medication[] = [];
