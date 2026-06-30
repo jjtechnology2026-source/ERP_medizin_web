@@ -25,7 +25,7 @@ export const productsService = {
       : Array.isArray(data) ? data : [];
     return {
       medications: rawItems.map(cleanImg),
-      next_cursor: data?.cursor ?? null,
+      next_cursor: data?.next_cursor ?? data?.cursor ?? null,
     };
   },
 
