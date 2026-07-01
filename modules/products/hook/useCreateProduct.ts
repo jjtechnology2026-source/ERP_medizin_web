@@ -100,14 +100,15 @@ export const useCreateMedication = () => {
               minimum: payloadData.minimum,
             } as any;
 
+            const agentId = (useAuthStore.getState().profile as any)?.id_agent || (useAuthStore.getState().profile as any)?.agentId || "web";
             const dto: any = {
-              idAgent: "web",
+              idAgent: agentId,
               idPharmacy: pharmacyId,
               medications: [medProto],
             };
 
             const buf = DtoUpdateMedications.encode(dto).finish();
-            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf).catch(() => {});
+            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf, agentId).catch(() => {});
           }
         } catch (e) {
           // noop - MQTT es secundario, no debe bloquear la creación

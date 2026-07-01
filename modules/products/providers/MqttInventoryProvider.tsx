@@ -98,7 +98,7 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
     const pharmacyId = profile.pharmacyId;
 
     // Ensure subscriptions (idempotent — safe to call even if already subscribed)
-    mqttServer.subscribeToInventory(pharmacyId).catch(() => {});
+    mqttServer.subscribeToInventory(pharmacyId, (useAuthStore.getState().profile as any)?.id_agent).catch(() => {});
 
     const unsubMessage = mqttServer.onMessage((topic, rawPayload) => {
       const payload = payloadToUint8Array(rawPayload);
@@ -111,16 +111,19 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 
-        const updates = dto.medications.map(protoToMedication);
-
         useProductsStore.setState((state) => {
           const inventoryMap = new Map(state.inventory.map((m) => [m.barCode, m]));
-          updates.forEach((med) => {
-            const existing = inventoryMap.get(med.barCode);
-            inventoryMap.set(med.barCode, {
+          dto.medications.forEach((proto) => {
+            const barCode = proto.barCode || "";
+            const existing = inventoryMap.get(barCode);
+            const quantity = (typeof proto.quantity === "number" && proto.quantity > 0)
+              ? proto.quantity
+              : (typeof proto.stock === "number" && proto.stock > 0 ? proto.stock : 0);
+            const med = protoToMedication(proto);
+            inventoryMap.set(barCode, {
               ...existing,
               ...med,
-              // ponytail: MQTT defaults protobuf3 price to 0 — preserve real price
+              stock: (existing?.stock ?? 0) + quantity,
               price: med.price > 0 ? med.price : (existing?.price ?? med.price),
             });
           });
@@ -135,12 +138,22 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 
-        const items = dto.medications.map((med) => ({
-          barCode: med.barCode ?? "",
-          quantity: typeof med.quantity === "number" ? med.quantity : 1,
-        }));
+        const { recentMutations } = useProductsStore.getState();
+        const now = Date.now();
+        const items = dto.medications
+          .filter((med) => {
+            const barCode = med.barCode ?? "";
+            const lastMut = recentMutations[barCode];
+            return !lastMut || now - lastMut > 5000;
+          })
+          .map((med) => ({
+            barCode: med.barCode ?? "",
+            quantity: typeof med.quantity === "number" ? med.quantity : 1,
+          }));
 
-        useProductsStore.getState().decrementStock(items);
+        if (items.length > 0) {
+          useProductsStore.getState().decrementStock(items);
+        }
         return;
       }
     });

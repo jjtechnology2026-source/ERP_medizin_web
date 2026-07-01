@@ -27,6 +27,7 @@ class MqttServerService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private lastPharmacyId: string | undefined;
+  private lastAgentId: string | undefined;
 
   private activeSubscriptions = new Set<string>();
   private runtimeConfig: any = null;
@@ -134,7 +135,7 @@ class MqttServerService {
     return Promise.race([promise, timeout]);
   }
 
-  private connect(pharmacyId?: string): Promise<MqttClient> {
+  private connect(pharmacyId?: string, agentId?: string): Promise<MqttClient> {
     if (this.authFailed) {
       return Promise.reject(new Error("MQTT: Autenticación fallida — revisa las credenciales."));
     }
@@ -142,6 +143,7 @@ class MqttServerService {
     if (this.connecting) return this.connecting;
 
     if (pharmacyId) this.lastPharmacyId = pharmacyId;
+    if (agentId) this.lastAgentId = agentId;
 
     const isServer = typeof window === "undefined";
 
@@ -161,7 +163,7 @@ class MqttServerService {
     }
 
     const uid = Math.random().toString(36).slice(2, 8);
-    const clientId = `medizin_terminal_${pharmacyId || this.lastPharmacyId || "unknown"}_${uid}`;
+    const clientId = `medizin_terminal_${agentId || this.lastAgentId || "unknown"}_${uid}`;
 
     this.log("log", `\n>>> [MQTT:CONNECT] Conectando (${isServer ? "SERVER" : "CLIENT"}): ${finalUrl} clientId=${clientId}`);
 
@@ -254,14 +256,13 @@ class MqttServerService {
     return this.connecting;
   }
 
-  async subscribeToInventory(pharmacyId: string): Promise<void> {
+  async subscribeToInventory(pharmacyId: string, agentId?: string): Promise<void> {
     const topics = [
       MQTT_TOPICS.inventoryInsert(pharmacyId),
       MQTT_TOPICS.inventoryUpdate(pharmacyId),
       MQTT_TOPICS.inventoryRemove(pharmacyId),
     ];
-
-    const client = await this.connect(pharmacyId);
+    const client = await this.connect(pharmacyId, agentId);
     topics.forEach((t) => this.activeSubscriptions.add(t));
 
     this.log("log", `\n>>> [MQTT:SUB] Suscribiendo inventario para: ${pharmacyId}`);
@@ -283,10 +284,10 @@ class MqttServerService {
     );
   }
 
-  async subscribeToMarketplace(pharmacyId: string): Promise<void> {
+  async subscribeToMarketplace(pharmacyId: string, agentId?: string): Promise<void> {
     const topics = [MQTT_TOPICS.marketplacePharmacy(pharmacyId)];
 
-    const client = await this.connect(pharmacyId);
+    const client = await this.connect(pharmacyId, agentId);
 
     topics.forEach((t) => this.activeSubscriptions.add(t));
 
@@ -309,10 +310,10 @@ class MqttServerService {
     );
   }
 
-  async subscribe(topics: string | string[]): Promise<void> {
+  async subscribe(topics: string | string[], agentId?: string): Promise<void> {
     const topicList = Array.isArray(topics) ? topics : [topics];
 
-    const client = await this.connect();
+    const client = await this.connect(undefined, agentId);
     topicList.forEach((t) => this.activeSubscriptions.add(t));
 
     return this.withTimeout(
@@ -350,9 +351,9 @@ class MqttServerService {
     );
   }
 
-  async publish(topic: string, payload: Buffer | Uint8Array | string): Promise<boolean> {
+  async publish(topic: string, payload: Buffer | Uint8Array | string, agentId?: string): Promise<boolean> {
     try {
-      const client = await this.connect();
+      const client = await this.connect(undefined, agentId);
       const buf = Buffer.from(payload);
       this.log("log", `\n>>> [MQTT:PUB]: ${topic} (${buf.length} bytes)`);
 

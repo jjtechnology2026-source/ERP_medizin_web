@@ -19,6 +19,7 @@ interface ProductsState {
   currentMedicine: Partial<Medication> | null;
   lastPharmacyId: string | null;
   _fetchPromise: Promise<void> | null;
+  recentMutations: Record<string, number>;
 }
 
 interface ProductsActions {
@@ -54,6 +55,7 @@ export const useProductsStore = create<ProductsStore>()(
       currentMedicine: null,
       lastPharmacyId: null,
       _fetchPromise: null,
+      recentMutations: {},
 
       clearStorage: () => {
         set({
@@ -282,29 +284,33 @@ export const useProductsStore = create<ProductsStore>()(
         set({ inventory: updated });
 
         try {
-          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+          const authState = useAuthStore.getState();
+          const pharmacyId = authState.profile?.pharmacyId;
           if (pharmacyId) {
+            const agentId = (authState.profile as any)?.id_agent || (authState.profile as any)?.agentId || "web";
             const dto: any = {
-              idAgent: "web",
+              idAgent: agentId,
               idPharmacy: pharmacyId,
               medications: [{ barCode, quantity: 0 }],
             };
             const buf = DtoUpdateMedications.encode(dto).finish();
-            mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf).catch(() => {});
+            mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf, agentId).catch(() => {});
           }
         } catch (e) {}
       },
 
       decrementStock: (items) => {
-        const { inventory } = get();
+        const { inventory, recentMutations } = get();
+        const now = Date.now();
         const updated = inventory.map((med) => {
           const item = items.find((i) => i.barCode === med.barCode);
           if (item) {
+            recentMutations[med.barCode] = now;
             return { ...med, stock: Math.max(0, (med.stock ?? 0) - item.quantity) };
           }
           return med;
         });
-        set({ inventory: updated });
+        set({ inventory: updated, recentMutations: { ...recentMutations } });
       },
 
       applyInventoryUpdate: (updates) => {

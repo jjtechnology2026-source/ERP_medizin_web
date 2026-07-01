@@ -53,6 +53,7 @@ function decodeOrderContactAndItems(payload: Uint8Array): MarketplaceOrderSummar
       clientAddress: decoded.clientAddress,
       clientPhone: decoded.clientPhone,
       clientIdNumber: decoded.clientIdNumber,
+      saleType: ((decoded as any).type_sale || (decoded as any).saleType) ?? undefined,
       items: decoded.items.map((item) => ({
         name: item.barcode,
         barcode: item.barcode,
@@ -75,6 +76,7 @@ function decodeOrderDto(payload: Uint8Array): MarketplaceOrderSummary | null {
       clientAddress: decoded.client?.address || "Dirección no disponible",
       clientPhone: decoded.client?.phone,
       clientIdNumber: decoded.client?.identity || undefined,
+      saleType: ((decoded as any).type_sale || (decoded as any).saleType) ?? undefined,
       items: decoded.medicines?.map((item) => ({
         name: item.name || item.barcode || "Producto",
         barcode: item.barcode,
@@ -178,7 +180,7 @@ function normalizeIncomingOrder(payload: Uint8Array | string): MarketplaceOrderS
     clientIdNumber: parsed.clientIdNumber ?? parsed.client_id ?? parsed.client?.identity ?? parsed.client?.cedula,
     total,
     items: normalizedItems,
-    saleType: parsed.saleType ?? parsed.type_sale ?? "Marketplace",
+    saleType: parsed.saleType ?? parsed.type_sale ?? "Pickup",
     createdAt: parsed.createdAt || new Date().toISOString(),
   };
 }
@@ -236,7 +238,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       id_group: profile.id_group || "",
       name_group: profile.name_group || "",
       rif_emisor: profile.rif_emisor || "",
-    }));
+    }), (profile as any)?.id_agent);
 
     if (success) {
       setFeedback({
@@ -244,7 +246,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         title: "¡Orden Aceptada!",
         message: "La orden ha sido confirmada exitosamente en el sistema."
       });
-      removeFromQueue(id);
+      setFocusedOrderId(null);
     } else {
       setFeedback({
         type: "error",
@@ -253,7 +255,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       });
     }
     return success;
-  }, [focusedOrderId, profile, removeFromQueue]);
+  }, [focusedOrderId, profile]);
 
   /** Lógica de Rechazo */
   const rejectOrder = useCallback(async (orderId?: string, reason: string = "Cancelada por farmacia") => {
@@ -266,7 +268,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       pharmacyId: profile.pharmacyId,
       status: "Rejected",
       reason
-    }));
+    }), (profile as any)?.id_agent);
 
     if (success) {
       setFeedback({
@@ -297,8 +299,8 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       setMqttConnected(connected);
       if (connected) {
         setMqttError(null);
-        mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
-        mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
+        mqttServer.subscribeToMarketplace(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
+        mqttServer.subscribeToInventory(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
       }
     });
 
@@ -334,6 +336,18 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         // Construir orden completa y enviar al backend
         (async () => {
           try {
+            const sessionResponse = await api.get("/admin/sesiones/activa");
+            const sesionCajaId = sessionResponse.data?.data?.sesion?.id;
+            if (!sesionCajaId) {
+              console.error("[MqttOrdersProvider] No hay sesión de caja activa — orden queda en cola");
+              setFeedback({
+                type: "error",
+                title: "Sin sesión de caja",
+                message: "No hay una sesión de caja activa. Abrí una caja para procesar órdenes de marketplace.",
+              });
+              return;
+            }
+
             const inventory = useProductsStore.getState().inventory || [];
             const rate = useCurrencyStore.getState().getEffectiveRate();
 
@@ -341,7 +355,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               const full = inventory.find((p: any) => p.barCode && p.barCode === item.barcode);
               return {
                 barCode: item.barcode || "",
-                name: item.name,
+                name: full?.name || item.name || "",
                 price: full?.price ?? item.price ?? 0,
                 quantity: item.quantity,
                 brand: full?.brand || "",
@@ -367,7 +381,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               date: new Date().toISOString(),
               id: orderId,
               nameGroup: profile?.name_group || "",
-              idAgent: profile?.id || "",
+              idAgent: (profile as any)?.id_agent || (profile as any)?.agentId || profile?.id || "",
               nameAgent: profile?.name || "",
               idPharmacy: profile?.pharmacyId || "",
               idGroup: profile?.id_group || "",
@@ -382,6 +396,9 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
                 reference: "",
                 bank: ""
               }],
+              changes: [],
+              totalPaidIn: totalVES,
+              totalChangeOut: 0,
               rifEmisor: (profile as any)?.rif || "J-00000000-0",
               client: {
                 id: "",
@@ -390,15 +407,24 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
                 email: "",
                 direccion: order.clientAddress || "",
                 phone: order.clientPhone || "0000000000",
+                retencion: 0,
                 tipo_documento: (order.clientIdNumber?.match(/^[A-Za-z]/)?.[0]?.toUpperCase()) || "V",
               },
+              facturacion: null,
+              notaCredito: null,
+              notaDebito: null,
+              numeroControlInterno: null,
+              gender: "Male",
               saleStatus: "Completed",
-              saleType: "Marketplace",
+              isControlled: medications.some((m) => m.controlled),
+              saleType: order.saleType || "Pickup",
               address: order.clientAddress || "",
               observation: null,
+              delivery: null,
             };
 
-            await api.post("/admin/Orders/insertorder", [modelOrder]);
+            const url = `/admin/Orders/insertorder?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`;
+            await api.post(url, [modelOrder]);
 
             // Descontar stock local
             useProductsStore.getState().decrementStock(
@@ -417,12 +443,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               message: `La orden #${orderId.slice(-8)} fue registrada. Stock actualizado.`
             });
           } catch (e: any) {
-            console.error("[MqttOrdersProvider] Error al registrar orden:", e);
-            setFeedback({
-              type: "error",
-              title: "Error al registrar orden",
-              message: e?.response?.data?.message || e?.message || "No se pudo guardar la orden en el sistema."
-            });
+            console.error("[MqttOrdersProvider] insertorder falló", e?.response?.status, e?.response?.data);
           }
         })();
         return;
@@ -513,8 +534,8 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       }
     });
 
-    mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
-    mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
+    mqttServer.subscribeToMarketplace(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
+    mqttServer.subscribeToInventory(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
 
     return () => {
       unsubConnection();
@@ -533,7 +554,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         mqttServer.subscribe([
           MQTT_TOPICS.paymentAccepted(orderId),
           MQTT_TOPICS.acceptedDelivery(orderId),
-        ]).catch(() => {});
+        ], (profile as any)?.id_agent).catch(() => {});
       }
     });
 
