@@ -18,6 +18,7 @@ interface ProductsState {
   editMode: boolean;
   currentMedicine: Partial<Medication> | null;
   lastPharmacyId: string | null;
+  _fetchPromise: Promise<void> | null;
 }
 
 interface ProductsActions {
@@ -52,6 +53,7 @@ export const useProductsStore = create<ProductsStore>()(
       editMode: false,
       currentMedicine: null,
       lastPharmacyId: null,
+      _fetchPromise: null,
 
       clearStorage: () => {
         set({
@@ -73,9 +75,15 @@ export const useProductsStore = create<ProductsStore>()(
         }
       },
 
+      // ponytail: shared promise so concurrent fetchInventory calls share the same request
+      _fetchPromise: null as Promise<void> | null,
+
       fetchInventory: async (force = false) => {
-        const { isInitialLoad, inventory, lastPharmacyId } = get();
+        const { isInitialLoad, inventory, lastPharmacyId, _fetchPromise } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;
+
+        // ponytail: deduplicate concurrent calls
+        if (_fetchPromise) return _fetchPromise;
 
         const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
         if (!pharmacyId) {
@@ -88,63 +96,70 @@ export const useProductsStore = create<ProductsStore>()(
         if (inventory.length === 0 || pharmacyChanged) set({ isLoading: true });
         set({ error: null });
 
-        try {
-          const localInventory = pharmacyChanged ? [] : [...inventory];
+        const promise = (async () => {
+          try {
+            const localInventory = pharmacyChanged ? [] : [...inventory];
 
-          const allMeds: Medication[] = [];
-          let cursor: string | undefined;
-          let hasMore = true;
-          let retries = 0;
-          const maxRetries = 3;
+            const allMeds: Medication[] = [];
+            let cursor: string | undefined;
+            let hasMore = true;
+            let retries = 0;
+            const maxRetries = 3;
 
-          while (hasMore) {
-            const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
+            while (hasMore) {
+              const page = await productsService.getCursorInventory(pharmacyId, cursor, 200);
 
-            if (page.total > 0 && page.medications.length === 0 && retries < maxRetries) {
-              retries++;
-              continue;
+              if (page.total > 0 && page.medications.length === 0 && retries < maxRetries) {
+                retries++;
+                continue;
+              }
+              retries = 0;
+
+              allMeds.push(...page.medications);
+
+              set({
+                inventory: [...allMeds],
+                isLoading: true,
+                isInitialLoad: false,
+              });
+
+              cursor = page.next_cursor ?? undefined;
+              hasMore = page.has_more && !!page.next_cursor;
             }
-            retries = 0;
 
-            allMeds.push(...page.medications);
-
-            set({
-              inventory: [...allMeds],
-              isLoading: true,
-              isInitialLoad: false,
+            const localMap = new Map(localInventory.map(m => [m.barCode, m]));
+            const merged = allMeds.map((api: Medication) => {
+              const local = localMap.get(api.barCode);
+              if (local) {
+                localMap.delete(api.barCode);
+                return {
+                  ...api,
+                  stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
+                  quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
+                  price: (local.price ?? 0) > 0 ? local.price : api.price,
+                };
+              }
+              return api;
             });
-
-            cursor = page.next_cursor ?? undefined;
-            hasMore = page.has_more && !!page.next_cursor;
-          }
-
-          const localMap = new Map(localInventory.map(m => [m.barCode, m]));
-          const merged = allMeds.map((api: Medication) => {
-            const local = localMap.get(api.barCode);
-            if (local) {
-              localMap.delete(api.barCode);
-              return {
-                ...api,
-                stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
-                quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
-                price: (local.price ?? 0) > 0 ? local.price : api.price,
-              };
+            for (const [, local] of localMap) {
+              merged.push(local);
             }
-            return api;
-          });
-          for (const [, local] of localMap) {
-            merged.push(local);
-          }
 
-          set({ inventory: merged, isLoading: false, isInitialLoad: false, lastPharmacyId: pharmacyId });
-        } catch (e: any) {
-          if (inventory.length === 0) {
-            const msg = "Error al cargar inventario";
-            set({ error: msg, isLoading: false, isInitialLoad: false });
-          } else {
-            set({ isLoading: false });
+            set({ inventory: merged, isLoading: false, isInitialLoad: false, lastPharmacyId: pharmacyId });
+          } catch (e: any) {
+            if (inventory.length === 0) {
+              const msg = "Error al cargar inventario";
+              set({ error: msg, isLoading: false, isInitialLoad: false });
+            } else {
+              set({ isLoading: false });
+            }
+          } finally {
+            set({ _fetchPromise: null });
           }
-        }
+        })();
+
+        set({ _fetchPromise: promise });
+        return promise;
       },
 
       addToInventory: (medications: Medication[]) => {
@@ -321,6 +336,7 @@ export const useProductsStore = create<ProductsStore>()(
       partialize: (state) => ({
         inventory: state.inventory,
         lastPharmacyId: state.lastPharmacyId,
+        // _fetchPromise is intentionally excluded — runtime-only
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
