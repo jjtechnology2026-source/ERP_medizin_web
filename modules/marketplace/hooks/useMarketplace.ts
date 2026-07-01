@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useMqttOrders } from "../providers/MqttOrdersProvider";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
+import { useProductsStore } from "@/modules/products/store/products.store";
 import { Order } from "@/modules/orders/types/orders";
 
 export function useMarketplaceOrders(initialSelectedOrderId?: string) {
@@ -97,28 +98,40 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   }, [mqttConnected, refetch, refetchPending]);
 
   // Merge Redis pending orders with MQTT live queue
+  const inventory = useProductsStore((s) => s.inventory) || [];
   const allIncomingOrders = useMemo(() => {
     const mqttIds = new Set(queuedOrders.map((o: any) => o.orderId));
     const redisOnly = (pendingRedisOrders || [])
       .filter((o: any) => !mqttIds.has(o.order_id || o.orderId))
-      .map((o: any) => ({
-        _source: "redis" as const,
-        orderId: o.order_id || o.orderId,
-        clientName: o.client_info?.name || "Cliente",
-        clientAddress: o.client_info?.address || "",
-        clientPhone: o.client_info?.phone || "",
-        clientIdNumber: o.client_info?.cedula || "",
-        items: (o.medicines || []).map((m: any) => ({
-          name: m.name,
-          barcode: m.medicine_id,
-          quantity: m.quantity,
-          price: 0,
-        })),
-        createdAt: undefined,
-        saleType: "Marketplace",
-      }));
+      .map((o: any) => {
+        const items = (o.medicines || []).map((m: any) => {
+          const barcode = m.medicine_id || "";
+          let price = 0;
+          const byBarcode = inventory.find((p: any) => p.barCode && p.barCode === barcode);
+          if (byBarcode) {
+            price = Number(byBarcode.price) || 0;
+          } else {
+            const byName = inventory.find((p: any) => p.name && m.name && p.name.toLowerCase() === String(m.name).toLowerCase());
+            if (byName) price = Number(byName.price) || 0;
+          }
+          return { name: m.name, barcode, quantity: m.quantity || 0, price };
+        });
+        const total = items.reduce((acc: number, item: any) => acc + item.price * item.quantity, 0);
+        return {
+          _source: "redis" as const,
+          orderId: o.order_id || o.orderId,
+          clientName: o.client_info?.name || "Cliente",
+          clientAddress: o.client_info?.address || "",
+          clientPhone: o.client_info?.phone || "",
+          clientIdNumber: o.client_info?.cedula || "",
+          items,
+          total,
+          createdAt: undefined,
+          saleType: "Marketplace",
+        };
+      });
     return [...queuedOrders, ...redisOnly];
-  }, [queuedOrders, pendingRedisOrders]);
+  }, [queuedOrders, pendingRedisOrders, inventory]);
 
   // --- Filtrado Local Interactivo ---
   const filteredOrders = useMemo(() => {
