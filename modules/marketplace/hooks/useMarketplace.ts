@@ -102,6 +102,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
     const redisOnly = (pendingRedisOrders || [])
       .filter((o: any) => !mqttIds.has(o.order_id || o.orderId))
       .map((o: any) => ({
+        _source: "redis" as const,
         orderId: o.order_id || o.orderId,
         clientName: o.client_info?.name || "Cliente",
         clientAddress: o.client_info?.address || "",

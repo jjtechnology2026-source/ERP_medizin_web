@@ -1,0 +1,7 @@
+- generic [active]:
+  - generic [ref=e2]:
+    - img "Logo" [ref=e6]
+    - heading "Cargando sistema..." [level=3] [ref=e8]
+  - button "Open Next.js Dev Tools" [ref=e16] [cursor=pointer]:
+    - img [ref=e17]
+  - alert [ref=e20]

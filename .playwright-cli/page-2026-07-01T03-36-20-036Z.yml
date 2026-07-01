@@ -1,0 +1,202 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e7] [cursor=pointer]:
+    - img [ref=e8]
+  - alert [ref=e11]
+  - generic [ref=e12]:
+    - navigation [ref=e13]:
+      - img "Medizin" [ref=e16]
+      - generic [ref=e17]:
+        - button "Colapsar menú" [ref=e18]:
+          - img [ref=e19]
+        - generic [ref=e21]:
+          - textbox "¿Qué estás buscando?" [ref=e22]
+          - img [ref=e23]
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - generic [ref=e28]: "Tasa:"
+            - generic [ref=e29]: "623.02"
+            - generic [ref=e30]: Bs
+            - button "Sincronizar tasa oficial desde R4" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+          - generic "Facturación electrónica activada" [ref=e35]:
+            - img [ref=e36]
+            - text: Digital
+          - button "Bs" [ref=e39]:
+            - generic [ref=e40]: Bs
+        - button [ref=e43]:
+          - img [ref=e44]
+        - button "@tesisa Agente" [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]: "@tesisa"
+            - generic [ref=e50]: Agente
+          - img [ref=e53]
+    - generic [ref=e55]:
+      - complementary [ref=e57]:
+        - navigation [ref=e58]:
+          - link "Panel de control" [ref=e59] [cursor=pointer]:
+            - /url: /panel
+            - generic [ref=e60]:
+              - img [ref=e63]
+              - generic [ref=e65]: Panel de control
+          - link "Caja de ventas" [ref=e66] [cursor=pointer]:
+            - /url: /caja-ventas
+            - generic [ref=e67]:
+              - img [ref=e69]
+              - generic [ref=e71]: Caja de ventas
+          - link "Pedidos" [ref=e72] [cursor=pointer]:
+            - /url: /marketplace
+            - generic [ref=e73]:
+              - img [ref=e75]
+              - generic [ref=e77]: Pedidos
+          - link "Registro de órdenes" [ref=e78] [cursor=pointer]:
+            - /url: /registro-ordenes
+            - generic [ref=e79]:
+              - img [ref=e81]
+              - generic [ref=e83]: Registro de órdenes
+          - link "Productos en Stock" [ref=e84] [cursor=pointer]:
+            - /url: /productos
+            - generic [ref=e85]:
+              - img [ref=e87]
+              - generic [ref=e89]: Productos en Stock
+          - generic [ref=e93]: Estadísticas
+          - link "Estadísticas" [ref=e95] [cursor=pointer]:
+            - /url: /estadisticas
+            - generic [ref=e96]:
+              - img [ref=e98]
+              - generic [ref=e100]: Estadísticas
+          - generic [ref=e101] [cursor=pointer]:
+            - img [ref=e103]
+            - generic [ref=e105]: Reportes
+            - img [ref=e106]
+          - generic [ref=e111]: Configuraciones
+          - link "Configuración" [ref=e113] [cursor=pointer]:
+            - /url: /configuraciones
+            - generic [ref=e114]:
+              - img [ref=e116]
+              - generic [ref=e119]: Configuración
+          - link "Auditoría" [ref=e120] [cursor=pointer]:
+            - /url: /auditoria
+            - generic [ref=e121]:
+              - img [ref=e123]
+              - generic [ref=e125]: Auditoría
+          - generic [ref=e126] [cursor=pointer]:
+            - img [ref=e128]
+            - generic [ref=e130]: Cerrar sesión
+        - button [ref=e132]
+      - main [ref=e134]:
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - heading "Panel de control" [level=1] [ref=e138]
+            - paragraph [ref=e139]: Bienvenido de nuevo, tesisa
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - generic [ref=e142]:
+                - generic [ref=e143]:
+                  - generic [ref=e144]: Total Usuarios
+                  - heading "10" [level=3] [ref=e145]
+                - img [ref=e147]
+              - generic [ref=e149]:
+                - generic [ref=e150]: ↗ +0.0%
+                - generic [ref=e151]: vs. mes anterior
+            - generic [ref=e153]:
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - generic [ref=e156]: Total de Ordenes
+                  - heading "11" [level=3] [ref=e157]
+                - img [ref=e159]
+              - generic [ref=e161]:
+                - generic [ref=e162]: ↗ +0.0%
+                - generic [ref=e163]: vs. mes anterior
+            - generic [ref=e165]:
+              - generic [ref=e166]:
+                - generic [ref=e167]:
+                  - generic [ref=e168]: Total de Ventas
+                  - heading "Bs 387766.09" [level=3] [ref=e169]
+                - img [ref=e171]
+              - generic [ref=e173]:
+                - generic [ref=e174]: ↗ +0.0%
+                - generic [ref=e175]: vs. mes anterior
+            - generic [ref=e177]:
+              - generic [ref=e178]:
+                - generic [ref=e179]:
+                  - generic [ref=e180]: Mis Ganancias (30%)
+                  - heading "Bs 116329.83" [level=3] [ref=e181]
+                - img [ref=e183]
+              - generic [ref=e185]:
+                - generic [ref=e186]: ↗ +0.0%
+                - generic [ref=e187]: vs. mes anterior
+            - generic [ref=e189]:
+              - generic [ref=e190]:
+                - generic [ref=e191]:
+                  - generic [ref=e192]: Total Canceladas
+                  - heading "0" [level=3] [ref=e193]
+                - img [ref=e195]
+              - generic [ref=e197]:
+                - generic [ref=e198]: ↘ 0.0%
+                - generic [ref=e199]: del total
+          - generic [ref=e203]:
+            - generic [ref=e204]:
+              - img "Cuida tu Bienestar" [ref=e206]
+              - generic [ref=e208]:
+                - generic [ref=e209]: Asesoría Profesional
+                - heading "Cuida tu Bienestar" [level=2] [ref=e210]
+                - paragraph [ref=e211]: ¡Tu salud es nuestra prioridad! Recibe atención personalizada y encuentra todo lo que necesitas para el cuidado de tu familia. Aprovecha nuestras jornadas de despistaje y descuentos exclusivos en vitaminas y suplementos.
+            - generic:
+              - button [ref=e212]:
+                - img [ref=e213]
+              - button [ref=e215]:
+                - img [ref=e216]
+            - generic [ref=e218]:
+              - button [ref=e219]
+              - button [ref=e220]
+          - img "Banner publicitario" [ref=e222]
+          - generic [ref=e223]:
+            - generic [ref=e224]:
+              - generic [ref=e225]:
+                - heading "Cantidad de tipos vendidos" [level=3] [ref=e226]
+                - combobox [ref=e227]:
+                  - option "Todos los meses" [selected]
+                  - option "junio de 2026"
+              - table [ref=e229]:
+                - rowgroup [ref=e230]:
+                  - row "Tipo de Venta Cantidad Tipo de entrega" [ref=e231]:
+                    - columnheader "Tipo de Venta" [ref=e232]
+                    - columnheader "Cantidad" [ref=e233]
+                    - columnheader "Tipo de entrega" [ref=e234]
+                - rowgroup [ref=e235]:
+                  - row "Venta por Delivery 0 delivery" [ref=e236]:
+                    - cell "Venta por Delivery" [ref=e237]
+                    - cell "0" [ref=e238]
+                    - cell "delivery" [ref=e239]
+                  - row "Venta por Pick Up 0 pickup" [ref=e240]:
+                    - cell "Venta por Pick Up" [ref=e241]
+                    - cell "0" [ref=e242]
+                    - cell "pickup" [ref=e243]
+                  - row "Venta por Local 11 local" [ref=e244]:
+                    - cell "Venta por Local" [ref=e245]
+                    - cell "11" [ref=e246]
+                    - cell "local" [ref=e247]
+            - generic [ref=e248]:
+              - heading "Productos más vendidos" [level=3] [ref=e249]
+              - generic [ref=e250]:
+                - generic [ref=e252]:
+                  - generic [ref=e253]:
+                    - generic [ref=e254]: ACEITE 1LT
+                    - generic [ref=e255]: 4 ventas
+                  - generic [ref=e256]: "#1"
+                - generic [ref=e258]:
+                  - generic [ref=e259]:
+                    - generic [ref=e260]: REFRESCO 350ML
+                    - generic [ref=e261]: 3 ventas
+                  - generic [ref=e262]: "#2"
+                - generic [ref=e264]:
+                  - generic [ref=e265]:
+                    - generic [ref=e266]: SABANA DE CAMILLA
+                    - generic [ref=e267]: 2 ventas
+                  - generic [ref=e268]: "#3"
+                - generic [ref=e270]:
+                  - generic [ref=e271]:
+                    - generic [ref=e272]: Acetabiofen
+                    - generic [ref=e273]: 1 ventas
+                  - generic [ref=e274]: "#4"

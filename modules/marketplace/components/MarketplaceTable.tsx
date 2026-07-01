@@ -89,7 +89,25 @@ export default function MarketplaceTable({
                           </Tooltip>
                           <Tooltip content="Ver Detalles">
                             <button 
-                              onClick={() => onFocus?.(qOrder.orderId)}
+                              onClick={() => {
+                                if ((qOrder as any)._source === "redis") {
+                                  onView({
+                                    id: qOrder.orderId,
+                                    client: { name: qOrder.clientName, direccion: qOrder.clientAddress || "", documento: qOrder.clientIdNumber || "" },
+                                    date: qOrder.createdAt || new Date().toISOString(),
+                                    saleType: qOrder.saleType || "Marketplace",
+                                    saleStatus: "Pending",
+                                    medications: (qOrder.items || []).map((item) => ({
+                                      name: item.name,
+                                      quantity: item.quantity,
+                                      price: item.price ?? 0,
+                                    })),
+                                    totalreal: qOrder.total,
+                                  } as any);
+                                } else {
+                                  onFocus?.(qOrder.orderId);
+                                }
+                              }}
                               className="p-2.5 bg-white border border-blue-500 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                             >
                               <HiOutlineEye size={18} />

@@ -1,0 +1,116 @@
+[    1526ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1721ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1780ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1780ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1780ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1780ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1850ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    1881ms] [LOG] [Fast Refresh] done in 131ms @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    2033ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    2068ms] [LOG] [Fast Refresh] done in 136ms @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[    3735ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3000/:0
+[   58212ms] [LOG] {
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJNZWRpemluIGFkbWluaXN0cmF0aXZvIiwic3ViIjoidGVzaXNhIiwiZXhwIjoxNzgyODc3Mjc4LCJpYXQiOjE3ODI4NzY5NzgsInRpcG8iOiJ0b2tlbi1ub3JtYWwiLCJ1c2VyX2lkIjoiMDFrczZnMXByMHNrd3QxeWE0enRlODFhbjgiLCJyb2wiOlsiYWdlbnQiXX0.FnMtVyTYT6eJUNyPkMT8i30-bdF9wOa2dY3k-thenCXBLA9XCT_wGmA360-8NhMjxESQ6t1znsejGhC_VP9BZA",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJNZWRpemluIGFkbWluaXN0cmF0aXZvIiwic3ViIjoidGVzaXNhIiwiZXhwIjoxNzgyOTg0OTc4LCJpYXQiOjE3ODI4NzY5NzgsInRpcG8iOiJyZWZyZXNoIiwidXNlcl9pZCI6IjAxa3M2ZzFwcjBza3d0MXlhNHp0ZTgxYW44Iiwicm9sIjpbImFnZW50Il19.YlVQomRsTstzyHmglWaaK0jXMbGhLBYh6XZBcg3kdqnZ0W2r8-i4kM6q-6bqylHM0fBNN9iKAz3pDRytDwGnMA",
+  "usesDigitalBilling": true,
+  "usesAccountant": true,
+  "groupId": "01ks6f5cqtes4mtwtmqcyg6wn5",
+  "groupName": "tesis",
+  "email": "enzo",
+  "sanitaryRegistrationNumber": "393993",
+  "mppRegistration": "3883",
+  "birthDate": "1994-05-09",
+  "phoneNumber": "04248851255",
+  "agentId": "01ks6g1pr0skwt1ya4zte81an8",
+  "agentUsername": "tesisa",
+  "agentPassword": "",
+  "pharmacyName": "tesis",
+  "pharmacyId": "01ks6fz9yxr6eam695w78qejy8",
+  "medicines": [],
+  "orders": [],
+  "pendingOrders": [],
+  "rif": "J-37737-4",
+  "permits": [
+    "Panel de Control",
+    "Caja de ventas",
+    "Mensajes",
+    "Ordenes marketplace",
+    "Registro de ordenes",
+    "Productos en stock",
+    "Medicamentos controlados",
+    "Estadisticas",
+    "Reportes",
+    "Promociones"
+  ],
+  "role": "Agente",
+  "salary": 0,
+  "paymentScheme": "quince_y_ultimo",
+  "paymentDays": null
+} @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58334ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58335ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58335ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58335ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58337ms] [LOG] 
+>>> [MQTT:CONNECT] Conectando (CLIENT): wss://v1106ae1.ala.us-east-1.emqxsl.com:8084/mqtt clientId=medizin_terminal_01ks6fz9yxr6eam695w78qejy8_ul7hcg @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58374ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58375ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58375ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58375ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58783ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58805ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58835ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58835ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58835ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58835ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58848ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58849ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58849ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58849ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58951ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58951ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58951ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   58951ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59022ms] [LOG] 
+>>> [MQTT:CONNECT] Conectando (CLIENT): wss://v1106ae1.ala.us-east-1.emqxsl.com:8084/mqtt clientId=medizin_terminal_01ks6fz9yxr6eam695w78qejy8_g2fuld @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59094ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59094ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59094ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59095ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59097ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59098ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59098ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59098ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59107ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59107ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59107ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59107ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59129ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59129ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59129ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59130ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59289ms] [LOG] >>> [MQTT:CONNECT] Servidor Conectado y Autenticado @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59289ms] [LOG] 
+>>> [MQTT:SUB] Armando escucha para Marketplace: 01ks6fz9yxr6eam695w78qejy8 @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59290ms] [LOG] 
+>>> [MQTT:SUB] Suscribiendo inventario para: 01ks6fz9yxr6eam695w78qejy8 @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59291ms] [LOG] 
+>>> [MQTT:SUB] Armando escucha para Marketplace: 01ks6fz9yxr6eam695w78qejy8 @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59291ms] [LOG] 
+>>> [MQTT:SUB] Suscribiendo inventario para: 01ks6fz9yxr6eam695w78qejy8 @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59294ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59294ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59294ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59294ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59329ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59330ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59330ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59330ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59360ms] [LOG] >>> [MQTT:SUB_OK] Suscripción confirmada @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59362ms] [LOG] >>> [MQTT:SUB_INVENTORY_OK] Inventario suscrito @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59362ms] [LOG] >>> [MQTT:SUB_OK] Suscripción confirmada @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59362ms] [LOG] >>> [MQTT:SUB_INVENTORY_OK] Inventario suscrito @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59580ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59580ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59580ms] [LOG] [ModalWrapper] isOpen: false isVisible: false isAnimating: false @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297
+[   59580ms] [LOG] [ModalWrapper] returning null (isVisible=false) @ http://localhost:3000/_next/static/chunks/adf63_next_dist_dea78a15._.js:2297

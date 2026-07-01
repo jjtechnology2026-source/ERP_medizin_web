@@ -1,4 +1,5 @@
 export interface MarketplaceOrderSummary {
+  _source?: "mqtt" | "redis";
   orderId: string;
   clientName: string;
   clientAddress: string;

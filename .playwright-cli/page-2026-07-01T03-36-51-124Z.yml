@@ -1,0 +1,223 @@
+- generic [ref=e21]:
+  - button "Open Next.js Dev Tools" [ref=e16] [cursor=pointer]:
+    - img [ref=e17]
+  - alert [ref=e20]
+  - generic [ref=e22]:
+    - navigation [ref=e23]:
+      - img "Medizin" [ref=e26]
+      - generic [ref=e27]:
+        - button "Colapsar menú" [ref=e28]:
+          - img [ref=e29]
+        - generic [ref=e31]:
+          - textbox "¿Qué estás buscando?" [ref=e32]
+          - img [ref=e33]
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - generic [ref=e38]: "Tasa:"
+            - generic [ref=e39]: "623.02"
+            - generic [ref=e40]: Bs
+            - button "Sincronizar tasa oficial desde R4" [ref=e41] [cursor=pointer]:
+              - img [ref=e42]
+          - generic "Facturación electrónica activada" [ref=e45]:
+            - img [ref=e46]
+            - text: Digital
+          - button "Bs" [ref=e49]:
+            - generic [ref=e50]: Bs
+        - button [ref=e53]:
+          - img [ref=e54]
+        - button "@tesisa Agente" [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e59]: "@tesisa"
+            - generic [ref=e60]: Agente
+          - img [ref=e63]
+    - generic [ref=e65]:
+      - complementary [ref=e67]:
+        - navigation [ref=e68]:
+          - link "Panel de control" [ref=e69] [cursor=pointer]:
+            - /url: /panel
+            - generic [ref=e70]:
+              - img [ref=e72]
+              - generic [ref=e74]: Panel de control
+          - link "Caja de ventas" [ref=e75] [cursor=pointer]:
+            - /url: /caja-ventas
+            - generic [ref=e76]:
+              - img [ref=e78]
+              - generic [ref=e80]: Caja de ventas
+          - link "Pedidos" [ref=e81] [cursor=pointer]:
+            - /url: /marketplace
+            - generic [ref=e82]:
+              - img [ref=e85]
+              - generic [ref=e87]: Pedidos
+          - link "Registro de órdenes" [ref=e88] [cursor=pointer]:
+            - /url: /registro-ordenes
+            - generic [ref=e89]:
+              - img [ref=e91]
+              - generic [ref=e93]: Registro de órdenes
+          - link "Productos en Stock" [ref=e94] [cursor=pointer]:
+            - /url: /productos
+            - generic [ref=e95]:
+              - img [ref=e97]
+              - generic [ref=e99]: Productos en Stock
+          - generic [ref=e103]: Estadísticas
+          - link "Estadísticas" [ref=e105] [cursor=pointer]:
+            - /url: /estadisticas
+            - generic [ref=e106]:
+              - img [ref=e108]
+              - generic [ref=e110]: Estadísticas
+          - generic [ref=e111] [cursor=pointer]:
+            - img [ref=e113]
+            - generic [ref=e115]: Reportes
+            - img [ref=e116]
+          - generic [ref=e121]: Configuraciones
+          - link "Configuración" [ref=e123] [cursor=pointer]:
+            - /url: /configuraciones
+            - generic [ref=e124]:
+              - img [ref=e126]
+              - generic [ref=e129]: Configuración
+          - link "Auditoría" [ref=e130] [cursor=pointer]:
+            - /url: /auditoria
+            - generic [ref=e131]:
+              - img [ref=e133]
+              - generic [ref=e135]: Auditoría
+          - generic [ref=e136] [cursor=pointer]:
+            - img [ref=e138]
+            - generic [ref=e140]: Cerrar sesión
+        - button [ref=e142]
+      - main [ref=e144]:
+        - generic [ref=e146]:
+          - generic [ref=e147]:
+            - generic [ref=e148]:
+              - paragraph [ref=e149]: Marketplace
+              - heading "Órdenes Pendientes" [level=1] [ref=e150]
+            - button [ref=e152]:
+              - img [ref=e153]
+          - generic [ref=e155]:
+            - table [ref=e157]:
+              - rowgroup [ref=e158]:
+                - row "ID NOMBRES DIRECCIÓN FECHA TIPO DE VENTA STATUS ACCIONES" [ref=e159]:
+                  - columnheader "ID" [ref=e160]
+                  - columnheader "NOMBRES" [ref=e161]
+                  - columnheader "DIRECCIÓN" [ref=e162]
+                  - columnheader "FECHA" [ref=e163]
+                  - columnheader "TIPO DE VENTA" [ref=e164]
+                  - columnheader "STATUS" [ref=e165]
+                  - columnheader "ACCIONES" [ref=e166]
+              - rowgroup [ref=e167]:
+                - row "#4wp1s90w enzo bustillos WRRV+42V, Clarines Recién llegada Marketplace NUEVA" [ref=e168]:
+                  - cell "#4wp1s90w" [ref=e169]
+                  - cell "enzo bustillos" [ref=e170]
+                  - cell "WRRV+42V, Clarines" [ref=e171]
+                  - cell "Recién llegada" [ref=e172]
+                  - cell "Marketplace" [ref=e173]
+                  - cell "NUEVA" [ref=e174]
+                  - cell [ref=e175]:
+                    - generic [ref=e176]:
+                      - button [ref=e178]:
+                        - img [ref=e179]
+                      - button [active] [ref=e182]:
+                        - img [ref=e183]
+                      - button [ref=e187]:
+                        - img [ref=e188]
+                - row "#320nk8ma enzo bustillos WRRV+42V, Clarines Recién llegada Marketplace NUEVA" [ref=e190]:
+                  - cell "#320nk8ma" [ref=e191]
+                  - cell "enzo bustillos" [ref=e192]
+                  - cell "WRRV+42V, Clarines" [ref=e193]
+                  - cell "Recién llegada" [ref=e194]
+                  - cell "Marketplace" [ref=e195]
+                  - cell "NUEVA" [ref=e196]
+                  - cell [ref=e197]:
+                    - generic [ref=e198]:
+                      - button [ref=e200]:
+                        - img [ref=e201]
+                      - button [ref=e204]:
+                        - img [ref=e205]
+                      - button [ref=e209]:
+                        - img [ref=e210]
+                - row "#njmx24ky enzo bustillos WRRV+42V, Clarines Recién llegada Marketplace NUEVA" [ref=e212]:
+                  - cell "#njmx24ky" [ref=e213]
+                  - cell "enzo bustillos" [ref=e214]
+                  - cell "WRRV+42V, Clarines" [ref=e215]
+                  - cell "Recién llegada" [ref=e216]
+                  - cell "Marketplace" [ref=e217]
+                  - cell "NUEVA" [ref=e218]
+                  - cell [ref=e219]:
+                    - generic [ref=e220]:
+                      - button [ref=e222]:
+                        - img [ref=e223]
+                      - button [ref=e226]:
+                        - img [ref=e227]
+                      - button [ref=e231]:
+                        - img [ref=e232]
+                - row "#0kkfba90 enzo bustillos WRRV+42V, Clarines Recién llegada Marketplace NUEVA" [ref=e234]:
+                  - cell "#0kkfba90" [ref=e235]
+                  - cell "enzo bustillos" [ref=e236]
+                  - cell "WRRV+42V, Clarines" [ref=e237]
+                  - cell "Recién llegada" [ref=e238]
+                  - cell "Marketplace" [ref=e239]
+                  - cell "NUEVA" [ref=e240]
+                  - cell [ref=e241]:
+                    - generic [ref=e242]:
+                      - button [ref=e244]:
+                        - img [ref=e245]
+                      - button [ref=e248]:
+                        - img [ref=e249]
+                      - button [ref=e253]:
+                        - img [ref=e254]
+            - generic [ref=e256]:
+              - paragraph [ref=e257]: Mostrando 4 de 4 órdenes
+              - generic [ref=e258]:
+                - button [disabled] [ref=e259]:
+                  - img [ref=e260]
+                - generic [ref=e262]:
+                  - generic [ref=e263]: "1"
+                  - generic [ref=e264]: /
+                  - generic [ref=e265]: "1"
+                - button [ref=e266]:
+                  - img [ref=e267]
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - heading "Detalles de la Orden - Marketplace" [level=2] [ref=e274]
+              - button "Cerrar" [ref=e275]
+            - generic [ref=e276]:
+              - generic [ref=e277]:
+                - generic [ref=e278]:
+                  - heading "Información del Cliente" [level=3] [ref=e279]
+                  - generic [ref=e280]:
+                    - generic [ref=e281]:
+                      - generic [ref=e282]: "Cliente:"
+                      - generic [ref=e283]: enzo bustillos
+                    - generic [ref=e284]:
+                      - generic [ref=e285]: "Cédula:"
+                      - generic [ref=e286]: V30220417
+                    - generic [ref=e287]:
+                      - generic [ref=e288]: "Dirección:"
+                      - generic [ref=e289]: WRRV+42V, Clarines
+                - generic [ref=e290]:
+                  - heading "Información de la Orden" [level=3] [ref=e291]
+                  - generic [ref=e292]:
+                    - generic [ref=e293]:
+                      - generic [ref=e294]: "ID de Orden:"
+                      - generic [ref=e295]: 01kwdshmp8ewksgwn44wp1s90w
+                    - generic [ref=e296]:
+                      - generic [ref=e297]: "Tipo de entrega:"
+                      - generic [ref=e298]: Marketplace
+                    - generic [ref=e299]:
+                      - generic [ref=e300]: "Fecha:"
+                      - generic [ref=e301]: 30/6/2026, 11:36:50 p. m.
+                - generic [ref=e302]:
+                  - generic [ref=e303]: "Total de la Orden:"
+                  - generic [ref=e304]: 0.00 USD
+              - generic [ref=e305]:
+                - heading "Lista de productos:" [level=3] [ref=e306]
+                - generic [ref=e307]:
+                  - generic [ref=e308]:
+                    - generic [ref=e309]: Cant.
+                    - generic [ref=e310]: Producto
+                    - generic [ref=e311]: Precio
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: "1"
+                    - generic [ref=e315]:
+                      - generic [ref=e316]: CLORO BLANTECH 1 LT
+                      - generic [ref=e317]: "Código: N44WP1S90W"
+                    - generic [ref=e318]: 0.00 USD
