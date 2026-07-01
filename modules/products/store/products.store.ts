@@ -97,7 +97,7 @@ export const useProductsStore = create<ProductsStore>()(
 
         const promise = (async () => {
           try {
-            const localInventory = pharmacyChanged ? [] : [...inventory];
+            const localInventory = (force || isInitialLoad || pharmacyChanged) ? [] : [...inventory];
 
             const allMeds: Medication[] = [];
             let cursor: string | undefined;
@@ -133,11 +133,6 @@ export const useProductsStore = create<ProductsStore>()(
                 localMap.delete(api.barCode);
                 return {
                   ...api,
-                  stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
-                  quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
-                  price: (local.price ?? 0) > 0 ? local.price : api.price,
-                  // El cursor de farmacia devuelve vat:0 y minimum:0,
-                  // preservamos los valores locales correctos
                   vat: api.vat === 0 && (local.vat ?? 0) > 0 ? local.vat : api.vat,
                   minimum: api.minimum === 0 && (local.minimum ?? 0) > 0 ? local.minimum : api.minimum,
                 };
