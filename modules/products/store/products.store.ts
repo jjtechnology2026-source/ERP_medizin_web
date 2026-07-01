@@ -134,6 +134,10 @@ export const useProductsStore = create<ProductsStore>()(
                   stock: (local.stock ?? 0) > 0 ? local.stock : api.stock,
                   quantity: (local.quantity ?? 0) > 0 ? local.quantity : api.quantity,
                   price: (local.price ?? 0) > 0 ? local.price : api.price,
+                  // El cursor de farmacia devuelve vat:0 y minimum:0,
+                  // preservamos los valores locales correctos
+                  vat: api.vat === 0 && (local.vat ?? 0) > 0 ? local.vat : api.vat,
+                  minimum: api.minimum === 0 && (local.minimum ?? 0) > 0 ? local.minimum : api.minimum,
                 };
               }
               return api;
@@ -215,6 +219,19 @@ export const useProductsStore = create<ProductsStore>()(
             await productsService.createProduct(medicine);
           } catch (error) {
             console.error("API error while saving medicine:", error);
+            return false;
+          }
+        } else {
+          // Usamos /Medications/Create (upsert por barCode en Meilisearch)
+          // Mandamos el stock real del catálogo, no el delta
+          try {
+            await productsService.createProduct({
+              ...medicine,
+              stock: existing.stock ?? 0,
+              quantity: existing.quantity ?? 0,
+            });
+          } catch (error) {
+            console.error("API error while updating medicine:", error);
             return false;
           }
         }
