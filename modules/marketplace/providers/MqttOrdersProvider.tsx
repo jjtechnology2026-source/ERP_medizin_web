@@ -28,6 +28,8 @@ import {
   FeedbackType 
 } from "../types/mqtt-orders";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import api from "@/modules/core/api/client";
 
 const MqttOrdersContext = createContext<MqttOrdersContextValue | null>(null);
 
@@ -311,10 +313,17 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
 
     const unsubMessage = mqttServer.onMessage((topic, payload) => {
       // ── PAGO ACEPTADO: orden pagada por el cliente ──────────────────────────
-      if (topic.includes("/payment_accepted") || topic.includes("/accepted_delivery")) {
+      if (topic.includes("/payment_accepted")) {
         const orderId = topic.split("/")[1]; // order_id/{orderId}/payment_accepted
         if (!orderId) return;
 
+        const order = queuedOrdersRef.current.find((o) => o.orderId === orderId);
+        if (!order?.items?.length) {
+          setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+          return;
+        }
+
+        // Notificar
         addNotification({
           type: 'order',
           title: 'Pago confirmado',
@@ -322,34 +331,116 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
           orderId
         });
 
-        // Remover de la cola de pendientes
-        setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+        // Construir orden completa y enviar al backend
+        (async () => {
+          try {
+            const inventory = useProductsStore.getState().inventory || [];
+            const rate = useCurrencyStore.getState().getEffectiveRate();
 
-        // Descontar inventario local (como en Dart: publish remove_inventory + applyInventoryUpdate)
-        const order = queuedOrdersRef.current.find((o) => o.orderId === orderId);
-        if (order?.items?.length) {
-          const stockUpdates = order.items.map((item) => ({
-            barCode: item.barcode || "",
-            stock: 0, // Se marcará como vendido
-          })).filter((u) => u.barCode);
+            const medications = order.items!.map((item) => {
+              const full = inventory.find((p: any) => p.barCode && p.barCode === item.barcode);
+              return {
+                barCode: item.barcode || "",
+                name: item.name,
+                price: full?.price ?? item.price ?? 0,
+                quantity: item.quantity,
+                brand: full?.brand || "",
+                activeIngredient: full?.activeIngredient || "",
+                dosage: full?.dosage || "",
+                tablets: full?.tablets || "",
+                image: full?.image || "",
+                category: full?.category || "",
+                subcategory: full?.subcategory || "",
+                stock: full?.stock ?? 0,
+                description: full?.description || "",
+                controlled: full?.controlled || false,
+                vat: full?.vat ?? 16,
+                antibiotic: full?.antibiotic || false,
+                minimum: full?.minimum || 0,
+              };
+            });
 
-          if (stockUpdates.length > 0) {
+            const subtotalUSD = medications.reduce((s, m) => s + m.price * m.quantity, 0);
+            const totalVES = Math.round(subtotalUSD * rate * 100) / 100;
+
+            const modelOrder = {
+              date: new Date().toISOString(),
+              id: orderId,
+              nameGroup: profile?.name_group || "",
+              idAgent: profile?.id || "",
+              nameAgent: profile?.name || "",
+              idPharmacy: profile?.pharmacyId || "",
+              idGroup: profile?.id_group || "",
+              pharmacy: profile?.pharmacyName || "",
+              medications,
+              totalreal: subtotalUSD,
+              totalsystem: subtotalUSD,
+              rate,
+              payments: [{
+                method: "mobile",
+                amount: totalVES,
+                reference: "",
+                bank: ""
+              }],
+              rifEmisor: (profile as any)?.rif || "J-00000000-0",
+              client: {
+                id: "",
+                documento: order.clientIdNumber || "V-00000000",
+                name: order.clientName || "Cliente Marketplace",
+                email: "",
+                direccion: order.clientAddress || "",
+                phone: order.clientPhone || "0000000000",
+                tipo_documento: (order.clientIdNumber?.match(/^[A-Za-z]/)?.[0]?.toUpperCase()) || "V",
+              },
+              saleStatus: "Completed",
+              saleType: "Marketplace",
+              address: order.clientAddress || "",
+              observation: null,
+            };
+
+            await api.post("/admin/Orders/insertorder", [modelOrder]);
+
             // Descontar stock local
             useProductsStore.getState().decrementStock(
-              order.items.map((item) => ({
+              order.items!.map((item) => ({
                 barCode: item.barcode || "",
                 quantity: item.quantity,
               })).filter((u) => u.barCode)
             );
 
-          }
-        }
+            // Limpiar cola
+            setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
 
-        setFeedback({
-          type: "success",
-          title: "¡Pago Confirmado!",
-          message: `El pago de la orden #${orderId.slice(-8)} ha sido procesado. Stock actualizado.`
+            setFeedback({
+              type: "success",
+              title: "¡Pago Confirmado!",
+              message: `La orden #${orderId.slice(-8)} fue registrada. Stock actualizado.`
+            });
+          } catch (e: any) {
+            console.error("[MqttOrdersProvider] Error al registrar orden:", e);
+            setFeedback({
+              type: "error",
+              title: "Error al registrar orden",
+              message: e?.response?.data?.message || e?.message || "No se pudo guardar la orden en el sistema."
+            });
+          }
+        })();
+        return;
+      }
+
+      // ── ENTREGA ACEPTADA: solo feedback ──────────────────────────────────
+      if (topic.includes("/accepted_delivery")) {
+        const orderId = topic.split("/")[1];
+        if (!orderId) return;
+
+        addNotification({
+          type: 'order',
+          title: 'Entrega confirmada',
+          message: `La entrega de la orden #${orderId.slice(-8)} ha sido confirmada`,
+          orderId
         });
+
+        setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
         return;
       }
 
