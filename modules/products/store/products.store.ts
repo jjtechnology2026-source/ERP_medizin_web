@@ -75,9 +75,6 @@ export const useProductsStore = create<ProductsStore>()(
         }
       },
 
-      // ponytail: shared promise so concurrent fetchInventory calls share the same request
-      _fetchPromise: null as Promise<void> | null,
-
       fetchInventory: async (force = false) => {
         const { isInitialLoad, inventory, lastPharmacyId, _fetchPromise } = get();
         if (!force && !isInitialLoad && inventory.length > 0) return;

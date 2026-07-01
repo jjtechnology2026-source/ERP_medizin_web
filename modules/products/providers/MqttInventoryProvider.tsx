@@ -116,12 +116,12 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
         useProductsStore.setState((state) => {
           const inventoryMap = new Map(state.inventory.map((m) => [m.barCode, m]));
           updates.forEach((med) => {
-            const existing = inventoryMap.get(med.barCode) || {};
+            const existing = inventoryMap.get(med.barCode);
             inventoryMap.set(med.barCode, {
               ...existing,
               ...med,
               // ponytail: MQTT defaults protobuf3 price to 0 — preserve real price
-              price: med.price > 0 ? med.price : existing.price,
+              price: med.price > 0 ? med.price : (existing?.price ?? med.price),
             });
           });
           return { inventory: Array.from(inventoryMap.values()) };
