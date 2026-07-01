@@ -198,6 +198,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
   const [mqttConnected, setMqttConnected] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [feedback, setFeedback] = useState<FeedbackState>({ type: "none", title: "", message: "" });
+  const [mqttError, setMqttError] = useState<string | null>(null);
 
   const currentOrder = useMemo(() => 
     queuedOrders.find(o => o.orderId === focusedOrderId) || null, 
@@ -206,6 +207,10 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
 
   const clearFeedback = useCallback(() => {
     setFeedback({ type: "none", title: "", message: "" });
+  }, []);
+
+  const clearMqttError = useCallback(() => {
+    setMqttError(null);
   }, []);
 
   const removeFromQueue = useCallback((orderId: string) => {
@@ -289,9 +294,19 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     const unsubConnection = mqttServer.onConnectionChange((connected) => {
       setMqttConnected(connected);
       if (connected) {
+        setMqttError(null);
         mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
         mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
       }
+    });
+
+    const unsubError = mqttServer.onError((message) => {
+      setMqttError(message);
+      addNotification({
+        type: 'error',
+        title: 'Error MQTT',
+        message,
+      } as any);
     });
 
     const unsubMessage = mqttServer.onMessage((topic, payload) => {
@@ -412,6 +427,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
 
     return () => {
       unsubConnection();
+      unsubError();
       unsubMessage();
     };
   }, [profile]);
@@ -470,6 +486,8 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     secondsLeft,
     feedback,
     clearFeedback,
+    mqttError,
+    clearMqttError,
   }), [
     queuedOrders,
     currentOrder,
@@ -482,6 +500,8 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     secondsLeft,
     feedback,
     clearFeedback,
+    mqttError,
+    clearMqttError,
   ]);
 
   return (

@@ -35,4 +35,6 @@ export interface MqttOrdersContextValue {
   secondsLeft: number;
   feedback: FeedbackState;
   clearFeedback: () => void;
+  mqttError: string | null;
+  clearMqttError: () => void;
 }

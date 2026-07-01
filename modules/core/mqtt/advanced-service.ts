@@ -23,17 +23,17 @@ class MqttServerService {
   private client: MqttClient | null = null;
   private connecting: Promise<MqttClient> | null = null;
   private store = new Map<string, Record<string, unknown>>();
-  private authFailed = false; // Si las credenciales son incorrectas, paramos todo.
+  private authFailed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
+  private lastPharmacyId: string | undefined;
 
-  // Tópicos activos para re-suscripción automática en caso de caída
   private activeSubscriptions = new Set<string>();
   private runtimeConfig: any = null;
 
-  // Múltiples handlers (pub-sub)
   private connectionHandlers: Set<(connected: boolean) => void> = new Set();
   private messageHandlers: Set<(topic: string, payload: Uint8Array | string) => void> = new Set();
+  private errorHandlers: Set<(message: string) => void> = new Set();
 
   static get(): MqttServerService {
     if (!g._mqttSrv_v1) {
@@ -62,6 +62,16 @@ class MqttServerService {
     return () => this.messageHandlers.delete(handler);
   }
 
+  /** Agrega un handler de error para exponer fallos al usuario */
+  onError(handler: (message: string) => void) {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
+  }
+
+  private notifyError(message: string) {
+    this.errorHandlers.forEach((h) => { try { h(message); } catch {} });
+  }
+
   private notifyDisconnected() {
     this.connectionHandlers.forEach((h) => { try { h(false); } catch {} });
   }
@@ -82,18 +92,37 @@ class MqttServerService {
     }
   }
 
-  /** Programar re-conexión manual con backoff exponencial (máx 30s) */
+  private rapidReconnectCount = 0;
+  private rapidReconnectWindow = 0;
+
+  /** Programar re-conexión manual con backoff exponencial (máx 30s) y circuit breaker */
   private scheduleReconnect() {
     if (this.authFailed) {
       return;
     }
     this.clearReconnectTimer();
-    const delay = Math.min(3_000 * Math.pow(1.5, this.reconnectAttempts), 30_000);
+
+    const now = Date.now();
+    if (now - this.rapidReconnectWindow > 15_000) {
+      this.rapidReconnectCount = 0;
+      this.rapidReconnectWindow = now;
+    }
+    this.rapidReconnectCount++;
+
+    let delay: number;
+    if (this.rapidReconnectCount > 3) {
+      delay = 30_000;
+      this.log("warn", `>>> [MQTT:RECONNECT] Circuit breaker: ${this.rapidReconnectCount} reconexiones en ${Math.round((now - this.rapidReconnectWindow) / 1000)}s, esperando ${delay / 1000}s`);
+      this.notifyError("Problemas de conexión MQTT. Reintentando en breve...");
+    } else {
+      delay = Math.min(3_000 * Math.pow(1.5, this.reconnectAttempts), 30_000);
+    }
+
     this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.connecting = null;
       this.client = null;
-      this.connect().catch((e) => this.log("error", e.message));
+      this.connect(this.lastPharmacyId).catch((e) => this.log("error", e.message));
     }, delay);
   }
 
@@ -105,14 +134,15 @@ class MqttServerService {
     return Promise.race([promise, timeout]);
   }
 
-  private connect(): Promise<MqttClient> {
+  private connect(pharmacyId?: string): Promise<MqttClient> {
     if (this.authFailed) {
       return Promise.reject(new Error("MQTT: Autenticación fallida — revisa las credenciales."));
     }
     if (this.client?.connected) return Promise.resolve(this.client);
     if (this.connecting) return this.connecting;
 
-    // Detectar el entorno
+    if (pharmacyId) this.lastPharmacyId = pharmacyId;
+
     const isServer = typeof window === "undefined";
 
     const host = this.runtimeConfig?.EMQX_BROKER || process.env.NEXT_PUBLIC_MQTT_BROKER_HOST;
@@ -124,16 +154,21 @@ class MqttServerService {
     const finalUrl = isServer ? `mqtt://${host}:${port}` : wssUrl || `wss://${host}:${port}/mqtt`;
 
     if (!finalUrl || finalUrl.includes("undefined") || finalUrl === "mqtt://undefined:undefined") {
+      const err = "MQTT config missing (URL/Host/Port)";
       this.log("error", "[MQTT] Error: URL de conexión inválida o no configurada.");
-      return Promise.reject(new Error("MQTT config missing (URL/Host/Port)"));
+      this.notifyError(err);
+      return Promise.reject(new Error(err));
     }
 
-    this.log("log", `\n>>> [MQTT:CONNECT] Conectando (${isServer ? "SERVER" : "CLIENT"}): ${finalUrl}`);
+    const uid = Math.random().toString(36).slice(2, 8);
+    const clientId = `medizin_terminal_${pharmacyId || this.lastPharmacyId || "unknown"}_${uid}`;
+
+    this.log("log", `\n>>> [MQTT:CONNECT] Conectando (${isServer ? "SERVER" : "CLIENT"}): ${finalUrl} clientId=${clientId}`);
 
     const connectPromise = new Promise<MqttClient>((resolve, reject) => {
       const opts: IClientOptions = {
         protocolVersion: 5,
-        clientId: `medizin_terminal_${this.runtimeConfig?.pharmacyId || "unknown"}`,
+        clientId,
         clean: true,
         connectTimeout: 10_000,
         reconnectPeriod: 0,
@@ -152,6 +187,7 @@ class MqttServerService {
         this.client = c;
         this.connecting = null;
         this.reconnectAttempts = 0;
+        this.rapidReconnectCount = 0;
         this.clearReconnectTimer();
         this.log("log", ">>> [MQTT:CONNECT] Servidor Conectado y Autenticado");
         this.notifyConnected();
@@ -178,8 +214,10 @@ class MqttServerService {
           msg.includes("connection refused: 4") ||
           msg.includes("connection refused: 5")
         ) {
-            this.log("error", ">>> [MQTT:AUTH] Error de credenciales. Se detiene la reconexión automática.");
+            this.log("error", ">>> [MQTT:AUTH] Error de credenciales. Se detiene la reconexión. Reintentando en 30s...");
           this.authFailed = true;
+          this.notifyError("Error de autenticación MQTT. Reintentando en 30 segundos...");
+          setTimeout(() => this.resetAuthFailure(), 30_000);
           c.end(true);
           if (!settled) {
             settled = true;
@@ -223,7 +261,7 @@ class MqttServerService {
       MQTT_TOPICS.inventoryRemove(pharmacyId),
     ];
 
-    const client = await this.connect();
+    const client = await this.connect(pharmacyId);
     topics.forEach((t) => this.activeSubscriptions.add(t));
 
     this.log("log", `\n>>> [MQTT:SUB] Suscribiendo inventario para: ${pharmacyId}`);
@@ -248,7 +286,7 @@ class MqttServerService {
   async subscribeToMarketplace(pharmacyId: string): Promise<void> {
     const topics = [MQTT_TOPICS.marketplacePharmacy(pharmacyId)];
 
-    const client = await this.connect();
+    const client = await this.connect(pharmacyId);
 
     topics.forEach((t) => this.activeSubscriptions.add(t));
 
