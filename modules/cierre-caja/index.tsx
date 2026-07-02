@@ -16,6 +16,8 @@ import {
   HiOutlineXCircle,
 } from "react-icons/hi";
 
+
+
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago";
