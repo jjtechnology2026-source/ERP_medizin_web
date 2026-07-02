@@ -31,6 +31,14 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: getGitVersion(),
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/proxy/backend/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -7,7 +7,7 @@ const cleanToken = (t: string | undefined) =>
 // ponytail: global lock, per-user lock if concurrent-user starvation matters
 let refreshing: Promise<void> | null = null;
 
-const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL });
+const api = axios.create({ baseURL: "/api/proxy/backend" });
 
 api.interceptors.request.use(async (config) => {
   if ((config as any).skipAuthInterceptor) return config;
