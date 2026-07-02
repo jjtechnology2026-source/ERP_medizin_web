@@ -19,10 +19,15 @@ async function proxy(req: NextRequest, method: Method) {
     const targetPath = pathname.replace(/^\/api\/proxy\//, "/");
     const targetUrl = `${apiUrl}${targetPath}${search}`;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token?.accessToken) {
-      headers["Authorization"] = `Bearer ${token.accessToken}`;
+    const incomingAuth = req.headers.get("authorization");
+    if (incomingAuth) {
+      headers["Authorization"] = incomingAuth;
+    } else {
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      if (token?.accessToken) {
+        headers["Authorization"] = `Bearer ${token.accessToken}`;
+      }
     }
 
     let body: any = undefined;
