@@ -20,8 +20,11 @@ export function useChatToast() {
 }
 
 export function ChatToastProvider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [toast, setToast] = useState<ToastState>({ message: "", visible: false });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { setMounted(true); return () => { if (timer.current) clearTimeout(timer.current); }; }, []);
 
   const show = useCallback((message: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -29,12 +32,10 @@ export function ChatToastProvider({ children }: { children: React.ReactNode }) {
     timer.current = setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 4000);
   }, []);
 
-  useEffect(() => { return () => { if (timer.current) clearTimeout(timer.current); }; }, []);
-
   return (
     <ChatToastContext.Provider value={{ show }}>
       {children}
-      {typeof document !== "undefined" && createPortal(
+      {mounted && createPortal(
         <div
           className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ${
             toast.visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
