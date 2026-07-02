@@ -102,15 +102,10 @@ export class MqttBrokerService {
 
   async subscribeDefaultTopics(pharmacyId: string): Promise<void> {
     await Promise.all([
-      this.subscribe(MQTT_TOPICS.salesWildcard),
-      this.subscribe(MQTT_TOPICS.inventoryWildcard),
-      this.subscribe(MQTT_TOPICS.stockAlerts),
       this.subscribe(MQTT_TOPICS.inventoryInsert(pharmacyId)),
       this.subscribe(MQTT_TOPICS.inventoryUpdate(pharmacyId)),
       this.subscribe(MQTT_TOPICS.inventoryRemove(pharmacyId)),
       this.subscribe(MQTT_TOPICS.marketplacePharmacy(pharmacyId)),
-      this.subscribe(MQTT_TOPICS.pendingOrdersWildcard),
-      this.subscribe(MQTT_TOPICS.pendingOrdersConfirmationWildcard),
     ]);
   }
 

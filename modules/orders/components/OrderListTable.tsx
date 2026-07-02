@@ -2,11 +2,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { 
   HiOutlineEye, HiOutlineDocumentText, HiOutlinePencilAlt, 
-  HiOutlineRefresh, HiX, HiOutlineExternalLink 
+  HiOutlineRefresh, HiX, HiOutlineExternalLink,
+  HiOutlineChatAlt2
 } from "react-icons/hi";
 import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
 import NoteModal from "./NoteModal";
+import ChatModal from "./ChatModal";
 import OrderFilters from "./OrderFilters";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
@@ -60,6 +62,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteType, setNoteType] = useState<'Crédito' | 'Débito'>('Crédito');
   const [noteOrderId, setNoteOrderId] = useState<string>('');
+  const [chatOrderId, setChatOrderId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -123,16 +126,16 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
           <table className="w-full text-left relative min-w-[1000px]">
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
               <tr>
-                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles", "N. Credito"].map((h) => (
+                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles", "N. Credito", "Chat"].map((h) => (
                   <th key={h} className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
+                <tr><td colSpan={10} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
               ) : !loading && filteredOrders.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
+                <tr><td colSpan={10} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
               ) : currentOrders.map((order) => (
                 <tr key={order.id || (order as any).idOrder} className="hover:bg-blue-50/40 transition-colors group">
                   <td className="px-6 py-4 text-xs font-mono text-slate-400">{(order.id || (order as any).idOrder || "")?.slice(0, 8)}...</td>
@@ -169,6 +172,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>
                   <td className="px-6 py-4"><ActionButton onClick={() => { setNoteType('Crédito'); setNoteOrderId(order.id); setIsNoteModalOpen(true); }} icon={<HiOutlineDocumentText size={18}/>} color="emerald" /></td>
+                  <td className="px-6 py-4"><ActionButton onClick={() => setChatOrderId(order.id)} icon={<HiOutlineChatAlt2 size={18}/>} color="amber" /></td>
                 </tr>
               ))}
             </tbody>
@@ -230,6 +234,14 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
         onClose={() => setIsNoteModalOpen(false)} 
         onConfirm={() => setIsNoteModalOpen(false)} 
       />
+
+      {chatOrderId && (
+        <ChatModal
+          orderId={chatOrderId}
+          clientName={orders.find(o => o.id === chatOrderId)?.client?.name}
+          onClose={() => setChatOrderId(null)}
+        />
+      )}
     </div>
   );
 }

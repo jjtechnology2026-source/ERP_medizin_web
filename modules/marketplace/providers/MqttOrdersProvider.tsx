@@ -29,6 +29,8 @@ import {
 } from "../types/mqtt-orders";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { addChatMessage } from "@/modules/core/store/chat.store";
+import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import api from "@/modules/core/api/client";
 
 const MqttOrdersContext = createContext<MqttOrdersContextValue | null>(null);
@@ -190,6 +192,7 @@ import { useNotifications } from "@/modules/core/providers/NotificationProvider"
 export function MqttOrdersProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuthStore();
   const { addNotification } = useNotifications();
+  const chatToast = useChatToast();
   const [queuedOrders, setQueuedOrders] = useState<MarketplaceOrderSummary[]>([]);
   const queuedOrdersRef = useRef<MarketplaceOrderSummary[]>([]);
   const subscribedOrderIds = useRef<Set<string>>(new Set());
@@ -241,6 +244,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     }), (profile as any)?.id_agent);
 
     if (success) {
+      mqttServer.subscribe(MQTT_TOPICS.clientToPharmacy(id), (profile as any)?.id_agent).catch(() => {});
       setFeedback({
         type: "success",
         title: "¡Orden Aceptada!",
@@ -462,6 +466,20 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         });
 
         setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+        return;
+      }
+
+      // ── MENSAJE DE CHAT (cliente → farmacia) ─────────────────────────────
+      if (topic.endsWith("/cliente/message_pharmacy_send")) {
+        try {
+          const raw = typeof payload === "string" ? payload : new TextDecoder().decode(payload);
+          const data = JSON.parse(raw);
+          if (data.text) {
+            const orderId = topic.split("/")[1];
+            addChatMessage(orderId, { text: data.text, sender: "client", timestamp: data.timestamp || Date.now() });
+            chatToast.show(`Cliente: ${data.text.slice(0, 80)}`);
+          }
+        } catch {}
         return;
       }
 

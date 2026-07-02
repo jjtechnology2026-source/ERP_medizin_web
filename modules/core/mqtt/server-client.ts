@@ -31,7 +31,6 @@ export function connectMqtt(pharmacyId: string) {
       `pharmacy/${pharmacyId}/insert_inventory`,
       `pharmacy/${pharmacyId}/update_inventory`,
       `pharmacy/${pharmacyId}/remove_inventory`,
-      `farmacia/ventas/+`,
     ], { qos: 1 });
   });
 

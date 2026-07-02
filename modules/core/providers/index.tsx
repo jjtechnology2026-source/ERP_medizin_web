@@ -7,6 +7,7 @@ import AuthSync from "@/modules/auth/components/AuthSync";
 import { MqttOrdersProvider } from "@/modules/marketplace/providers/MqttOrdersProvider";
 import GlobalOrderNotifications from "@/modules/marketplace/components/GlobalOrderNotifications";
 import { NotificationProvider } from "./NotificationProvider";
+import { ChatToastProvider } from "./ChatToastProvider";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 function CurrencyRatePoller() {
   const fetchRate = useCurrencyStore((s) => s.fetchRate);
@@ -43,11 +44,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         {/* AuthSync vive dentro del modulo auth y se encarga del store */}
         <AuthSync />
         <NotificationProvider>
+          <ChatToastProvider>
           <MqttOrdersProvider>
             <GlobalOrderNotifications />
             <CurrencyRatePoller />
             {children}
           </MqttOrdersProvider>
+          </ChatToastProvider>
         </NotificationProvider>
       </SessionProvider>
     </QueryClientProvider>
