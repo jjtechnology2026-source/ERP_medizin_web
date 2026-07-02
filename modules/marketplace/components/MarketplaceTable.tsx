@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { HiOutlineEye, HiOutlineCheck, HiOutlineX } from "react-icons/hi";
+import { HiOutlineEye, HiOutlineCheck, HiOutlineX, HiOutlineChatAlt2 } from "react-icons/hi";
 import { Order } from "../../orders/types/orders";
 import { MarketplaceOrderService } from "../services/OrderService";
 import { MarketplaceOrderSummary } from "../types/mqtt-orders";
@@ -15,6 +15,7 @@ interface MarketplaceTableProps {
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onFocus?: (id: string) => void;
+  onChat?: (orderId: string, clientName?: string) => void;
 }
 
 export default function MarketplaceTable({ 
@@ -24,7 +25,8 @@ export default function MarketplaceTable({
   onView,
   onAccept,
   onReject,
-  onFocus
+  onFocus,
+  onChat
 }: MarketplaceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -121,6 +123,14 @@ export default function MarketplaceTable({
                               <HiOutlineX size={18} />
                             </button>
                           </Tooltip>
+                          <Tooltip content="Chat con Cliente">
+                            <button 
+                              onClick={() => onChat?.(qOrder.orderId, qOrder.clientName)}
+                              className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all active:scale-95"
+                            >
+                              <HiOutlineChatAlt2 size={18} />
+                            </button>
+                          </Tooltip>
                         </div>
                       </td>
                     </motion.tr>
@@ -175,6 +185,14 @@ export default function MarketplaceTable({
                               className="p-2.5 bg-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all active:scale-95"
                             >
                               <HiOutlineX size={18} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Chat con Cliente">
+                            <button 
+                              onClick={() => onChat?.(order.id, order.client?.name)}
+                              className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all active:scale-95"
+                            >
+                              <HiOutlineChatAlt2 size={18} />
                             </button>
                           </Tooltip>
                         </div>
