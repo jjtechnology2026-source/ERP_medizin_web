@@ -21,6 +21,7 @@ export const MQTT_TOPICS = {
     `pharmacy/${pharmacyId}/orden_id/${orderId}/negada_order`,
   paymentAccepted: (orderId: string) => `order_id/${orderId}/payment_accepted`,
   acceptedDelivery: (orderId: string) => `order_id/${orderId}/accepted_delivery`,
+  completedOrder: (orderId: string) => `order/${orderId}/completed`,
 
   // Topics de mensajería farmacia ↔ cliente
   pharmacyToClient: (orderId: string) =>

@@ -8,11 +8,10 @@ interface MarketplaceOrderModalProps {
   order: MarketplaceOrderSummary | null;
   secondsLeft: number;
   onAccept: () => void;
-  onReject: () => void;
   onClose: () => void;
 }
 
-export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, onReject, onClose }: MarketplaceOrderModalProps) {
+export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, onClose }: MarketplaceOrderModalProps) {
   if (!order) return null;
 
   // Timer color logic
@@ -142,12 +141,6 @@ export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, on
 
         {/* Footer Buttons - Fixed at bottom */}
         <div className="px-5 sm:px-10 py-4 sm:py-8 border-t border-slate-50 shrink-0 flex flex-row justify-end gap-3 sm:gap-4 bg-white">
-          <button
-            onClick={onReject}
-            className="flex-1 sm:flex-none sm:px-12 py-3 bg-[#E85C33] text-white font-black rounded-xl hover:bg-[#D44A24] transition-all active:scale-95 text-xs sm:text-sm shadow-lg shadow-rose-100"
-          >
-            Rechazar
-          </button>
           <button
             onClick={onAccept}
             className="flex-1 sm:flex-none sm:px-12 py-3 bg-[#44C08D] text-white font-black rounded-xl hover:bg-[#3AA87C] transition-all active:scale-95 text-xs sm:text-sm shadow-lg shadow-emerald-100"

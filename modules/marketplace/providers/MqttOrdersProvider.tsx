@@ -225,7 +225,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     if (focusedOrderId === orderId) setFocusedOrderId(null);
   }, [focusedOrderId]);
 
-  /** Lógica de Aceptación */
+  /** Lógica de Aceptación (desde el diálogo MQTT) */
   const acceptOrder = useCallback(async (orderId?: string) => {
     const id = orderId || focusedOrderId;
     if (!id || !profile?.pharmacyId) return false;
@@ -260,6 +260,38 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     }
     return success;
   }, [focusedOrderId, profile]);
+
+  /** Lógica de Finalización (desde la tabla) */
+  const finalizeOrder = useCallback(async (orderId?: string) => {
+    const id = orderId || focusedOrderId;
+    if (!id || !profile?.pharmacyId) return false;
+
+    const success = await mqttServer.publish(
+      MQTT_TOPICS.completedOrder(id),
+      JSON.stringify({
+        orderId: id,
+        pharmacyId: profile.pharmacyId,
+        timestamp: new Date().toISOString(),
+      }),
+      (profile as any)?.id_agent
+    );
+
+    if (success) {
+      setFeedback({
+        type: "success",
+        title: "¡Orden Finalizada!",
+        message: "La orden ha sido completada exitosamente."
+      });
+      removeFromQueue(id);
+    } else {
+      setFeedback({
+        type: "error",
+        title: "Error de Conexión",
+        message: "No se pudo notificar al servidor. Por favor, intente de nuevo."
+      });
+    }
+    return success;
+  }, [focusedOrderId, profile, removeFromQueue]);
 
   /** Lógica de Rechazo */
   const rejectOrder = useCallback(async (orderId?: string, reason: string = "Cancelada por farmacia") => {
@@ -469,6 +501,27 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         return;
       }
 
+      // ── ORDEN COMPLETADA (por otro sistema) ─────────────────────────────
+      if (topic.includes("/completed")) {
+        const orderId = topic.split("/")[1];
+        if (!orderId) return;
+
+        addNotification({
+          type: 'order',
+          title: 'Orden completada',
+          message: `La orden #${orderId.slice(-8)} ha sido completada externamente`,
+          orderId
+        });
+
+        setFeedback({
+          type: "success",
+          title: "¡Orden Completada!",
+          message: `La orden #${orderId.slice(-8)} ha sido completada.`
+        });
+        removeFromQueue(orderId);
+        return;
+      }
+
       // ── MENSAJE DE CHAT (cliente → farmacia) ─────────────────────────────
       if (topic.endsWith("/cliente/message_pharmacy_send")) {
         try {
@@ -572,6 +625,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         mqttServer.subscribe([
           MQTT_TOPICS.paymentAccepted(orderId),
           MQTT_TOPICS.acceptedDelivery(orderId),
+          MQTT_TOPICS.completedOrder(orderId),
         ], (profile as any)?.id_agent).catch(() => {});
       }
     });
@@ -582,6 +636,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         mqttServer.unsubscribe([
           MQTT_TOPICS.paymentAccepted(orderId),
           MQTT_TOPICS.acceptedDelivery(orderId),
+          MQTT_TOPICS.completedOrder(orderId),
         ]).catch(() => {});
       }
     });
@@ -609,6 +664,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     currentOrder,
     mqttConnected,
     acceptOrder,
+    finalizeOrder,
     rejectOrder,
     dismissOrder,
     focusOrder,
@@ -623,6 +679,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     currentOrder,
     mqttConnected,
     acceptOrder,
+    finalizeOrder,
     rejectOrder,
     dismissOrder,
     focusOrder,

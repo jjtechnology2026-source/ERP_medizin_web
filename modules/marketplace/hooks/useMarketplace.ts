@@ -7,7 +7,7 @@ import { Order } from "@/modules/orders/types/orders";
 
 export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   const { profile } = useAuthStore();
-  const { queuedOrders, mqttConnected, acceptOrder, rejectOrder, focusOrder } = useMqttOrders();
+  const { queuedOrders, mqttConnected, finalizeOrder, rejectOrder, focusOrder } = useMqttOrders();
 
   const [activeTab, setActiveTab] = useState<"incoming" | "completed">("incoming");
 
@@ -23,6 +23,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [initialOrderHandled, setInitialOrderHandled] = useState(false);
+  const [completedOrderIds, setCompletedOrderIds] = useState<string[]>([]);
 
   // --- API Data Fetching ---
   const pendingQueryParams = useMemo(() => {
@@ -136,6 +137,7 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   // --- Filtrado Local Interactivo ---
   const filteredOrders = useMemo(() => {
     const list = orders.filter((o) => {
+      if (completedOrderIds.includes(o.id)) return false;
       const status = (o.saleStatus || (o as any).sale_status || "") as any;
       const price = o.totalreal !== undefined ? o.totalreal : (o as any).total_real;
       const medications = o.medications || (o as any).medicines || [];
@@ -223,8 +225,9 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
 
   // --- Handlers ---
   const handleAccept = async (orderId?: string) => {
-    const published = await acceptOrder(orderId);
+    const published = await finalizeOrder(orderId);
     if (published) {
+      if (orderId) setCompletedOrderIds((prev) => [...prev, orderId]);
       refetch();
     }
   };

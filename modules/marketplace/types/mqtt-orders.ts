@@ -29,6 +29,7 @@ export interface MqttOrdersContextValue {
   currentOrder: MarketplaceOrderSummary | null;
   mqttConnected: boolean;
   acceptOrder: (orderId?: string) => Promise<boolean>;
+  finalizeOrder: (orderId?: string) => Promise<boolean>;
   rejectOrder: (orderId?: string, reason?: string) => Promise<boolean>;
   dismissOrder: () => void;
   focusOrder: (orderId: string) => void;
