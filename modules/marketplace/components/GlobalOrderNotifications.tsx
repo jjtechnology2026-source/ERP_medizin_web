@@ -47,6 +47,7 @@ export default function GlobalOrderNotifications() {
         order={currentOrder}
         secondsLeft={secondsLeft}
         onAccept={handleAccept}
+        onReject={handleReject}
         onClose={dismissOrder}
       />
 
