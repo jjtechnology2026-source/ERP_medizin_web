@@ -196,10 +196,10 @@ Portar mensajeria tiempo real entre terminales.
    - farmacia/alertas/stock
    - pharmacy/{pharmacyId}/insert_inventory
    - pharmacy/{pharmacyId}/update_inventory
-   - pharmacy/{pharmacyId}/remove_inventory
+   - pharmacy/{pharmacyId}/decrease_inventory
 4. Implementar publicacion JSON de ventas y alertas.
 5. Implementar publicacion y recepcion protobuf de inventario.
-6. Corregir la ambiguedad remove_inventory antes de producir el modulo final.
+6. Corregir la ambiguedad decrease_inventory antes de producir el modulo final.
 
 ## Criterio de salida
 
@@ -223,7 +223,7 @@ Portar la recepcion de ordenes marketplace y su ciclo de aceptacion.
 8. Al recibir pago aceptado:
    - completar orden
    - descontar inventario
-   - publicar remove_inventory
+   - publicar decrease_inventory
 9. Implementar accept_order y negada_order.
 
 ## Criterio de salida

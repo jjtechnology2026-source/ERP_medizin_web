@@ -10,7 +10,7 @@
  * Topics watched (per Dart app documentation):
  *   - pharmacy/{pharmacyId}/insert_inventory  → add/upsert medications
  *   - pharmacy/{pharmacyId}/update_inventory  → update medications
- *   - pharmacy/{pharmacyId}/remove_inventory  → reduce stock after sale
+ *   - pharmacy/{pharmacyId}/decrease_inventory  → reduce stock after sale
  *
  * Payload format:
  *   Protobuf: DtoUpdateMedications { idAgent, idPharmacy, medications: MedicationProto[] }
@@ -134,7 +134,7 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
 
       // ── REMOVE: reduce stock after a sale ────────────────────────────────
       // quantity = unidades vendidas, se descuenta del stock actual
-      if (topic === MQTT_TOPICS.inventoryRemove(pharmacyId)) {
+      if (topic === MQTT_TOPICS.inventoryDecrease(pharmacyId)) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 

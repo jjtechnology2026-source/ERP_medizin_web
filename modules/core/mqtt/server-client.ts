@@ -30,7 +30,7 @@ export function connectMqtt(pharmacyId: string) {
     client?.subscribe([
       `pharmacy/${pharmacyId}/insert_inventory`,
       `pharmacy/${pharmacyId}/update_inventory`,
-      `pharmacy/${pharmacyId}/remove_inventory`,
+      `pharmacy/${pharmacyId}/decrease_inventory`,
     ], { qos: 1 });
   });
 

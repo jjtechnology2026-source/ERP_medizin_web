@@ -104,7 +104,7 @@ export class MqttBrokerService {
     await Promise.all([
       this.subscribe(MQTT_TOPICS.inventoryInsert(pharmacyId)),
       this.subscribe(MQTT_TOPICS.inventoryUpdate(pharmacyId)),
-      this.subscribe(MQTT_TOPICS.inventoryRemove(pharmacyId)),
+      this.subscribe(MQTT_TOPICS.inventoryDecrease(pharmacyId)),
       this.subscribe(MQTT_TOPICS.marketplacePharmacy(pharmacyId)),
     ]);
   }

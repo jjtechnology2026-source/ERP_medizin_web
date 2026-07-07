@@ -1,7 +1,7 @@
 export const MQTT_TOPICS = {
   inventoryInsert: (pharmacyId: string) => `pharmacy/${pharmacyId}/insert_inventory`,
   inventoryUpdate: (pharmacyId: string) => `pharmacy/${pharmacyId}/update_inventory`,
-  inventoryRemove: (pharmacyId: string) => `pharmacy/${pharmacyId}/remove_inventory`,
+  inventoryDecrease: (pharmacyId: string) => `pharmacy/${pharmacyId}/decrease_inventory`,
   marketplacePharmacy: (pharmacyId: string) => `pharmacy/${pharmacyId}`,
 
   // Topics de cliente para marketplace

@@ -77,31 +77,6 @@ export const productsService = {
     return cleanImg(medication);
   },
 
-  async upsertProducts(medications: Partial<Medication>[]): Promise<void> {
-    const payload = medications.map((medication) => ({
-      brand: medication.brand || "",
-      activeIngredient: medication.activeIngredient || "",
-      dosage: medication.dosage || "",
-      tablets: medication.tablets || "",
-      barCode: medication.barCode || "",
-      name: medication.name || "",
-      image: medication.image && typeof medication.image === "string" ? medication.image : "",
-      category: medication.category || "",
-      subcategory: medication.subcategory || "",
-      price: Number(medication.price) || 0,
-      quantity: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
-      stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
-      description: medication.description || "",
-      controlled: Boolean(medication.controlled),
-      vat: Math.round(Number(medication.vat)) || 0,
-      antibiotic: Boolean(medication.antibiotic),
-      minimum: Math.round(Number(medication.minimum)) || 0,
-      detalle: (medication as any).detalle || "",
-    }));
-
-    await api.post("/admin/Medications/upsert", payload);
-  },
-
   async uploadImage(image: { name: string; data: number[] }): Promise<unknown> {
     const { data } = await api.post("/admin/MedicationImage/Upload", image);
     return data;

@@ -260,7 +260,7 @@ class MqttServerService {
     const topics = [
       MQTT_TOPICS.inventoryInsert(pharmacyId),
       MQTT_TOPICS.inventoryUpdate(pharmacyId),
-      MQTT_TOPICS.inventoryRemove(pharmacyId),
+      MQTT_TOPICS.inventoryDecrease(pharmacyId),
     ];
     const client = await this.connect(pharmacyId, agentId);
     topics.forEach((t) => this.activeSubscriptions.add(t));

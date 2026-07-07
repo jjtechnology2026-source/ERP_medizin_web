@@ -295,7 +295,7 @@ export const useProductsStore = create<ProductsStore>()(
               medications: [{ barCode, quantity: 0 }],
             };
             const buf = DtoUpdateMedications.encode(dto).finish();
-            mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf, agentId).catch(() => {});
+            mqttServer.publish(MQTT_TOPICS.inventoryDecrease(pharmacyId), buf, agentId).catch(() => {});
           }
         } catch (e) {}
       },
