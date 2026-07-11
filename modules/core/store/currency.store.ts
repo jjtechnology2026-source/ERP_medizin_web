@@ -2,9 +2,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import axios from "axios";
 
+type RateSource = "api" | "manual";
+
 interface CurrencyState {
   isDollar: boolean;
   rate: number;
+  manualRate: number;
+  rateSource: RateSource;
   initialized: boolean;
   isLoading: boolean;
   error: string | null;
@@ -14,6 +18,8 @@ interface CurrencyActions {
   toggleCurrency: () => void;
   setCurrency: (val: boolean) => void;
   fetchRate: () => Promise<void>;
+  setManualRate: (rate: number) => void;
+  setRateSource: (source: RateSource) => void;
   getEffectiveRate: () => number;
 }
 
@@ -24,6 +30,8 @@ export const useCurrencyStore = create<CurrencyStore>()(
     (set, get) => ({
       isDollar: false,
       rate: 36.5,
+      manualRate: 0,
+      rateSource: "api",
       initialized: false,
       isLoading: false,
       error: null,
@@ -31,6 +39,10 @@ export const useCurrencyStore = create<CurrencyStore>()(
       toggleCurrency: () => set((s) => ({ isDollar: !s.isDollar })),
 
       setCurrency: (val: boolean) => set({ isDollar: val }),
+
+      setManualRate: (manualRate: number) => set({ manualRate }),
+
+      setRateSource: (rateSource: RateSource) => set({ rateSource }),
 
       fetchRate: async () => {
         set({ isLoading: true, error: null });
@@ -57,13 +69,19 @@ export const useCurrencyStore = create<CurrencyStore>()(
       },
 
       getEffectiveRate: () => {
-        const { rate } = get();
+        const { rate, manualRate, rateSource } = get();
+        if (rateSource === "manual" && manualRate > 0) return manualRate;
         return rate > 0 ? rate : 36.5;
       },
     }),
     {
       name: "currency-storage",
-      partialize: (state) => ({ isDollar: state.isDollar, rate: state.rate }),
+      partialize: (state) => ({
+        isDollar: state.isDollar,
+        rate: state.rate,
+        manualRate: state.manualRate,
+        rateSource: state.rateSource,
+      }),
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error) return;

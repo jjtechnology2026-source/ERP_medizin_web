@@ -22,6 +22,33 @@ api.interceptors.request.use(async (config) => {
   const token = session?.accessToken;
   if (token) config.headers.Authorization = `Bearer ${cleanToken(token)}`;
 
+  // ponytail: convert every request to POST /api/proxy with body
+  // avoids the broken catch-all [...path] route under Turbopack
+  if (!(config as any).skipProxyInterceptor) {
+    const originalUrl = config.url || "";
+    const originalMethod = (config.method || "get").toUpperCase();
+    const originalData = config.data;
+    const originalParams = config.params;
+
+    const body: Record<string, any> = {
+      url: originalUrl,
+      method: originalMethod,
+    };
+    if (originalData !== undefined && originalData !== null) {
+      body.data = originalData;
+    }
+    if (originalParams !== undefined && originalParams !== null) {
+      body.params = originalParams;
+    }
+
+    config.baseURL = "";
+    config.url = "/api/proxy";
+    config.method = "post";
+    config.data = body;
+    config.params = {};
+    (config as any).skipProxyInterceptor = true;
+  }
+
   return config;
 }, (err) => Promise.reject(err));
 
