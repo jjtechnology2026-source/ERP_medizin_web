@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
-import { execSync } from "child_process";
+import { readFileSync } from "fs";
 
-function getGitVersion(): string {
+function getAppVersion(): string {
   try {
-    const count = execSync("git rev-list --count HEAD", { encoding: "utf8" }).trim();
-    return `1.0.${count}`;
+    const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
+    return pkg.version;
   } catch {
     return "1.0.0";
   }
@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
   },
   output: "standalone",
   env: {
-    NEXT_PUBLIC_APP_VERSION: getGitVersion(),
+    NEXT_PUBLIC_APP_VERSION: getAppVersion(),
   },
 };
 
