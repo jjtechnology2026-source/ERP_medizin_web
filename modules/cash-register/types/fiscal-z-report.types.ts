@@ -114,3 +114,20 @@ export interface ZReportResult {
   rawPayloadJson: string | null;
   details: string | null;
 }
+
+export interface ZReportListItem {
+  id: string;
+  pharmacyId: string;
+  fiscalDate: string;
+  zNumber: number | null;
+  totalSales: number | null;
+  invoiceCount: number | null;
+  sucursal: string | null;
+}
+
+export interface ZReportListResult {
+  success: boolean;
+  statusCode: number;
+  message: string;
+  reports: ZReportListItem[];
+}

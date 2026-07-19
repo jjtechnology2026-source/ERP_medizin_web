@@ -10,6 +10,8 @@ import type {
   ZReportCashRegister,
   ZReportAmount,
   ZReportSession,
+  ZReportListItem,
+  ZReportListResult,
 } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 function readString(val: unknown): string {
@@ -251,6 +253,44 @@ export const fiscalZReportService = {
         report: null,
         rawPayloadJson: null,
         details,
+      };
+    }
+  },
+
+  async fetchZReportList(params: {
+    idPharmacy: string;
+    fechaDesde?: string;
+    fechaHasta?: string;
+  }): Promise<ZReportListResult> {
+    try {
+      const queryParams: Record<string, string> = {
+        id_pharmacy: params.idPharmacy.trim(),
+      };
+      if (params.fechaDesde?.trim()) queryParams["fecha_desde"] = params.fechaDesde.trim();
+      if (params.fechaHasta?.trim()) queryParams["fecha_hasta"] = params.fechaHasta.trim();
+
+      const response = await api.get("/admin/Facturacion/reportes_z", {
+        params: queryParams,
+      });
+
+      const data = Array.isArray(response.data) ? response.data : [];
+      const reports: ZReportListItem[] = data.map((item: any) => ({
+        id: item.id || "",
+        pharmacyId: item.pharmacy_id || item.pharmacyId || "",
+        fiscalDate: item.fiscal_date || item.fiscalDate || "",
+        zNumber: item.z_number ?? item.zNumber ?? null,
+        totalSales: item.total_sales ?? item.totalSales ?? null,
+        invoiceCount: item.invoice_count ?? item.invoiceCount ?? null,
+        sucursal: item.sucursal ?? null,
+      }));
+
+      return { success: true, statusCode: response.status, message: "OK", reports };
+    } catch (e: any) {
+      return {
+        success: false,
+        statusCode: e.response?.status || 0,
+        message: e.message || "No se pudo obtener el listado de reportes Z",
+        reports: [],
       };
     }
   },
