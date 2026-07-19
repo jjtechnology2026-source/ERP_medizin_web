@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { 
-  HiOutlineEye, HiOutlineDocumentText, HiOutlineReceiptRefund,
+  HiOutlineEye, HiOutlineDocumentText,
   HiOutlineRefresh, HiX, HiOutlineExternalLink 
 } from "react-icons/hi";
 import { Order } from "../types/orders";
@@ -82,7 +82,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   const [fiscalNoteOrder, setFiscalNoteOrder] = useState<Order | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
-  const colSpan = usesDigitalBilling ? 10 : 8;
+  const colSpan = usesDigitalBilling ? 9 : 8;
 
   // 1. Ordernar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
@@ -145,7 +145,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
               <tr>
                 {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles",
-                  ...(usesDigitalBilling ? ["N. Credito", "N. Debito"] : [])].map((h) => (
+                  ...(usesDigitalBilling ? ["N. Credito"] : [])].map((h) => (
                   <th key={h} className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
@@ -198,16 +198,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                       hasNote={!!order.notaCredito}
                       icon={<HiOutlineDocumentText size={18} />}
                       color="emerald"
-                      onView={() => setSelectedOrder(order)}
-                      onEmit={() => setFiscalNoteOrder(order)}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <NoteActionButton
-                      order={order}
-                      hasNote={!!order.notaDebito}
-                      icon={<HiOutlineReceiptRefund size={18} />}
-                      color="amber"
                       onView={() => setSelectedOrder(order)}
                       onEmit={() => setFiscalNoteOrder(order)}
                     />
