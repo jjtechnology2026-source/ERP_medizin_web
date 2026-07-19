@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { HiOutlineExternalLink, HiOutlineDocumentReport } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
@@ -69,10 +69,8 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
 
   const handleClose = () => {
     setIsOpen(false);
-    setTimeout(() => {
-      setVisibleOrder(null);
-      onClose();
-    }, 330);
+    setVisibleOrder(null);
+    onClose();
   };
 
   if (!visibleOrder) return null;
@@ -104,23 +102,9 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               <DetailItem label="Fecha y hora de la orden" value={new Date(visibleOrder.date).toLocaleString('es-VE')} />
               <div className="flex flex-col col-span-2">
                 <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter mb-0.5">Tipo de pago</span>
-                {visibleOrder.payments && visibleOrder.payments.length > 0 ? (
+                {visibleOrder.payments?.length ? (
                   <div className="flex flex-col gap-1">
-                    {visibleOrder.payments.map((p: any, i: number) => {
-                      const method = p?.method;
-                      const rawAmount = p?.amount ?? 0;
-                      if (!method) return null;
-                      const label = PAYMENT_LABELS[method] || method;
-                      const isUsd = method === "dollars" || p?.currency === "USD";
-                      const orderRate = visibleOrder.rate || rate;
-                      const usdAmount = isUsd ? rawAmount : rawAmount / Math.max(orderRate, 1);
-                      const displayAmount = `$ ${Number(usdAmount).toFixed(2)}`;
-                      return (
-                        <span key={i} className="text-sm font-medium text-slate-600 leading-tight">
-                          {label}: {displayAmount}
-                        </span>
-                      );
-                    })}
+                    {renderPayments(visibleOrder.payments, visibleOrder.rate || rate)}
                   </div>
                 ) : (
                   <span className="text-sm font-medium text-slate-400 leading-tight">—</span>
@@ -182,7 +166,10 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               </div>
 
               {fiscalNotesLoading && (
-                <p className="text-xs text-slate-400">Cargando notas fiscales...</p>
+                <div className="space-y-3">
+                  <NoteCardSkeleton />
+                  <NoteCardSkeleton />
+                </div>
               )}
 
               {!fiscalNotesLoading && fiscalNotesNC.length + fiscalNotesND.length === 0 && (
@@ -261,6 +248,42 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     </ModalWrapper>
   );
 }
+
+function renderPayments(payments: any[], rate: number) {
+  return payments.map((p: any, i: number) => {
+    const method = p?.method;
+    const rawAmount = p?.amount ?? 0;
+    if (!method) return null;
+    const label = PAYMENT_LABELS[method] || method;
+    const isUsd = method === "dollars" || p?.currency === "USD";
+    const usdAmount = isUsd ? rawAmount : rawAmount / Math.max(rate, 1);
+    const displayAmount = `$ ${Number(usdAmount).toFixed(2)}`;
+    return (
+      <span key={i} className="text-sm font-medium text-slate-600 leading-tight">
+        {label}: {displayAmount}
+      </span>
+    );
+  });
+}
+
+const NoteCardSkeleton = () => (
+  <div className="bg-white rounded-2xl p-4 border border-slate-200 animate-pulse">
+    <div className="flex justify-between items-start mb-3">
+      <div className="h-3 w-24 bg-slate-200 rounded" />
+      <div className="h-4 w-7 bg-slate-200 rounded-full" />
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <div className="h-3 w-16 bg-slate-200 rounded mb-1" />
+      <div className="h-3 w-16 bg-slate-200 rounded mb-1" />
+      <div className="h-4 w-20 bg-slate-200 rounded" />
+      <div className="h-4 w-20 bg-slate-200 rounded" />
+      <div className="h-3 w-14 bg-slate-200 rounded mb-1" />
+      <div className="h-3 w-14 bg-slate-200 rounded mb-1" />
+      <div className="h-4 w-16 bg-slate-200 rounded" />
+      <div className="h-4 w-24 bg-slate-200 rounded" />
+    </div>
+  </div>
+);
 
 const NoteCard = ({ note, type, onClick }: { note: FiscalNoteDetail; type: "NC" | "ND"; onClick: () => void }) => (
   <div
