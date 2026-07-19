@@ -2,9 +2,12 @@
 import { useState } from "react";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import InvoiceDetailDialog from "@/modules/cash-register/components/InvoiceDetailDialog";
+import type { CashierInvoice } from "@/modules/cash-register/types/cashier.types";
 
 export default function RecentInvoicesCard() {
   const { sessionInvoices, activeSession } = useCashierWorkflowStore();
+  const [selectedInvoice, setSelectedInvoice] = useState<CashierInvoice | null>(null);
 
   const profile = useAuthStore((s) => s.profile);
   const currentUser = profile?.name || "Sistema";
@@ -95,7 +98,7 @@ export default function RecentInvoicesCard() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {currentInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50/40 transition-colors">
+                <tr key={inv.id} onClick={() => setSelectedInvoice(inv)} className="hover:bg-slate-50/40 transition-colors cursor-pointer">
                   <td className="py-3 pl-1">
                     <span className="text-xs font-black text-slate-700 font-mono tracking-tight">
                       {inv.controlNumber}
@@ -135,6 +138,10 @@ export default function RecentInvoicesCard() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {selectedInvoice && (
+        <InvoiceDetailDialog invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
       )}
 
       {/* Controles de Paginación */}
