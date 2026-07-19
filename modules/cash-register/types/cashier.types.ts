@@ -64,6 +64,7 @@ export interface CashierInvoiceDetail {
   clientDocType: string;
   clientDoc: string;
   baseImponibleVes: number;
+  totalExentoVes: number;
   ivaPorcentaje: number;
   ivaMontoVes: number;
   igtfMontoVes: number | null;

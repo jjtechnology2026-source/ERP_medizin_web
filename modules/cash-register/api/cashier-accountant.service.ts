@@ -114,6 +114,7 @@ function parseInvoiceDetail(raw: any): CashierInvoiceDetail {
     clientDocType: f.cliente_tipo_documento ?? f.clientDocType ?? "",
     clientDoc: f.cliente_documento ?? f.clientDoc ?? "",
     baseImponibleVes: Number(f.base_imponible_ves ?? f.baseImponibleVes ?? 0),
+    totalExentoVes: Number(f.total_exento_ves ?? 0),
     ivaPorcentaje: Number(f.iva_porcentaje ?? f.ivaPorcentaje ?? 0),
     ivaMontoVes: Number(f.iva_monto_ves ?? f.ivaMontoVes ?? 0),
     igtfMontoVes: f.igtf_monto_ves ?? f.igtfMontoVes ?? null,
