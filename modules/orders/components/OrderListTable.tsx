@@ -1,14 +1,15 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { 
-  HiOutlineEye, HiOutlineDocumentText, HiOutlinePencilAlt, 
+  HiOutlineEye, HiOutlineDocumentText, HiOutlineReceiptRefund,
   HiOutlineRefresh, HiX, HiOutlineExternalLink 
 } from "react-icons/hi";
 import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
-import NoteModal from "./NoteModal";
+import FiscalNoteDialog from "./FiscalNoteDialog";
 import OrderFilters from "./OrderFilters";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 interface OrdersPageProps {
   orders: Order[];
@@ -43,11 +44,32 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
   );
 };
 
+const NoteActionButton = ({ hasNote, icon, color, onView, onEmit }: {
+  order: Order;
+  hasNote: boolean;
+  icon: React.ReactNode;
+  color: 'blue' | 'emerald' | 'amber';
+  onView: () => void;
+  onEmit: () => void;
+}) => (
+  <div className="relative inline-flex">
+    <ActionButton
+      onClick={hasNote ? onView : onEmit}
+      icon={icon}
+      color={hasNote ? "blue" : color}
+    />
+    {hasNote && (
+      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white" />
+    )}
+  </div>
+);
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
+  const usesDigitalBilling = useAuthStore((s) => s.profile?.usesDigitalBilling) ?? false;
 
   const formatOrderTotal = (total: number) => {
     if (isDollar) {
@@ -57,11 +79,10 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
-  const [noteType, setNoteType] = useState<'Crédito' | 'Débito'>('Crédito');
-  const [noteOrderId, setNoteOrderId] = useState<string>('');
+  const [fiscalNoteOrder, setFiscalNoteOrder] = useState<Order | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const colSpan = usesDigitalBilling ? 10 : 8;
 
   // 1. Ordernar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
@@ -123,16 +144,17 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
           <table className="w-full text-left relative min-w-[1000px]">
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
               <tr>
-                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles", "N. Credito"].map((h) => (
+                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles",
+                  ...(usesDigitalBilling ? ["N. Credito", "N. Debito"] : [])].map((h) => (
                   <th key={h} className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
+                <tr><td colSpan={colSpan} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
               ) : !loading && filteredOrders.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
+                <tr><td colSpan={colSpan} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
               ) : currentOrders.map((order) => (
                 <tr key={order.id || (order as any).idOrder} className="hover:bg-blue-50/40 transition-colors group">
                   <td className="px-6 py-4 text-xs font-mono text-slate-400">{(order.id || (order as any).idOrder || "")?.slice(0, 8)}...</td>
@@ -168,7 +190,30 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                     </span>
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>
-                  <td className="px-6 py-4"><ActionButton onClick={() => { setNoteType('Crédito'); setNoteOrderId(order.id); setIsNoteModalOpen(true); }} icon={<HiOutlineDocumentText size={18}/>} color="emerald" /></td>
+                  {usesDigitalBilling && (
+                  <>
+                  <td className="px-6 py-4">
+                    <NoteActionButton
+                      order={order}
+                      hasNote={!!order.notaCredito}
+                      icon={<HiOutlineDocumentText size={18} />}
+                      color="emerald"
+                      onView={() => setSelectedOrder(order)}
+                      onEmit={() => setFiscalNoteOrder(order)}
+                    />
+                  </td>
+                  <td className="px-6 py-4">
+                    <NoteActionButton
+                      order={order}
+                      hasNote={!!order.notaDebito}
+                      icon={<HiOutlineReceiptRefund size={18} />}
+                      color="amber"
+                      onView={() => setSelectedOrder(order)}
+                      onEmit={() => setFiscalNoteOrder(order)}
+                    />
+                  </td>
+                  </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -222,14 +267,9 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
       {/* --- MODAL DETALLES --- */}
       <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
 
-      {/* --- MODAL CONFIRMACIÓN NOTAS --- */}
-      <NoteModal 
-        isOpen={isNoteModalOpen} 
-        type={noteType} 
-        orderId={noteOrderId} 
-        onClose={() => setIsNoteModalOpen(false)} 
-        onConfirm={() => setIsNoteModalOpen(false)} 
-      />
+      {fiscalNoteOrder && usesDigitalBilling && (
+        <FiscalNoteDialog order={fiscalNoteOrder} onClose={() => setFiscalNoteOrder(null)} />
+      )}
     </div>
   );
 }
