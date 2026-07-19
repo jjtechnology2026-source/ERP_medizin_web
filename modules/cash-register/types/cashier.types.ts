@@ -51,6 +51,44 @@ export interface CashierInvoiceLine {
   quantity: number;
   unitPriceVes: number;
   vatPercentage: number;
+  subtotalVes?: number;
+  productoId?: string;
+}
+
+export interface CashierInvoiceDetail {
+  id: string;
+  controlNumber: string;
+  emittedAt: string | null;
+  clientName: string;
+  clientRif: string;
+  clientDocType: string;
+  clientDoc: string;
+  baseImponibleVes: number;
+  ivaPorcentaje: number;
+  ivaMontoVes: number;
+  igtfMontoVes: number | null;
+  totalVes: number;
+  totalUsd: number;
+  exchangeRate: number | null;
+  pdfUrl: string | null;
+  observaciones: string | null;
+  retencionAplicada: number | null;
+  ivaRetenidoClienteVes: number | null;
+  ivaAPagarEmpresaVes: number | null;
+  lines: CashierInvoiceLine[];
+  transaccion: CashierPaymentTransaction | null;
+}
+
+export interface CashierPaymentTransaction {
+  id: string;
+  tipo: string;
+  metodoPago: string;
+  moneda: string;
+  montoOriginal: number;
+  montoVes: number;
+  tasaCambio: number | null;
+  descripcion: string | null;
+  fechaHora: string;
 }
 
 export interface CashierTransaction {

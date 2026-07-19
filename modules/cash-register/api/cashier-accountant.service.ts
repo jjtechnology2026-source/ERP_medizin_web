@@ -5,6 +5,7 @@ import type {
   CashierCashBox,
   CashierSession,
   CashierInvoice,
+  CashierInvoiceDetail,
   CashierTransaction,
   CreateInvoicePayload,
   CloseSessionPayload,
@@ -100,6 +101,55 @@ function parseCurrency(moneda: any): "VES" | "USD" {
     return key.toUpperCase() === "USD" ? "USD" : "VES";
   }
   return "VES";
+}
+
+function parseInvoiceDetail(raw: any): CashierInvoiceDetail {
+  const f = raw?.factura ?? raw;
+  return {
+    id: f.id ?? f._id ?? "",
+    controlNumber: f.numero_control ?? f.controlNumber ?? "",
+    emittedAt: f.fecha_emision ?? f.emittedAt ?? null,
+    clientName: f.cliente_nombre ?? f.clientName ?? "Cliente General",
+    clientRif: f.cliente_rif ?? f.clientRif ?? "V-00000000",
+    clientDocType: f.cliente_tipo_documento ?? f.clientDocType ?? "",
+    clientDoc: f.cliente_documento ?? f.clientDoc ?? "",
+    baseImponibleVes: Number(f.base_imponible_ves ?? f.baseImponibleVes ?? 0),
+    ivaPorcentaje: Number(f.iva_porcentaje ?? f.ivaPorcentaje ?? 0),
+    ivaMontoVes: Number(f.iva_monto_ves ?? f.ivaMontoVes ?? 0),
+    igtfMontoVes: f.igtf_monto_ves ?? f.igtfMontoVes ?? null,
+    totalVes: Number(f.total_ves ?? f.totalVes ?? 0),
+    totalUsd: Number(f.total_usd ?? f.totalUsd ?? 0),
+    exchangeRate: f.tasa_cambio ?? f.exchangeRate ?? null,
+    pdfUrl: f.url_pdf ?? f.pdfUrl ?? null,
+    observaciones: f.observaciones ?? null,
+    retencionAplicada: f.retencion_aplicada ?? f.retencionAplicada ?? null,
+    ivaRetenidoClienteVes: f.iva_retenido_cliente_ves ?? f.ivaRetenidoClienteVes ?? null,
+    ivaAPagarEmpresaVes: f.iva_a_pagar_empresa_ves ?? f.ivaAPagarEmpresaVes ?? null,
+    lines: Array.isArray(raw.detalles ?? raw.lines)
+      ? (raw.detalles ?? raw.lines).map((l: any) => ({
+          id: l.id ?? l._id ?? "",
+          description: l.descripcion ?? l.description ?? "",
+          quantity: Number(l.cantidad ?? l.quantity ?? 0),
+          unitPriceVes: Number(l.precio_unitario_ves ?? l.unitPriceVes ?? 0),
+          vatPercentage: Number(l.iva_porcentaje ?? l.vatPercentage ?? 0),
+          subtotalVes: Number(l.subtotal_ves ?? l.subtotalVes ?? 0),
+          productoId: l.producto_id ?? l.productoId ?? undefined,
+        }))
+      : [],
+    transaccion: raw.transaccion
+      ? {
+          id: raw.transaccion.id ?? raw.transaccion._id ?? "",
+          tipo: raw.transaccion.tipo ?? "",
+          metodoPago: raw.transaccion.metodo_pago ?? raw.transaccion.metodoPago ?? "",
+          moneda: raw.transaccion.moneda ?? "",
+          montoOriginal: Number(raw.transaccion.monto_original ?? raw.transaccion.montoOriginal ?? 0),
+          montoVes: Number(raw.transaccion.monto_ves ?? raw.transaccion.montoVes ?? 0),
+          tasaCambio: raw.transaccion.tasa_cambio ?? raw.transaccion.tasaCambio ?? null,
+          descripcion: raw.transaccion.descripcion ?? null,
+          fechaHora: raw.transaccion.fecha_hora ?? raw.transaccion.fechaHora ?? "",
+        }
+      : null,
+  };
 }
 
 function parseTransaction(raw: any): CashierTransaction {
@@ -202,6 +252,11 @@ async fetchCurrentRate(): Promise<number> {
       },
       ordenId: result?.id ?? result?.idOrder ?? "",
     };
+  },
+
+  async fetchInvoiceDetail(id: string): Promise<CashierInvoiceDetail> {
+    const { data } = await api.get(`/admin/facturas/${id}`);
+    return parseInvoiceDetail(data?.data ?? data);
   },
 
   async fetchSessionInvoices(cashBoxId?: string): Promise<CashierInvoice[]> {
