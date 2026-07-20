@@ -16,6 +16,7 @@ export interface Medication {
   vat: number;
   antibiotic: boolean;
   minimum: number;
+  discount?: number;
 }
 
 export interface Client {

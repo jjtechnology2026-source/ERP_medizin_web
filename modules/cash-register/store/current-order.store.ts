@@ -4,6 +4,8 @@ import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+const getEffectivePrice = (price: number, discount?: number) =>
+  discount ? price * (1 - discount / 100) : price;
 
 interface CurrentOrderState {
   orders: Order[];
@@ -255,7 +257,8 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     const vatByRate: Record<number, number> = {};
 
     for (const med of order.medications) {
-      const lineTotal = med.price * med.quantity;
+      const effectivePrice = med.discount ? getEffectivePrice(med.price, med.discount) : med.price;
+      const lineTotal = effectivePrice * med.quantity;
       total += lineTotal;
       const taxAmount = lineTotal * med.vat / (100 + med.vat);
       totalVat += taxAmount;
@@ -309,7 +312,10 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     });
 
     const rate = useCurrencyStore.getState().getEffectiveRate();
-    const subtotal = order.medications.reduce((s, m) => s + m.price * m.quantity, 0);
+    const subtotal = order.medications.reduce((s, m) => {
+      const ep = m.discount ? getEffectivePrice(m.price, m.discount) : m.price;
+      return s + ep * m.quantity;
+    }, 0);
     const rif = (profile as any)?.rif || (profile as any)?.rifPharmacy || "J-00000000-0";
 
     return {
@@ -321,7 +327,9 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       idPharmacy: (profile as any)?.pharmacyId || "",
       idGroup: (profile as any)?.id_group || "",
       pharmacy: (profile as any)?.pharmacyName || "",
-      medications: order.medications.map((m) => ({
+      medications: order.medications.map((m) => {
+        const ep = m.discount ? getEffectivePrice(m.price, m.discount) : m.price;
+        return {
         brand: m.brand || "",
         activeIngredient: m.activeIngredient || "",
         dosage: m.dosage || "",
@@ -331,7 +339,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         image: m.image || "",
         category: m.category || "",
         subcategory: m.subcategory || "",
-        price: m.price,
+        price: ep,
         quantity: m.quantity,
         stock: m.stock,
         description: m.description || "",
@@ -339,7 +347,9 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         vat: m.vat || 0,
         antibiotic: m.antibiotic || false,
         minimum: m.minimum || 0,
-      })),
+        discount: m.discount,
+      };
+    }),
       totalreal: subtotal,
       totalsystem: subtotal,
       rate,
