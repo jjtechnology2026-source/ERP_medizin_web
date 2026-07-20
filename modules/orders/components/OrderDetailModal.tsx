@@ -1,14 +1,9 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
-import { HiOutlineExternalLink, HiOutlineDocumentReport } from "react-icons/hi";
+import { useEffect, useState } from "react";
+import { HiOutlineExternalLink } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
-import FiscalNoteDialog from "./FiscalNoteDialog";
-import FiscalNoteDetailDialog from "./FiscalNoteDetailDialog";
-import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
-import type { FiscalNoteDetail } from "@/modules/cash-register/types/fiscal-notes.types";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -34,38 +29,15 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
   const [isOpen, setIsOpen] = useState(!!order);
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
-  const usesDigitalBilling = useAuthStore((s) => s.profile?.usesDigitalBilling) ?? false;
-
-  const [showFiscalNoteDialog, setShowFiscalNoteDialog] = useState(false);
-  const [fiscalNotesNC, setFiscalNotesNC] = useState<FiscalNoteDetail[]>([]);
-  const [fiscalNotesND, setFiscalNotesND] = useState<FiscalNoteDetail[]>([]);
-  const [fiscalNotesLoading, setFiscalNotesLoading] = useState(false);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [selectedNoteType, setSelectedNoteType] = useState<"NC" | "ND">("NC");
 
   useEffect(() => {
     if (order) {
       setVisibleOrder(order);
       setIsOpen(true);
-      if (usesDigitalBilling) loadFiscalNotes(order.id);
       return;
     }
-
     setIsOpen(false);
-    setFiscalNotesNC([]);
-    setFiscalNotesND([]);
   }, [order]);
-
-  const loadFiscalNotes = async (orderId: string) => {
-    setFiscalNotesLoading(true);
-    const [ncResult, ndResult] = await Promise.all([
-      fiscalNotesService.listNotasCredito({ order_id: orderId }),
-      fiscalNotesService.listNotasDebito({ order_id: orderId }),
-    ]);
-    setFiscalNotesNC(ncResult.items);
-    setFiscalNotesND(ndResult.items);
-    setFiscalNotesLoading(false);
-  };
 
   const handleClose = () => {
     setIsOpen(false);
@@ -145,74 +117,6 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 </button>
               </div>
             </div>
-
-            {usesDigitalBilling && (
-            <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-8 space-y-5">
-              <h4 className="font-black text-slate-900 text-xs uppercase tracking-widest">Notas Fiscales</h4>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowFiscalNoteDialog(true)}
-                  className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all"
-                >
-                  Emitir NC
-                </button>
-                <button
-                  onClick={() => setShowFiscalNoteDialog(true)}
-                  className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black transition-all"
-                >
-                  Emitir ND
-                </button>
-              </div>
-
-              {fiscalNotesLoading && (
-                <div className="space-y-3">
-                  <NoteCardSkeleton />
-                  <NoteCardSkeleton />
-                </div>
-              )}
-
-              {!fiscalNotesLoading && fiscalNotesNC.length + fiscalNotesND.length === 0 && (
-                <p className="text-xs text-slate-400">Sin notas fiscales emitidas.</p>
-              )}
-
-              {fiscalNotesNC.length > 0 && (
-                <div>
-                  <span className="text-[10px] font-black text-amber-600 uppercase tracking-wider block mb-2">
-                    Notas de Crédito ({fiscalNotesNC.length})
-                  </span>
-                  <div className="space-y-2">
-                    {fiscalNotesNC.map((note) => (
-                      <NoteCard
-                        key={note.id || note.numero_control}
-                        note={note}
-                        type="NC"
-                        onClick={() => { setSelectedNoteId(note.id!); setSelectedNoteType("NC"); }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {fiscalNotesND.length > 0 && (
-                <div>
-                  <span className="text-[10px] font-black text-red-600 uppercase tracking-wider block mb-2 mt-3">
-                    Notas de Débito ({fiscalNotesND.length})
-                  </span>
-                  <div className="space-y-2">
-                    {fiscalNotesND.map((note) => (
-                      <NoteCard
-                        key={note.id || note.numero_control}
-                        note={note}
-                        type="ND"
-                        onClick={() => { setSelectedNoteId(note.id!); setSelectedNoteType("ND"); }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            )}
           </div>
 
           {/* Columna Derecha */}
@@ -234,16 +138,7 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
             </div>
           </div>
       </div>
-      {showFiscalNoteDialog && visibleOrder && usesDigitalBilling && (
-        <FiscalNoteDialog order={visibleOrder} onClose={() => setShowFiscalNoteDialog(false)} />
-      )}
-      {selectedNoteId && usesDigitalBilling && (
-        <FiscalNoteDetailDialog
-          noteId={selectedNoteId}
-          noteType={selectedNoteType}
-          onClose={() => setSelectedNoteId(null)}
-        />
-      )}
+
     </div>
     </ModalWrapper>
   );
@@ -266,66 +161,3 @@ function renderPayments(payments: any[], rate: number) {
   });
 }
 
-const NoteCardSkeleton = () => (
-  <div className="bg-white rounded-2xl p-4 border border-slate-200 animate-pulse">
-    <div className="flex justify-between items-start mb-3">
-      <div className="h-3 w-24 bg-slate-200 rounded" />
-      <div className="h-4 w-7 bg-slate-200 rounded-full" />
-    </div>
-    <div className="grid grid-cols-2 gap-2">
-      <div className="h-3 w-16 bg-slate-200 rounded mb-1" />
-      <div className="h-3 w-16 bg-slate-200 rounded mb-1" />
-      <div className="h-4 w-20 bg-slate-200 rounded" />
-      <div className="h-4 w-20 bg-slate-200 rounded" />
-      <div className="h-3 w-14 bg-slate-200 rounded mb-1" />
-      <div className="h-3 w-14 bg-slate-200 rounded mb-1" />
-      <div className="h-4 w-16 bg-slate-200 rounded" />
-      <div className="h-4 w-24 bg-slate-200 rounded" />
-    </div>
-  </div>
-);
-
-const NoteCard = ({ note, type, onClick }: { note: FiscalNoteDetail; type: "NC" | "ND"; onClick: () => void }) => (
-  <div
-    onClick={onClick}
-    className="bg-white rounded-2xl p-4 border border-slate-200 hover:border-slate-300 cursor-pointer transition-all"
-  >
-    <div className="flex justify-between items-start mb-2">
-      <span className="text-xs font-bold text-slate-700 font-mono">{note.numero_control}</span>
-      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-        type === "NC" ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-      }`}>
-        {type}
-      </span>
-    </div>
-    <div className="grid grid-cols-2 gap-2 text-xs">
-      <div>
-        <span className="text-slate-400 block">Base imponible</span>
-        <span className="font-bold text-slate-800">Bs {note.base_imponible_ves.toFixed(2)}</span>
-      </div>
-      <div>
-        <span className="text-slate-400 block">IVA ({note.iva_porcentaje}%)</span>
-        <span className="font-bold text-slate-800">Bs {note.iva_monto_ves.toFixed(2)}</span>
-      </div>
-      <div>
-        <span className="text-slate-400 block">Total Bs</span>
-        <span className="font-bold text-emerald-600">Bs {note.total_ves.toFixed(2)}</span>
-      </div>
-      <div>
-        <span className="text-slate-400 block">Motivo</span>
-        <span className="font-bold text-slate-800 truncate">{note.motivo || "—"}</span>
-      </div>
-    </div>
-    {note.url_pdf && (
-      <a
-        href={note.url_pdf}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-blue-600 hover:underline"
-      >
-        Ver PDF <HiOutlineExternalLink size={12} />
-      </a>
-    )}
-  </div>
-);
