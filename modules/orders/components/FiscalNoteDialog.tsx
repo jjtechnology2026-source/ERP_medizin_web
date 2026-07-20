@@ -243,13 +243,7 @@ export default function FiscalNoteDialog({ order, onClose }: FiscalNoteDialogPro
               >
                 Emitir NC
               </button>
-              <button
-                onClick={() => handleEmit("ND")}
-                disabled={!motivo.trim() || !usesDigitalBilling}
-                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg disabled:opacity-50"
-              >
-                Emitir ND
-              </button>
+
             </div>
           </div>
         )}
