@@ -165,6 +165,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                   <th className="px-6 pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Cant.</th>
                   <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Descripción</th>
                   <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Precio Unit.</th>
+                  <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-12">Desc.</th>
                   <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-16">IVA</th>
                   <th className="pb-2 pt-4 pr-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Subtotal</th>
                 </tr>
@@ -189,7 +190,17 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                         )}
                       </td>
                       <td className="py-3 pr-4 text-right align-top">
-                        <span className="text-xs font-medium text-slate-500 font-mono">Bs {line.unitPriceVes.toFixed(2)}</span>
+                        {line.discount ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-slate-400 line-through">Bs {line.unitPriceVes.toFixed(2)}</span>
+                            <span className="text-xs font-semibold text-emerald-600 font-mono">Bs {(line.unitPriceVes * (1 - line.discount / 100)).toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-500 font-mono">Bs {line.unitPriceVes.toFixed(2)}</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-right align-top">
+                        <span className="text-[10px] font-semibold text-amber-600">{line.discount ? `${line.discount}%` : "-"}</span>
                       </td>
                       <td className="py-3 pr-4 text-right align-top">
                         <span className="text-[11px] font-semibold text-slate-400">{line.vatPercentage}%</span>

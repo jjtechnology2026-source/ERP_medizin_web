@@ -135,6 +135,7 @@ function parseInvoiceDetail(raw: any): CashierInvoiceDetail {
           vatPercentage: Number(l.iva_porcentaje ?? l.vatPercentage ?? 0),
           subtotalVes: Number(l.subtotal_ves ?? l.subtotalVes ?? 0),
           productoId: l.producto_id ?? l.productoId ?? undefined,
+          discount: l.discount ?? undefined,
         }))
       : [],
     transaccion: raw.transaccion

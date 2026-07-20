@@ -5,21 +5,16 @@ import {
   HiTrash,
   HiShoppingBag,
   HiDocumentText,
-  HiOutlineDocumentReport,
 } from "react-icons/hi";
 import ProductSearchDialog from "@/modules/cash-register/components/ProductSearchDialog";
 import ManualAddDialog from "@/modules/cash-register/components/ManualAddDialog";
 import PriceCheckDialog from "@/modules/cash-register/components/PriceCheckDialog";
-import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
-import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 
 export default function ActionButtons({ onCheckout }: { onCheckout: () => void }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showPriceCheck, setShowPriceCheck] = useState(false);
-  const [showZReport, setShowZReport] = useState(false);
-  const [showZHistory, setShowZHistory] = useState(false);
   const { deleteOrder, getCurrentOrder, removeMedication } = useCurrentOrderStore();
 
   const order = getCurrentOrder();
@@ -68,27 +63,11 @@ export default function ActionButtons({ onCheckout }: { onCheckout: () => void }
           <HiTrash size={15} />
           Eliminar Art.
         </button>
-        <button
-          onClick={() => setShowZReport(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1f2937] hover:bg-[#111827] text-white rounded-xl font-black text-[11px] tracking-wider shadow-xs hover:scale-105 active:scale-95 transition-all"
-        >
-          <HiOutlineDocumentReport size={15} />
-          Generar Z
-        </button>
-        <button
-          onClick={() => setShowZHistory(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#374151] hover:bg-[#1f2937] text-white rounded-xl font-black text-[11px] tracking-wider shadow-xs hover:scale-105 active:scale-95 transition-all"
-        >
-          <HiOutlineDocumentReport size={15} />
-          Historial Z
-        </button>
       </div>
 
       {showSearch && <ProductSearchDialog onClose={() => setShowSearch(false)} />}
       {showManual && <ManualAddDialog onClose={() => setShowManual(false)} />}
       {showPriceCheck && <PriceCheckDialog onClose={() => setShowPriceCheck(false)} />}
-      {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
-      {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
     </>
   );
 }

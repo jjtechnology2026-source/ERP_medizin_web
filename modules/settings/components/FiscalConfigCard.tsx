@@ -1,5 +1,7 @@
 "use client";
 import React, { useState } from "react";
+import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
+import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 
 // Datos de soporte fiscal agrupados
 const FISCAL_SUPPORT_DATA = [
@@ -26,12 +28,15 @@ const FISCAL_SUPPORT_DATA = [
 export default function FiscalConfigCard() {
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
+  const [showZReport, setShowZReport] = useState(false);
+  const [showZHistory, setShowZHistory] = useState(false);
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
   };
 
   return (
+    <>
     <div className="flex flex-col gap-8 w-full">
       {/* --- SECCIÓN SUPERIOR: CONFIGURACIÓN Y ESTADO --- */}
       <div className="grid grid-cols-1 lg:grid-cols-[2.2fr_1fr] gap-8 items-start">
@@ -98,10 +103,16 @@ export default function FiscalConfigCard() {
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <button
-                onClick={() => handleAction("Ver Historial Reporte Z")}
-                className="px-10 py-5 bg-[#0F172A] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+                onClick={() => setShowZReport(true)}
+                className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
               >
-                Ver Historial Reporte Z
+                Generar Z
+              </button>
+              <button
+                onClick={() => setShowZHistory(true)}
+                className="px-10 py-5 bg-[#374151] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+              >
+                Historial Z
               </button>
               <button
                 onClick={() => handleAction("Ver Auditoria Fiscal")}
@@ -160,5 +171,8 @@ export default function FiscalConfigCard() {
         </div>
       </div>
     </div>
+      {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
+      {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
+    </>
   );
 }

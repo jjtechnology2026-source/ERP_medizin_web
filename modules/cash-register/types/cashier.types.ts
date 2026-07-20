@@ -53,6 +53,7 @@ export interface CashierInvoiceLine {
   vatPercentage: number;
   subtotalVes?: number;
   productoId?: string;
+  discount?: number;
 }
 
 export interface CashierInvoiceDetail {

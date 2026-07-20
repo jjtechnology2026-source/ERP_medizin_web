@@ -48,8 +48,16 @@ export default function StockFeaturesForm({
     return p * (1 + selectedVat / 100);
   }, [priceWithoutVat, selectedVat, parseInput]);
 
-  const finalPriceUSD = priceWithVat;
-  const finalPriceVES = priceWithVat * rate;
+  const discountPercent = parseInput(discount);
+  const hasDiscount = discountPercent > 0;
+
+  const discountedPrice = useMemo(() => {
+    if (!hasDiscount) return priceWithVat;
+    return priceWithVat * (1 - discountPercent / 100);
+  }, [priceWithVat, discountPercent, hasDiscount]);
+
+  const finalPriceUSD = discountedPrice;
+  const finalPriceVES = discountedPrice * rate;
 
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
@@ -204,7 +212,17 @@ export default function StockFeaturesForm({
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Precio Final (con IVA)</span>
-                    <p className="text-3xl font-black text-slate-800 mt-1">{format(priceWithVat)}</p>
+                    {hasDiscount ? (
+                      <div>
+                        <p className="text-lg font-bold text-slate-400 line-through">{format(priceWithVat)}</p>
+                        <p className="text-3xl font-black text-emerald-600 mt-0.5">
+                          {format(discountedPrice)}
+                          <span className="ml-2 px-2 py-0.5 bg-emerald-100 rounded-lg text-[11px] font-black text-emerald-700">-{discountPercent}%</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-3xl font-black text-slate-800 mt-1">{format(priceWithVat)}</p>
+                    )}
                   </div>
                   <div className="flex flex-col text-xs font-bold text-slate-500 gap-1 border-t md:border-t-0 md:border-l border-blue-100 pt-3 md:pt-0 md:pl-6">
                     <span>USD: <strong className="text-blue-600 font-black">${finalPriceUSD.toFixed(2)}</strong></span>
@@ -251,8 +269,11 @@ export default function StockFeaturesForm({
                     </div>
                     <div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor total del stock</span>
-                      <p className="text-xl font-black text-slate-800 mt-1">{format(priceWithVat * (parseInput(quantity) || 0))}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">{parseInput(quantity) || 0} unidades x {format(priceWithVat)} c/u</p>
+                      <p className="text-xl font-black text-slate-800 mt-1">{format(discountedPrice * (parseInput(quantity) || 0))}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {parseInput(quantity) || 0} unidades x {format(discountedPrice)} c/u
+                        {hasDiscount && <span className="block text-emerald-600 font-bold">(con {discountPercent}% desc.)</span>}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -338,7 +359,10 @@ export default function StockFeaturesForm({
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">Precio unitario</span>
-                <span className="text-sm font-black text-blue-600">{format(priceWithVat)}</span>
+                <div className="text-right">
+                  {hasDiscount && <span className="text-[10px] font-bold text-slate-400 line-through block">{format(priceWithVat)}</span>}
+                  <span className={`text-sm font-black ${hasDiscount ? "text-emerald-600" : "text-blue-600"}`}>{format(discountedPrice)}</span>
+                </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">IVA aplicado</span>
