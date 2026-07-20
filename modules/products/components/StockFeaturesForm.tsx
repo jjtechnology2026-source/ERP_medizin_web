@@ -24,6 +24,7 @@ export default function StockFeaturesForm({
   const [selectedVat, setSelectedVat] = useState<number>(16);
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("");
+  const [discount, setDiscount] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -39,6 +40,7 @@ export default function StockFeaturesForm({
     setSelectedVat(vat);
     setQuantity(""); // ponytail: start empty — stock is added, not replaced
     setMinStock(String(currentMedicine.minimum ?? 0));
+    setDiscount(currentMedicine.discount !== undefined ? String(currentMedicine.discount) : "");
   }, [currentMedicine]);
 
   const priceWithVat = useMemo(() => {
@@ -57,6 +59,7 @@ export default function StockFeaturesForm({
     const p = parseInput(priceWithoutVat);
     const q = parseInput(quantity);
     const min = parseInput(minStock);
+    const disc = parseInput(discount);
 
     const medicine: Medication = {
       ...(currentMedicine as Medication),
@@ -64,6 +67,7 @@ export default function StockFeaturesForm({
       stock: q,
       vat: selectedVat,
       minimum: min,
+      discount: disc || undefined,
     };
 
     const success = await saveMedicine(medicine);
@@ -230,6 +234,14 @@ export default function StockFeaturesForm({
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Descuento (%)</label>
+                    <input type="text" inputMode="decimal" value={discount}
+                      onChange={(e) => setDiscount(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
                 </div>
 
                 <div className="bg-slate-50 rounded-3xl p-5 border border-slate-100 mt-4">
@@ -331,6 +343,10 @@ export default function StockFeaturesForm({
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">IVA aplicado</span>
                 <span className="text-sm font-black text-slate-800">{selectedVat}%</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
+                <span className="text-xs font-bold text-slate-400">Descuento</span>
+                <span className="text-sm font-black text-slate-800">{discount || "0"}%</span>
               </div>
             </div>
           </div>

@@ -254,16 +254,19 @@ export const useProductsStore = create<ProductsStore>()(
             const stockVal = typeof medicine.stock === "number" ? medicine.stock : 0;
             const priceVal = medicine.price ?? 0;
             const minVal = Number(medicine.minimum) || 0;
+            const discountVal = medicine.discount !== undefined ? Number(medicine.discount) : undefined;
             const changed =
               stockVal !== (existing?.stock ?? 0) ||
               priceVal !== (existing?.price ?? 0) ||
-              minVal !== (existing?.minimum ?? 0);
+              minVal !== (existing?.minimum ?? 0) ||
+              discountVal !== (existing?.discount ?? undefined);
             if (changed) {
               await productsService.increaseInventory(pharmacyId, [{
                 bar_code: medicine.barCode || "",
                 stock: stockVal,
                 price: priceVal,
                 minimum: minVal,
+                ...(discountVal !== undefined ? { discount: discountVal } : {}),
               }]);
             }
           }

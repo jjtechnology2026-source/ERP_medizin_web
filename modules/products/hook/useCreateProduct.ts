@@ -24,6 +24,7 @@ export interface MedicationData {
   minimum: number;
   image: string;
   detalle: string;
+  discount?: number;
 }
 
 export const useCreateMedication = () => {
@@ -62,6 +63,7 @@ export const useCreateMedication = () => {
           minimum: parseInt(baseData.minimum) || 0,
           image: mainImage,
           detalle: "",
+          discount: baseData.discount !== undefined ? parseFloat(baseData.discount) : undefined,
         };
 
         const { data: medResult } = await api.post(
@@ -98,6 +100,7 @@ export const useCreateMedication = () => {
               vat: payloadData.vat,
               antibiotic: payloadData.antibiotic,
               minimum: payloadData.minimum,
+              discount: payloadData.discount !== undefined ? payloadData.discount : null,
             } as any;
 
             const agentId = (useAuthStore.getState().profile as any)?.id_agent || (useAuthStore.getState().profile as any)?.agentId || "web";

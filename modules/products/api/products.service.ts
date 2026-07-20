@@ -9,6 +9,7 @@ const cleanImg = (item: any) => ({
   price: Number(item.price) || 0,
   vat: Math.round(Number(item.vat)) || 0,
   minimum: Math.round(Number(item.minimum)) || 0,
+  discount: item.discount !== undefined ? Number(item.discount) : undefined,
 });
 
 export const productsService = {
@@ -70,6 +71,7 @@ export const productsService = {
       vat: Math.round(Number(medication.vat)) || 0,
       antibiotic: Boolean(medication.antibiotic),
       minimum: Math.round(Number(medication.minimum)) || 0,
+      discount: medication.discount !== undefined ? Number(medication.discount) : null,
       detalle: (medication as any).detalle || "",
     }];
 
@@ -130,7 +132,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,

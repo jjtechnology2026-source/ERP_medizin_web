@@ -271,7 +271,7 @@ export default function InventoryList({
           <table className="w-full text-left">
             <thead className="bg-white border-b border-slate-50">
               <tr>
-                {["Imagen", "Nombre", "Categoria", "Precio", "Cantidad", "Descripción", "Acción"].map(
+                {["Imagen", "Nombre", "Categoria", "Precio", "Desc.", "Cantidad", "Descripción", "Acción"].map(
                   (h) => (
                     <th key={h} className="px-8 py-5 text-[11px] font-black text-slate-900 uppercase tracking-widest">
                       {h}
@@ -283,7 +283,7 @@ export default function InventoryList({
             <tbody className="divide-y divide-slate-50">
               {showLoadingState ? (
                 <tr>
-                  <td colSpan={7} className="px-8 py-24 text-center">
+                  <td colSpan={8} className="px-8 py-24 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <svg className="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -295,7 +295,7 @@ export default function InventoryList({
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-8 py-16 text-center">
+                  <td colSpan={8} className="px-8 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <span className="text-red-500 font-bold text-sm">{error}</span>
                       <button
@@ -309,7 +309,7 @@ export default function InventoryList({
                 </tr>
               ) : showEmptyState ? (
                 <tr>
-                  <td colSpan={7} className="px-8 py-16 text-center text-slate-400 font-bold text-sm">
+                  <td colSpan={8} className="px-8 py-16 text-center text-slate-400 font-bold text-sm">
                     {localSearch ? (
                       "No se encontraron productos con ese criterio de búsqueda"
                     ) : (
@@ -340,6 +340,7 @@ export default function InventoryList({
                     </td>
                     <td className="px-8 py-4 text-slate-500 text-xs">{med.category || "-"}</td>
                     <td className="px-8 py-4 font-black text-slate-800 text-xs">{formatPrice(med.price)}</td>
+                    <td className="px-8 py-4 text-xs font-bold text-slate-500">{med.discount ? `${med.discount}%` : "-"}</td>
                     <td className="px-8 py-4">
                       <span className={`font-bold text-xs ${med.stock <= med.minimum ? "text-red-600" : "text-slate-600"}`}>
                         {med.stock}
