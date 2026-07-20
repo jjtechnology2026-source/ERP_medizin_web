@@ -34,13 +34,18 @@ export default function StockFeaturesForm({
     const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
       ? (currentMedicine.vat as number)
       : 16;
-    const p = currentMedicine.price ?? 0;
-    const priceExVat = vat > 0 ? p / (1 + vat / 100) : p;
+    const storedPrice = currentMedicine.price ?? 0;
+    const storedDiscount = currentMedicine.discount;
+    // Restaurar precio original si ya tiene descuento aplicado en BD
+    const originalPrice = storedDiscount && storedDiscount > 0
+      ? storedPrice / (1 - storedDiscount / 100)
+      : storedPrice;
+    const priceExVat = vat > 0 ? originalPrice / (1 + vat / 100) : originalPrice;
     setPriceWithoutVat(priceExVat.toFixed(2));
     setSelectedVat(vat);
     setQuantity(""); // ponytail: start empty — stock is added, not replaced
     setMinStock(String(currentMedicine.minimum ?? 0));
-    setDiscount(currentMedicine.discount !== undefined ? String(currentMedicine.discount) : "");
+    setDiscount(storedDiscount !== undefined ? String(storedDiscount) : "");
   }, [currentMedicine]);
 
   const priceWithVat = useMemo(() => {
@@ -71,7 +76,7 @@ export default function StockFeaturesForm({
 
     const medicine: Medication = {
       ...(currentMedicine as Medication),
-      price: p * (1 + selectedVat / 100),
+      price: hasDiscount ? discountedPrice : priceWithVat,
       stock: q,
       vat: selectedVat,
       minimum: min,
