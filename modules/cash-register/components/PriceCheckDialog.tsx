@@ -65,7 +65,7 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
               <>
               <div className="flex justify-between">
                 <span className="text-xs font-bold text-slate-400">Precio original:</span>
-                <span className="text-sm font-bold text-slate-400 line-through">{formatPrice(result.price)}</span>
+                <span className="text-sm font-bold text-slate-400 line-through">{formatPrice(result.price / (1 - result.discount / 100))}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs font-bold text-slate-400">Descuento:</span>
@@ -73,7 +73,7 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs font-bold text-slate-400">Precio final:</span>
-                <span className="text-lg font-black text-emerald-600">{formatPrice(result.price * (1 - result.discount / 100))}</span>
+                <span className="text-lg font-black text-emerald-600">{formatPrice(result.price)}</span>
               </div>
               </>
             ) : (

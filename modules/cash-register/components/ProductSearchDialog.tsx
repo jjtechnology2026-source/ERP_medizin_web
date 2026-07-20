@@ -85,8 +85,8 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                     <td className="py-3 pr-4 font-bold text-xs text-slate-600">
                       {med.discount ? (
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-400 line-through">{formatPrice(med.price)}</span>
-                          <span className="text-xs text-emerald-600">{formatPrice(med.price * (1 - med.discount / 100))} <span className="text-[9px] text-slate-400">(-{med.discount}%)</span></span>
+                          <span className="text-[10px] text-slate-400 line-through">{formatPrice(med.price / (1 - med.discount / 100))}</span>
+                          <span className="text-xs text-emerald-600">{formatPrice(med.price)} <span className="text-[9px] text-slate-400">(-{med.discount}%)</span></span>
                         </div>
                       ) : formatPrice(med.price)}
                     </td>

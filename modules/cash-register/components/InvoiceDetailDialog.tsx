@@ -192,8 +192,8 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                       <td className="py-3 pr-4 text-right align-top">
                         {line.discount ? (
                           <div className="flex flex-col items-end">
-                            <span className="text-[10px] text-slate-400 line-through">Bs {line.unitPriceVes.toFixed(2)}</span>
-                            <span className="text-xs font-semibold text-emerald-600 font-mono">Bs {(line.unitPriceVes * (1 - line.discount / 100)).toFixed(2)}</span>
+                            <span className="text-[10px] text-slate-400 line-through">Bs {(line.unitPriceVes / (1 - line.discount / 100)).toFixed(2)}</span>
+                            <span className="text-xs font-semibold text-emerald-600 font-mono">Bs {line.unitPriceVes.toFixed(2)}</span>
                           </div>
                         ) : (
                           <span className="text-xs font-medium text-slate-500 font-mono">Bs {line.unitPriceVes.toFixed(2)}</span>
