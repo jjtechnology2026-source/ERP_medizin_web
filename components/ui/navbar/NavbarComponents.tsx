@@ -15,8 +15,7 @@ export const SearchBar = ({ value, onChange }: any) => (
 );
 
 export const CurrencySwitch = () => {
-  const { isDollar, toggleCurrency, fetchRate, isLoading, rateSource,
-    setRateSource, manualRate, setManualRate } = useCurrencyStore();
+  const { isDollar, toggleCurrency, fetchRate, isLoading } = useCurrencyStore();
   const rate = useCurrencyStore((s) => s.getEffectiveRate());
   const initialized = useCurrencyStore((s) => s.initialized);
   const profile = useAuthStore((s) => s.profile);
@@ -28,29 +27,13 @@ export const CurrencySwitch = () => {
     <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">Tasa:</span>
-        {rateSource === "manual" ? (
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={manualRate || ""}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              setManualRate(isNaN(v) ? 0 : v);
-            }}
-            onFocus={(e) => e.target.select()}
-            className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-amber-600 text-center shadow-sm tabular-nums outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            placeholder="0.00"
-          />
-        ) : (
-          <span className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center shadow-sm tabular-nums">
-            {displayRate === null ? (
-              <span className="text-slate-300 animate-pulse">---</span>
-            ) : (
-              `${rate.toFixed(2)}`
-            )}
-          </span>
-        )}
+        <span className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center shadow-sm tabular-nums">
+          {displayRate === null ? (
+            <span className="text-slate-300 animate-pulse">---</span>
+          ) : (
+            `${rate.toFixed(2)}`
+          )}
+        </span>
         <span className="text-[11px] font-bold text-slate-500 select-none">Bs</span>
         <button
           onClick={fetchRate}
@@ -62,33 +45,6 @@ export const CurrencySwitch = () => {
           )}
         >
           <HiOutlineRefresh size={14} />
-        </button>
-      </div>
-
-      <div className="h-4 w-[1px] bg-slate-200" />
-
-      <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
-        <button
-          onClick={() => setRateSource("api")}
-          className={cn(
-            "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-            rateSource === "api"
-              ? "bg-blue-600 text-white shadow"
-              : "text-slate-400 hover:text-blue-600"
-          )}
-        >
-          API
-        </button>
-        <button
-          onClick={() => setRateSource("manual")}
-          className={cn(
-            "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-            rateSource === "manual"
-              ? "bg-amber-500 text-white shadow"
-              : "text-slate-400 hover:text-amber-600"
-          )}
-        >
-          Manual
         </button>
       </div>
 
