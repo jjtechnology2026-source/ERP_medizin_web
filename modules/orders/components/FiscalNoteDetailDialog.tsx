@@ -28,10 +28,7 @@ export default function FiscalNoteDetailDialog({ noteId, noteType, onClose }: Fi
 
   const loadDetail = async () => {
     setLoading(true);
-    const result =
-      noteType === "NC"
-        ? await fiscalNotesService.getNotaCredito(noteId)
-        : await fiscalNotesService.getNotaDebito(noteId);
+    const result = await fiscalNotesService.getNotaCredito(noteId);
 
     if (!result.success || !result.item) {
       setError(result.message || "No se pudo cargar el detalle");
