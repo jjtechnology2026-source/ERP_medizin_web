@@ -4,8 +4,6 @@ import { HiOutlineExternalLink } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import FiscalNoteDialog from "./FiscalNoteDialog";
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -31,8 +29,6 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
   const [isOpen, setIsOpen] = useState(!!order);
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
-  const usesDigitalBilling = useAuthStore((s) => s.profile?.usesDigitalBilling) ?? false;
-  const [showFiscalNoteDialog, setShowFiscalNoteDialog] = useState(false);
 
   useEffect(() => {
     if (order) {
@@ -119,21 +115,8 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 >
                   Ver factura <HiOutlineExternalLink size={18} />
                 </button>
-            </div>
-          </div>
-            {!usesDigitalBilling && (
-            <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-8 space-y-5">
-              <h4 className="font-black text-slate-900 text-xs uppercase tracking-widest">Notas Fiscales</h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowFiscalNoteDialog(true)}
-                  className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all"
-                >
-                  Emitir NC
-                </button>
               </div>
             </div>
-            )}
           </div>
 
           {/* Columna Derecha */}
@@ -154,11 +137,8 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               </div>
             </div>
           </div>
-      {showFiscalNoteDialog && visibleOrder && !usesDigitalBilling && (
-        <FiscalNoteDialog order={visibleOrder} onClose={() => setShowFiscalNoteDialog(false)} mode="fiscal" />
-      )}
-    </div>
-  </div>
+        </div>
+      </div>
     </ModalWrapper>
   );
 }

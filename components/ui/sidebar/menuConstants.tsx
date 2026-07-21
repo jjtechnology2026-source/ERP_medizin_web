@@ -7,6 +7,7 @@ import {
   HiOutlineChatAlt2,
   HiOutlinePresentationChartLine,
   HiOutlineDocumentReport,
+  HiOutlineReceiptRefund,
   HiOutlineCog,
   HiOutlineLogout,
   HiOutlineArchive,
@@ -44,6 +45,11 @@ export const MENU_ITEMS: MenuItem[] = [
     name: "Registro de órdenes",
     icon: <HiOutlineClipboardList size={iconSize} />,
     href: "/registro-ordenes",
+  },
+  {
+    name: "Facturas",
+    icon: <HiOutlineReceiptRefund size={iconSize} />,
+    href: "/facturas",
   },
   {
     name: "Productos en Stock",

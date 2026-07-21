@@ -1,15 +1,12 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { 
-  HiOutlineEye, HiOutlineDocumentText,
-  HiOutlineRefresh, HiX, HiOutlineExternalLink 
+  HiOutlineEye, HiOutlineRefresh, HiX, HiOutlineExternalLink 
 } from "react-icons/hi";
 import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
-import FiscalNoteDialog from "./FiscalNoteDialog";
 import OrderFilters from "./OrderFilters";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 interface OrdersPageProps {
   orders: Order[];
@@ -44,32 +41,12 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
   );
 };
 
-const NoteActionButton = ({ hasNote, icon, color, onView, onEmit }: {
-  order: Order;
-  hasNote: boolean;
-  icon: React.ReactNode;
-  color: 'blue' | 'emerald' | 'amber';
-  onView: () => void;
-  onEmit: () => void;
-}) => (
-  <div className="relative inline-flex">
-    <ActionButton
-      onClick={hasNote ? onView : onEmit}
-      icon={icon}
-      color={hasNote ? "blue" : color}
-    />
-    {hasNote && (
-      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white" />
-    )}
-  </div>
-);
 
 // --- COMPONENTE PRINCIPAL ---
 
 export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
-  const usesDigitalBilling = useAuthStore((s) => s.profile?.usesDigitalBilling) ?? false;
 
   const formatOrderTotal = (total: number) => {
     if (isDollar) {
@@ -79,10 +56,9 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [fiscalNoteOrder, setFiscalNoteOrder] = useState<Order | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
-  const colSpan = usesDigitalBilling ? 9 : 8;
+  const colSpan = 8;
 
   // 1. Ordernar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
@@ -144,8 +120,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
           <table className="w-full text-left relative min-w-[1000px]">
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
               <tr>
-                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles",
-                  ...(usesDigitalBilling ? ["N. Credito"] : [])].map((h) => (
+                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles"].map((h) => (
                   <th key={h} className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
@@ -190,20 +165,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                     </span>
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>
-                  {usesDigitalBilling && (
-                  <>
-                  <td className="px-6 py-4">
-                    <NoteActionButton
-                      order={order}
-                      hasNote={!!order.notaCredito}
-                      icon={<HiOutlineDocumentText size={18} />}
-                      color="emerald"
-                      onView={() => setSelectedOrder(order)}
-                      onEmit={() => setFiscalNoteOrder(order)}
-                    />
-                  </td>
-                  </>
-                  )}
                 </tr>
               ))}
             </tbody>
@@ -256,10 +217,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
 
       {/* --- MODAL DETALLES --- */}
       <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
-
-      {fiscalNoteOrder && usesDigitalBilling && (
-        <FiscalNoteDialog order={fiscalNoteOrder} onClose={() => setFiscalNoteOrder(null)} />
-      )}
     </div>
   );
 }
