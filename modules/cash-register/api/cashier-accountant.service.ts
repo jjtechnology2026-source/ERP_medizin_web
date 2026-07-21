@@ -9,6 +9,7 @@ import type {
   CashierTransaction,
   CreateInvoicePayload,
   CloseSessionPayload,
+  MovimientoCajaPayload,
 } from "@/modules/cash-register/types/cashier.types";
 
 function normalizeApprovalStatus(status: string): string {
@@ -138,19 +139,19 @@ function parseInvoiceDetail(raw: any): CashierInvoiceDetail {
           discount: l.discount ?? undefined,
         }))
       : [],
-    transaccion: raw.transaccion
-      ? {
-          id: raw.transaccion.id ?? raw.transaccion._id ?? "",
-          tipo: raw.transaccion.tipo ?? "",
-          metodoPago: raw.transaccion.metodo_pago ?? raw.transaccion.metodoPago ?? "",
-          moneda: raw.transaccion.moneda ?? "",
-          montoOriginal: Number(raw.transaccion.monto_original ?? raw.transaccion.montoOriginal ?? 0),
-          montoVes: Number(raw.transaccion.monto_ves ?? raw.transaccion.montoVes ?? 0),
-          tasaCambio: raw.transaccion.tasa_cambio ?? raw.transaccion.tasaCambio ?? null,
-          descripcion: raw.transaccion.descripcion ?? null,
-          fechaHora: raw.transaccion.fecha_hora ?? raw.transaccion.fechaHora ?? "",
-        }
-      : null,
+    transacciones: Array.isArray(raw.transacciones)
+      ? raw.transacciones.map((t: any) => ({
+          id: t.id ?? t._id ?? "",
+          tipo: t.tipo ?? "",
+          metodoPago: t.metodo_pago ?? t.metodoPago ?? "",
+          moneda: t.moneda ?? "",
+          montoOriginal: Number(t.monto_original ?? t.montoOriginal ?? 0),
+          montoVes: Number(t.monto_ves ?? t.montoVes ?? 0),
+          tasaCambio: t.tasa_cambio ?? t.tasaCambio ?? null,
+          descripcion: t.descripcion ?? null,
+          fechaHora: t.fecha_hora ?? t.fechaHora ?? "",
+        }))
+      : [],
   };
 }
 
@@ -305,6 +306,7 @@ async fetchCurrentRate(): Promise<number> {
       precio_unitario_ves: number;
       iva_porcentaje: number;
     }[];
+    movimientos_caja: MovimientoCajaPayload[];
   }): Promise<CashierInvoice> {
     const { data } = await api.post("/admin/notas-credito", payload);
     return parseInvoice(data?.nota ?? data);

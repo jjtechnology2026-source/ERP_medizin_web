@@ -18,6 +18,8 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
   const [step, setStep] = useState<"loading" | "form" | "submitting" | "error" | "success">("loading");
   const [detail, setDetail] = useState<FacturaDetail | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [metodoPago, setMetodoPago] = useState("EFECTIVO");
+  const [moneda, setMoneda] = useState("VES");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -40,6 +42,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
 
     setStep("submitting");
     try {
+      const montoOriginal = moneda === "USD" ? detail.total_usd : detail.total_ves;
       await facturasService.createCreditNote({
         factura_id: detail.id,
         sesion_caja_id: detail.sesion_caja_id,
@@ -53,6 +56,12 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
           precio_unitario_ves: d.precio_unitario_ves,
           iva_porcentaje: d.iva_porcentaje,
         })),
+        movimientos_caja: [{
+          moneda,
+          monto_original: montoOriginal,
+          tasa_cambio: moneda === "USD" ? detail.tasa_cambio : undefined,
+          metodo_pago: metodoPago,
+        }],
       });
       setSuccessMsg("Nota de crédito emitida correctamente");
       setStep("success");
@@ -156,6 +165,45 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
                 placeholder="Motivo de la nota de crédito..."
                 className="w-full p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 min-h-[80px] resize-none"
               />
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <HiOutlineCash size={14} />
+                Información de pago para la NC
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Método de pago
+                  </label>
+                  <select
+                    value={metodoPago}
+                    onChange={(e) => setMetodoPago(e.target.value)}
+                    className="w-full p-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="EFECTIVO">Efectivo</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                    <option value="PUNTO_DE_VENTA">Punto de Venta</option>
+                    <option value="ZELLE">Zelle</option>
+                    <option value="PAGOMOVIL">Pago Móvil</option>
+                    <option value="OTRO">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Moneda
+                  </label>
+                  <select
+                    value={moneda}
+                    onChange={(e) => setMoneda(e.target.value)}
+                    className="w-full p-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="VES">VES (Bs)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">

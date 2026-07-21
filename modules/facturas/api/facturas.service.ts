@@ -28,6 +28,13 @@ export const facturasService = {
       precio_unitario_ves: number;
       iva_porcentaje: number;
     }[];
+    movimientos_caja: {
+      moneda: string;
+      monto_original: number;
+      tasa_cambio?: number;
+      metodo_pago: string;
+      descripcion?: string;
+    }[];
   }): Promise<void> {
     await api.post("/admin/notas-credito", payload);
   },
