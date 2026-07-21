@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, FormEvent } from "react";
+import { useState, useCallback, useEffect, FormEvent } from "react";
 import {
   HiOutlineXCircle,
   HiOutlineDocumentReport,
@@ -8,6 +8,7 @@ import {
   HiOutlineOfficeBuilding,
 } from "react-icons/hi";
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
@@ -27,12 +28,28 @@ function formatMoney(value: number | null | undefined): string {
 export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
 
-  const [step, setStep] = useState<"form" | "loading" | "result" | "error">("form");
+  const initialStep = usesDigitalBilling ? "form" : "fiscal_printing";
+  const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
   const [report, setReport] = useState<CreatedZReport | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (step !== "fiscal_printing") return;
+    setPrintError(null);
+    (async () => {
+      try {
+        await fiscalPrinterClient.reportZ();
+        setStep("form");
+      } catch (e: any) {
+        setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
+      }
+    })();
+  }, [step]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");
@@ -128,6 +145,41 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             <HiOutlineXCircle size={22} className="text-slate-400" />
           </button>
         </div>
+
+        {step === "fiscal_printing" && !printError && (
+          <div className="p-10 flex flex-col items-center gap-4 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
+            <p className="text-sm font-bold text-slate-600">Imprimiendo reporte Z en la máquina fiscal...</p>
+          </div>
+        )}
+
+        {step === "fiscal_printing" && printError && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div className="p-5 bg-red-50 rounded-full text-red-500">
+              <HiOutlineXCircle size={48} />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-slate-800 mb-2">Error de impresión</p>
+              <p className="text-sm text-slate-500 max-w-md">{printError}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("fiscal_printing")}
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
 
         {step === "form" && (
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
