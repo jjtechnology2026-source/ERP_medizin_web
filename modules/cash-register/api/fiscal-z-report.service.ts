@@ -251,6 +251,38 @@ function extractErrorMessage(rawData: unknown, fallback: string): { message: str
 }
 
 export const fiscalZReportService = {
+  async getZReport(
+    pharmacyId: string,
+    reportId: string
+  ): Promise<CreateZReportResult> {
+    try {
+      const response = await api.get(
+        `/admin/farmacias/${encodeURIComponent(pharmacyId.trim())}/z-reports/${encodeURIComponent(reportId.trim())}`
+      );
+      const report = parseCreatedZReport(response.data);
+      return {
+        success: !!report,
+        statusCode: response.status,
+        message: report ? "OK" : "No se encontró el reporte Z",
+        report,
+        details: null,
+      };
+    } catch (e: any) {
+      const { message, details } = extractErrorMessage(
+        e.response?.data,
+        e.message || "No se pudo obtener el reporte Z"
+      );
+      return {
+        success: false,
+        statusCode: e.response?.status || 0,
+        message,
+        report: null,
+        details,
+      };
+    }
+  },
+
+
   /**
    * Alta de reporte Z: POST /admin/farmacias/{id}/z-reports
    * El body solo envía datos de la impresora fiscal; el backend agrega ventas/notas/etc.
