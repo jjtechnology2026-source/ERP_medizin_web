@@ -1,5 +1,5 @@
 import api from "@/modules/core/api/client";
-import type { FacturaListItem, FacturaDetail, FacturaTransaccion, FacturaFilters } from "../types";
+import type { FacturaListItem, FacturaDetail, FacturaTransaccion, NotaCreditoResumen, FacturaFilters } from "../types";
 
 export const facturasService = {
   async list(filtros: FacturaFilters): Promise<FacturaListItem[]> {
@@ -12,6 +12,34 @@ export const facturasService = {
     const response = await api.get(`/admin/facturas/${id}`);
     const raw = response.data?.data ?? response.data;
     return parseFacturaDetail(raw);
+  },
+
+  async listNotasCredito(filtros: { pharmacy_id: string; fecha_desde?: string; fecha_hasta?: string }): Promise<NotaCreditoResumen[]> {
+    const response = await api.get("/admin/notas-credito", { params: filtros });
+    const payload = response.data?.data ?? response.data;
+    return (Array.isArray(payload) ? payload : []).map((n: any) => ({
+      id: n.id ?? "",
+      factura_id: n.factura_id ?? "",
+      numero_control: n.numero_control ?? "",
+      fecha_emision: n.fecha_emision ?? "",
+      motivo: n.motivo ?? "",
+      total_ves: Number(n.total_ves ?? 0),
+      total_usd: Number(n.total_usd ?? 0),
+    }));
+  },
+
+  async getNotasCreditoPorFactura(facturaId: string): Promise<NotaCreditoResumen[]> {
+    const response = await api.get(`/admin/facturas/${facturaId}/notas-credito`);
+    const payload = response.data?.data ?? response.data;
+    return (Array.isArray(payload) ? payload : []).map((n: any) => ({
+      id: n.id ?? "",
+      factura_id: n.factura_id ?? "",
+      numero_control: n.numero_control ?? "",
+      fecha_emision: n.fecha_emision ?? "",
+      motivo: n.motivo ?? "",
+      total_ves: Number(n.total_ves ?? 0),
+      total_usd: Number(n.total_usd ?? 0),
+    }));
   },
 
   async createCreditNote(payload: {

@@ -56,6 +56,16 @@ export interface FacturaDetalleItem {
   subtotal_ves: number;
 }
 
+export interface NotaCreditoResumen {
+  id: string;
+  factura_id: string;
+  numero_control: string;
+  fecha_emision: string;
+  motivo: string;
+  total_ves: number;
+  total_usd: number;
+}
+
 export interface FacturaFilters {
   pharmacy_id: string;
   search?: string;

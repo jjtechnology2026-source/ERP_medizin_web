@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   HiOutlineEye,
   HiOutlineDocumentText,
   HiOutlineRefresh,
   HiOutlineSearch,
 } from "react-icons/hi";
-import type { FacturaListItem } from "../types";
+import type { FacturaListItem, NotaCreditoResumen, FacturaFilters } from "../types";
+import { facturasService } from "../api/facturas.service";
 import FacturaNotaCreditoDialog from "./FacturaNotaCreditoDialog";
 import FacturaDetailDialog from "./FacturaDetailDialog";
 
@@ -14,6 +15,7 @@ interface FacturasTableProps {
   facturas: FacturaListItem[];
   isLoading: boolean;
   onRefresh: () => void;
+  filtros: FacturaFilters;
 }
 
 function SkeletonRow() {
@@ -28,10 +30,27 @@ function SkeletonRow() {
   );
 }
 
-export default function FacturasTable({ facturas, isLoading, onRefresh }: FacturasTableProps) {
+export default function FacturasTable({ facturas, isLoading, onRefresh, filtros }: FacturasTableProps) {
   const [selectedFactura, setSelectedFactura] = useState<FacturaListItem | null>(null);
   const [selectedDetailFactura, setSelectedDetailFactura] = useState<FacturaListItem | null>(null);
+  const [ncPorFactura, setNcPorFactura] = useState<Record<string, NotaCreditoResumen[]>>({});
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (!filtros.pharmacy_id) return;
+    facturasService.listNotasCredito({
+      pharmacy_id: filtros.pharmacy_id,
+      fecha_desde: filtros.fecha_desde,
+      fecha_hasta: filtros.fecha_hasta,
+    }).then((list) => {
+      const map: Record<string, NotaCreditoResumen[]> = {};
+      for (const nc of list) {
+        if (!map[nc.factura_id]) map[nc.factura_id] = [];
+        map[nc.factura_id].push(nc);
+      }
+      setNcPorFactura(map);
+    }).catch(() => {});
+  }, [filtros.pharmacy_id, filtros.fecha_desde, filtros.fecha_hasta]);
   const perPage = 20;
 
   const totalPages = Math.ceil(facturas.length / perPage);
@@ -121,6 +140,11 @@ export default function FacturasTable({ facturas, isLoading, onRefresh }: Factur
                       <span className="text-xs font-bold text-[#0F172A] font-mono tracking-tight">
                         {f.numero_control}
                       </span>
+                      {ncPorFactura[f.id] && ncPorFactura[f.id].length > 0 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[#D97706]/10 text-[#D97706] border border-[#D97706]/20 text-[9px] font-bold uppercase tracking-wider">
+                          NC
+                        </span>
+                      )}
                       {f.url_pdf && (
                         <span className="w-1.5 h-1.5 rounded-full bg-[#059669] shrink-0" title="PDF disponible" />
                       )}
@@ -229,6 +253,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh }: Factur
         <FacturaDetailDialog
           factura={selectedDetailFactura}
           onClose={() => setSelectedDetailFactura(null)}
+          notasCredito={ncPorFactura[selectedDetailFactura.id] ?? []}
         />
       )}
       {selectedFactura && (

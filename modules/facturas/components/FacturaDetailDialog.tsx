@@ -2,14 +2,15 @@
 import { useEffect, useState } from "react";
 import { HiX, HiDocumentText, HiUser, HiHashtag, HiCalendar, HiIdentification, HiCash } from "react-icons/hi";
 import { facturasService } from "../api/facturas.service";
-import type { FacturaListItem, FacturaDetail } from "../types";
+import type { FacturaListItem, FacturaDetail, NotaCreditoResumen } from "../types";
 
 interface FacturaDetailDialogProps {
   factura: FacturaListItem;
   onClose: () => void;
+  notasCredito?: NotaCreditoResumen[];
 }
 
-export default function FacturaDetailDialog({ factura, onClose }: FacturaDetailDialogProps) {
+export default function FacturaDetailDialog({ factura, onClose, notasCredito = [] }: FacturaDetailDialogProps) {
   const [detail, setDetail] = useState<FacturaDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -235,6 +236,26 @@ export default function FacturaDetailDialog({ factura, onClose }: FacturaDetailD
                 <p className="text-xs font-medium text-slate-600 bg-white rounded-xl px-4 py-2.5 border border-[#E4E7EB] leading-relaxed">
                   {d.observaciones}
                 </p>
+              </div>
+            )}
+
+            {notasCredito.length > 0 && (
+              <div className="border-t border-[#E4E7EB] px-6 py-3">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2">
+                  Notas de Crédito asociadas ({notasCredito.length})
+                </span>
+                <div className="space-y-2">
+                  {notasCredito.map((nc) => (
+                    <div key={nc.id} className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-[#E4E7EB] text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[#D97706]/10 text-[#D97706] border border-[#D97706]/20 text-[9px] font-bold uppercase">NC</span>
+                        <span className="font-mono font-semibold text-[#0F172A]">{nc.numero_control}</span>
+                        <span className="text-slate-400">{nc.motivo}</span>
+                      </div>
+                      <span className="font-bold text-[#D97706] font-mono">Bs {nc.total_ves.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

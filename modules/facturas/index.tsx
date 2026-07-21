@@ -76,7 +76,7 @@ export default function FacturasFeature() {
         </div>
       </div>
 
-      <FacturasTable facturas={facturas} isLoading={isLoading} onRefresh={refetch} />
+      <FacturasTable facturas={facturas} isLoading={isLoading} onRefresh={refetch} filtros={filtros} />
     </div>
   );
 }
