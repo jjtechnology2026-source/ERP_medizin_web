@@ -131,3 +131,49 @@ export interface ZReportListResult {
   message: string;
   reports: ZReportListItem[];
 }
+
+/** Body para POST /admin/farmacias/{id}/z-reports */
+export interface CreateZReportDto {
+  z_number: number;
+  fiscal_serial: string;
+  fiscal_date?: string;
+  invoices: {
+    count: number;
+    doc_from: string;
+    doc_to: string;
+  };
+}
+
+export interface ZReportDocRange {
+  count: number;
+  total?: number | null;
+  docFrom: string;
+  docTo: string;
+}
+
+/** Respuesta ZReportPresent del backend (campos tolerantes) */
+export interface CreatedZReport {
+  id: string;
+  pharmacyId: string;
+  zNumber: number;
+  fiscalSerial: string;
+  fiscalDate: string;
+  totalSales: number | null;
+  taxedSales: number | null;
+  exemptSales: number | null;
+  taxpayers: number | null;
+  nonTaxpayers: number | null;
+  invoices: ZReportDocRange | null;
+  creditNotes: ZReportDocRange | null;
+  debitNotes: ZReportDocRange | null;
+  taxWithholdingsCount: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface CreateZReportResult {
+  success: boolean;
+  statusCode: number;
+  message: string;
+  report: CreatedZReport | null;
+  details: string | null;
+}

@@ -106,7 +106,7 @@ export default function FiscalConfigCard() {
                 onClick={() => setShowZReport(true)}
                 className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
               >
-                Generar Z
+                Generar reporte Z
               </button>
               <button
                 onClick={() => setShowZHistory(true)}

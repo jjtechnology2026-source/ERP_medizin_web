@@ -12,6 +12,10 @@ import type {
   ZReportSession,
   ZReportListItem,
   ZReportListResult,
+  CreateZReportDto,
+  CreateZReportResult,
+  CreatedZReport,
+  ZReportDocRange,
 } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 function readString(val: unknown): string {
@@ -178,7 +182,115 @@ function parseReportData(json: Record<string, unknown>): ZReportData {
   };
 }
 
+function parseDocRange(val: unknown): ZReportDocRange | null {
+  const m = readMap(val);
+  if (!m) return null;
+  return {
+    count: readInt(m["count"]),
+    total: m["total"] != null ? readDouble(m["total"]) : null,
+    docFrom: readString(m["doc_from"] ?? m["docFrom"]),
+    docTo: readString(m["doc_to"] ?? m["docTo"]),
+  };
+}
+
+function parseCreatedZReport(raw: unknown): CreatedZReport | null {
+  const root = readMap(raw);
+  if (!root) return null;
+  const m = readMap(root["data"]) || root;
+  const withholdings = m["tax_withholdings"] ?? m["taxWithholdings"];
+  const withholdingsCount = Array.isArray(withholdings)
+    ? withholdings.length
+    : withholdings != null
+      ? readInt(withholdings)
+      : null;
+
+  return {
+    id: readString(m["id"]),
+    pharmacyId: readString(m["pharmacy_id"] ?? m["pharmacyId"] ?? m["id_farmacia"]),
+    zNumber: readInt(m["z_number"] ?? m["zNumber"]),
+    fiscalSerial: readString(m["fiscal_serial"] ?? m["fiscalSerial"]),
+    fiscalDate: readString(m["fiscal_date"] ?? m["fiscalDate"]),
+    totalSales: m["total_sales"] != null || m["totalSales"] != null
+      ? readDouble(m["total_sales"] ?? m["totalSales"])
+      : null,
+    taxedSales: m["taxed_sales"] != null || m["taxedSales"] != null
+      ? readDouble(m["taxed_sales"] ?? m["taxedSales"])
+      : null,
+    exemptSales: m["exempt_sales"] != null || m["exemptSales"] != null
+      ? readDouble(m["exempt_sales"] ?? m["exemptSales"])
+      : null,
+    taxpayers: m["taxpayers"] != null ? readInt(m["taxpayers"]) : null,
+    nonTaxpayers: m["non_taxpayers"] != null || m["nonTaxpayers"] != null
+      ? readInt(m["non_taxpayers"] ?? m["nonTaxpayers"])
+      : null,
+    invoices: parseDocRange(m["invoices"]),
+    creditNotes: parseDocRange(m["credit_notes"] ?? m["creditNotes"]),
+    debitNotes: parseDocRange(m["debit_notes"] ?? m["debitNotes"]),
+    taxWithholdingsCount: withholdingsCount,
+    raw: m,
+  };
+}
+
+function extractErrorMessage(rawData: unknown, fallback: string): { message: string; details: string | null } {
+  let message = fallback;
+  if (typeof rawData === "string") {
+    const trimmed = rawData.trim();
+    const match = trimmed.match(/Internal\(["']([^"']+)["']\)/);
+    if (match) message = match[1];
+    else if (trimmed) message = trimmed;
+  } else if (rawData && typeof rawData === "object") {
+    const obj = rawData as Record<string, unknown>;
+    message = String(obj.message || obj.error || message);
+  }
+  const details = rawData == null
+    ? null
+    : typeof rawData === "string"
+      ? rawData
+      : JSON.stringify(rawData);
+  return { message, details };
+}
+
 export const fiscalZReportService = {
+  /**
+   * Alta de reporte Z: POST /admin/farmacias/{id}/z-reports
+   * El body solo envía datos de la impresora fiscal; el backend agrega ventas/notas/etc.
+   */
+  async createZReport(
+    pharmacyId: string,
+    payload: CreateZReportDto
+  ): Promise<CreateZReportResult> {
+    try {
+      const response = await api.post(
+        `/admin/farmacias/${encodeURIComponent(pharmacyId.trim())}/z-reports`,
+        payload
+      );
+
+      const report = parseCreatedZReport(response.data);
+      return {
+        success: response.status >= 200 && response.status < 300 && !!report,
+        statusCode: response.status,
+        message: report
+          ? "Reporte Z registrado correctamente"
+          : "El servidor respondió sin datos del reporte Z",
+        report,
+        details: null,
+      };
+    } catch (e: any) {
+      const status = e.response?.status || 0;
+      const { message, details } = extractErrorMessage(
+        e.response?.data,
+        e.message || "No se pudo registrar el reporte Z"
+      );
+      return {
+        success: false,
+        statusCode: status,
+        message,
+        report: null,
+        details,
+      };
+    }
+  },
+
   async fetchZReport(params: {
     date: string;
     idPharmacy: string;

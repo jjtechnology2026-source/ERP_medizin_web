@@ -29,11 +29,23 @@ export async function POST(req: NextRequest) {
       ...headers,
     };
 
-    if (token?.accessToken) {
-      finalHeaders["Authorization"] = `Bearer ${token.accessToken}`;
-      console.log("🔐 Token agregado a la petición");
+    // Prefer JWT session token; fall back to Authorization forwarded by the client interceptor
+    const bearerFromSession = token?.accessToken
+      ? `Bearer ${token.accessToken}`
+      : null;
+    const bearerFromRequest =
+      req.headers.get("authorization") ||
+      (typeof headers.Authorization === "string" ? headers.Authorization : null) ||
+      (typeof headers.authorization === "string" ? headers.authorization : null);
+
+    if (bearerFromSession) {
+      finalHeaders["Authorization"] = bearerFromSession;
+      console.log("🔐 Token agregado desde sesión JWT");
+    } else if (bearerFromRequest) {
+      finalHeaders["Authorization"] = bearerFromRequest;
+      console.log("🔐 Token agregado desde header del cliente");
     } else {
-      console.log("⚠️ No se encontró accessToken en la sesión");
+      console.log("⚠️ No se encontró accessToken en la sesión ni Authorization en el request");
     }
 
     const targetUrl = `${process.env.NEXT_PUBLIC_API_URL}${url}`;
