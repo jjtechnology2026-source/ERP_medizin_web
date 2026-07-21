@@ -250,6 +250,49 @@ function extractErrorMessage(rawData: unknown, fallback: string): { message: str
   return { message, details };
 }
 
+function parsePresentZReportFull(raw: unknown): CreatedZReport | null {
+  const m = readMap(raw);
+  if (!m) return null;
+  return {
+    id: readString(m["id"]),
+    pharmacyId: readString(m["pharmacy_id"]),
+    zNumber: readInt(m["z_number"]),
+    fiscalSerial: readString(m["fiscal_serial"]),
+    fiscalDate: readString(m["fiscal_date"]),
+    totalSales: m["total_sales"] != null ? readDouble(m["total_sales"]) : null,
+    taxedSales: m["taxed_sales"] != null ? readDouble(m["taxed_sales"]) : null,
+    exemptSales: m["exempt_sales"] != null ? readDouble(m["exempt_sales"]) : null,
+    taxpayers: null,
+    nonTaxpayers: null,
+    invoices: (m["invoices_count"] != null)
+      ? {
+          count: readInt(m["invoices_count"]),
+          total: null,
+          docFrom: readString(m["invoices_doc_from"]),
+          docTo: readString(m["invoices_doc_to"]),
+        }
+      : null,
+    creditNotes: (m["credit_notes_count"] != null)
+      ? {
+          count: readInt(m["credit_notes_count"]),
+          total: m["credit_notes_total"] != null ? readDouble(m["credit_notes_total"]) : null,
+          docFrom: "",
+          docTo: "",
+        }
+      : null,
+    debitNotes: (m["debit_notes_count"] != null)
+      ? {
+          count: readInt(m["debit_notes_count"]),
+          total: m["debit_notes_total"] != null ? readDouble(m["debit_notes_total"]) : null,
+          docFrom: "",
+          docTo: "",
+        }
+      : null,
+    taxWithholdingsCount: m["tax_withholdings_count"] != null ? readInt(m["tax_withholdings_count"]) : null,
+    raw: m,
+  };
+}
+
 export const fiscalZReportService = {
   async getZReport(
     pharmacyId: string,
@@ -257,9 +300,9 @@ export const fiscalZReportService = {
   ): Promise<CreateZReportResult> {
     try {
       const response = await api.get(
-        `/admin/farmacias/${encodeURIComponent(pharmacyId.trim())}/z-reports/${encodeURIComponent(reportId.trim())}`
+        `/admin/Facturacion/reporte_z/${encodeURIComponent(reportId.trim())}`
       );
-      const report = parseCreatedZReport(response.data);
+      const report = parsePresentZReportFull(response.data);
       return {
         success: !!report,
         statusCode: response.status,
