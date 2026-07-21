@@ -1,5 +1,5 @@
 import api from "@/modules/core/api/client";
-import type { FacturaListItem, FacturaDetail, FacturaFilters } from "../types";
+import type { FacturaListItem, FacturaDetail, FacturaTransaccion, FacturaFilters } from "../types";
 
 export const facturasService = {
   async list(filtros: FacturaFilters): Promise<FacturaListItem[]> {
@@ -60,6 +60,19 @@ function parseFacturaListItem(raw: any): FacturaListItem {
 function parseFacturaDetail(raw: any): FacturaDetail {
   const f = raw?.factura ?? raw;
   const detalles = raw?.detalles ?? raw?.lines ?? [];
+  const transacciones: FacturaTransaccion[] = Array.isArray(raw?.transacciones)
+    ? raw.transacciones.map((t: any) => ({
+        id: t.id ?? "",
+        tipo: t.tipo ?? "",
+        metodo_pago: t.metodo_pago ?? "",
+        moneda: t.moneda ?? "",
+        monto_original: Number(t.monto_original ?? 0),
+        monto_ves: Number(t.monto_ves ?? 0),
+        tasa_cambio: t.tasa_cambio ?? null,
+        descripcion: t.descripcion ?? null,
+        fecha_hora: t.fecha_hora ?? "",
+      }))
+    : [];
   return {
     id: f.id ?? "",
     sesion_caja_id: f.sesion_caja_id ?? "",
@@ -88,5 +101,6 @@ function parseFacturaDetail(raw: any): FacturaDetail {
           subtotal_ves: Number(d.subtotal_ves ?? 0),
         }))
       : [],
+    transacciones,
   };
 }

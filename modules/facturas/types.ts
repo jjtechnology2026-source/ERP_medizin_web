@@ -31,6 +31,19 @@ export interface FacturaDetail {
   url_pdf: string | null;
   observaciones: string | null;
   detalles: FacturaDetalleItem[];
+  transacciones: FacturaTransaccion[];
+}
+
+export interface FacturaTransaccion {
+  id: string;
+  tipo: string;
+  metodo_pago: string;
+  moneda: string;
+  monto_original: number;
+  monto_ves: number;
+  tasa_cambio: number | null;
+  descripcion: string | null;
+  fecha_hora: string;
 }
 
 export interface FacturaDetalleItem {

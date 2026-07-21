@@ -75,27 +75,27 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
   const formatMoney = (n: number) => n.toFixed(2);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-[32px] shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in duration-200">
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-[#E4E7EB]">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-500 text-white rounded-2xl">
+            <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-sm">
               <HiOutlineDocumentReport size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">Emitir Nota de Crédito</h2>
-              <span className="text-xs font-bold text-slate-400 font-mono">{factura.numero_control}</span>
+              <h2 className="text-lg font-bold text-[#0F172A] tracking-tight">Emitir Nota de Crédito</h2>
+              <span className="text-xs font-semibold text-slate-400 font-mono">{factura.numero_control}</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-[#F1F3F5] rounded-xl transition-all duration-200">
             <HiOutlineXCircle size={22} className="text-slate-400" />
           </button>
         </div>
 
         {step === "loading" && (
           <div className="p-8 flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
-            <p className="text-sm font-bold text-slate-500">Cargando detalle...</p>
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#E4E7EB] border-t-[#1E3A5F]" />
+            <p className="text-sm font-bold text-slate-400">Cargando detalle...</p>
           </div>
         )}
 
@@ -107,7 +107,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
             <p className="text-sm text-slate-500">{errorMsg}</p>
             <button
               onClick={onClose}
-              className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm"
+              className="px-6 py-3 bg-[#1E3A5F] hover:bg-[#0F172A] text-white rounded-xl font-bold text-sm transition-all duration-200"
             >
               Cerrar
             </button>
@@ -116,59 +116,59 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
 
         {step === "success" && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="p-5 bg-emerald-50 rounded-full text-emerald-500">
+            <div className="p-5 bg-[#059669]/10 rounded-full text-[#059669]">
               <HiOutlineDocumentReport size={48} />
             </div>
-            <p className="text-sm font-bold text-emerald-700">{successMsg}</p>
+            <p className="text-sm font-bold text-[#059669]">{successMsg}</p>
           </div>
         )}
 
         {(step === "form" || step === "submitting") && detail && (
           <div className="p-6 space-y-5">
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">Datos de la factura</h3>
+            <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E4E7EB]">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Datos de la factura</h3>
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400 block">Cliente</span>
-                  <span className="font-bold text-slate-800">{detail.cliente_nombre}</span>
+                  <span className="font-bold text-[#0F172A]">{detail.cliente_nombre}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">RIF</span>
-                  <span className="font-bold text-slate-800 font-mono">{detail.cliente_rif || "—"}</span>
+                  <span className="font-bold text-slate-700 font-mono">{detail.cliente_rif || "—"}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Total VES</span>
-                  <span className="font-bold text-slate-800 font-mono">Bs {formatMoney(detail.total_ves)}</span>
+                  <span className="font-bold text-[#1E3A5F] font-mono">Bs {formatMoney(detail.total_ves)}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Total USD</span>
-                  <span className="font-bold text-slate-800 font-mono">$ {formatMoney(detail.total_usd)}</span>
+                  <span className="font-bold text-slate-700 font-mono">$ {formatMoney(detail.total_usd)}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Base imponible</span>
-                  <span className="font-bold text-slate-800 font-mono">Bs {formatMoney(detail.base_imponible_ves)}</span>
+                  <span className="font-bold text-slate-700 font-mono">Bs {formatMoney(detail.base_imponible_ves)}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">IVA ({detail.iva_porcentaje}%)</span>
-                  <span className="font-bold text-slate-800 font-mono">Bs {formatMoney(detail.iva_monto_ves)}</span>
+                  <span className="font-bold text-slate-700 font-mono">Bs {formatMoney(detail.iva_monto_ves)}</span>
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
                 Motivo de la nota de crédito
               </label>
               <textarea
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                placeholder="Motivo de la nota de crédito..."
-                className="w-full p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 min-h-[80px] resize-none"
+                placeholder="Describí el motivo de la nota de crédito..."
+                className="w-full p-3 text-sm font-semibold bg-[#F8FAFC] border border-[#E4E7EB] rounded-xl outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 min-h-[80px] resize-none placeholder:text-slate-300"
               />
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E4E7EB]">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <HiOutlineCash size={14} />
                 Información de pago para la NC
               </h3>
@@ -180,7 +180,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
                   <select
                     value={metodoPago}
                     onChange={(e) => setMetodoPago(e.target.value)}
-                    className="w-full p-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full p-2.5 text-xs font-semibold bg-white border border-[#E4E7EB] rounded-xl outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
                   >
                     <option value="EFECTIVO">Efectivo</option>
                     <option value="TRANSFERENCIA">Transferencia</option>
@@ -197,7 +197,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
                   <select
                     value={moneda}
                     onChange={(e) => setMoneda(e.target.value)}
-                    className="w-full p-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full p-2.5 text-xs font-semibold bg-white border border-[#E4E7EB] rounded-xl outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
                   >
                     <option value="VES">VES (Bs)</option>
                     <option value="USD">USD ($)</option>
@@ -206,17 +206,17 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E4E7EB]">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <HiOutlineCash size={14} />
                 Items de la factura original ({detail.detalles.length})
               </h3>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {detail.detalles.map((d, i) => (
-                  <div key={d.id || i} className="flex justify-between items-center text-xs bg-white p-3 rounded-xl">
-                    <span className="font-bold text-slate-700 truncate flex-1">{d.descripcion}</span>
-                    <span className="font-mono text-slate-500 mx-3">x{d.cantidad}</span>
-                    <span className="font-bold text-slate-800">Bs {formatMoney(d.subtotal_ves)}</span>
+                  <div key={d.id || i} className="flex justify-between items-center text-xs bg-white p-3 rounded-xl border border-[#E4E7EB]/50">
+                    <span className="font-semibold text-slate-700 truncate flex-1">{d.descripcion}</span>
+                    <span className="font-mono text-slate-400 mx-3">x{d.cantidad}</span>
+                    <span className="font-bold text-[#1E3A5F]">Bs {formatMoney(d.subtotal_ves)}</span>
                   </div>
                 ))}
               </div>
@@ -225,14 +225,14 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
             <div className="flex gap-3 justify-end pt-2">
               <button
                 onClick={onClose}
-                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+                className="px-5 py-2.5 bg-[#F8FAFC] hover:bg-[#F1F3F5] text-slate-600 rounded-xl font-bold text-xs transition-all duration-200 border border-[#E4E7EB]"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleEmit}
                 disabled={!motivo.trim() || step === "submitting"}
-                className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg disabled:opacity-50"
+                className="px-5 py-2.5 bg-[#059669] hover:bg-[#047857] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm disabled:opacity-50 disabled:hover:bg-[#059669]"
               >
                 {step === "submitting" ? "Emitiendo..." : "Emitir NC"}
               </button>
