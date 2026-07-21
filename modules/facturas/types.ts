@@ -26,6 +26,7 @@ export interface FacturaDetail {
   total_usd: number;
   tasa_cambio: number;
   base_imponible_ves: number;
+  total_exento_ves: number;
   iva_porcentaje: number;
   iva_monto_ves: number;
   url_pdf: string | null;

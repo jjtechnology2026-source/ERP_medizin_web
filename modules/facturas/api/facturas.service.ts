@@ -114,6 +114,7 @@ function parseFacturaDetail(raw: any): FacturaDetail {
     total_usd: Number(f.total_usd ?? 0),
     tasa_cambio: Number(f.tasa_cambio ?? 1),
     base_imponible_ves: Number(f.base_imponible_ves ?? 0),
+    total_exento_ves: Number(f.total_exento_ves ?? 0),
     iva_porcentaje: Number(f.iva_porcentaje ?? 0),
     iva_monto_ves: Number(f.iva_monto_ves ?? 0),
     url_pdf: f.url_pdf ?? null,
