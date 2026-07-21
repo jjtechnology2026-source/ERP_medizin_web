@@ -310,25 +310,6 @@ async fetchCurrentRate(): Promise<number> {
     return parseInvoice(data?.nota ?? data);
   },
 
-  async createDebitNote(payload: {
-    factura_id: string;
-    sesion_caja_id: string;
-    numero_control: string;
-    motivo: string;
-    tasa_cambio: number;
-    observaciones?: string;
-    detalles: {
-      detalle_factura_id: string;
-      descripcion: string;
-      cantidad: number;
-      precio_unitario_ves: number;
-      iva_porcentaje: number;
-    }[];
-  }): Promise<CashierInvoice> {
-    const { data } = await api.post("/admin/notas-debito", payload);
-    return parseInvoice(data?.nota ?? data);
-  },
-
   buildControlNumber(prefix = "FAC"): string {
     return `${prefix}-${Date.now()}`;
   },

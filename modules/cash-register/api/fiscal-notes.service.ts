@@ -35,24 +35,12 @@ export const fiscalNotesService = {
     return createFiscalNote("/admin/Facturacion/nota_credito", dto);
   },
 
-  async createNotaDebito(dto: FiscalNoteCreateRequest): Promise<FiscalNoteResult> {
-    return createFiscalNote("/admin/Facturacion/nota_debito", dto);
-  },
-
   async listNotasCredito(filter: FiscalNotesFilter = {}): Promise<FiscalNoteListResult> {
     return listFiscalNotes("/admin/Facturacion/nota_credito", filter);
   },
 
-  async listNotasDebito(filter: FiscalNotesFilter = {}): Promise<FiscalNoteListResult> {
-    return listFiscalNotes("/admin/Facturacion/nota_debito", filter);
-  },
-
   async getNotaCredito(id: string): Promise<FiscalNoteDetailResult> {
     return getFiscalNote("/admin/Facturacion/nota_credito", id);
-  },
-
-  async getNotaDebito(id: string): Promise<FiscalNoteDetailResult> {
-    return getFiscalNote("/admin/Facturacion/nota_debito", id);
   },
 };
 

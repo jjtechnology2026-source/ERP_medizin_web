@@ -8,6 +8,7 @@ import {
 } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
   FiscalNoteItem,
@@ -18,9 +19,10 @@ import type {
 interface FiscalNoteDialogProps {
   order: Order;
   onClose: () => void;
+  mode?: "digital" | "fiscal";
 }
 
-export default function FiscalNoteDialog({ order, onClose }: FiscalNoteDialogProps) {
+export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: FiscalNoteDialogProps) {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const rifEmisor = profile?.rif || order.rifEmisor || "";
@@ -83,19 +85,61 @@ export default function FiscalNoteDialog({ order, onClose }: FiscalNoteDialogPro
     id_order: order.id,
   });
 
-  const handleEmit = async (type: "NC" | "ND") => {
+  const handleEmit = async () => {
     if (!motivo.trim()) {
       setErrorMsg("El motivo es obligatorio.");
       return;
     }
 
     setStep("loading");
-    const payload = buildPayload();
 
-    const result =
-      type === "NC"
-        ? await fiscalNotesService.createNotaCredito(payload)
-        : await fiscalNotesService.createNotaDebito(payload);
+    if (mode === "fiscal") {
+        const payload = {
+          customer: {
+            name: cliente.razon_social,
+            document: cliente.rif,
+            address: cliente.direccion,
+          },
+          items: defaultItems.map((item) => ({
+            description: item.descripcion,
+            quantity: item.cantidad,
+            unit_price: item.precio_unitario,
+            tax_code: item.vat === 0 ? "EXENTO" as const : item.vat === 8 ? "IVA_REDUCIDO" as const : item.vat === 31 ? "IVA_ADICIONAL" as const : "IVA_GENERAL" as const,
+            sku: item.codigo_plu,
+          })),
+          payments: order.payments?.length
+            ? order.payments.map((p: any) => {
+                if (p.method === "dollars") return { method: "cash" as const, amount: p.amount, currency: "USD" as const, exchange_rate: tasaCambio };
+                if (p.method === "card") return { method: "card" as const, amount: p.amount };
+                return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
+              })
+            : [{ method: "cash" as const, amount: order.totalreal, currency: "VES" as const }],
+          prices_include_tax: false,
+          dry_run: false,
+          affected_fiscal_number: documentoAfectado.numero_documento,
+          affected_invoice_date: documentoAfectado.fecha_emision
+            ? new Date(documentoAfectado.fecha_emision).toLocaleDateString("es-VE")
+            : undefined,
+          reason: motivo,
+        };
+
+        const result = await fiscalPrinterClient.createCreditNote(payload);
+
+        if (!result.numero_control) {
+          setStep("error");
+          setErrorMsg("La impresora fiscal no devolvió número de control");
+          return;
+        }
+
+        setStep("result");
+        setResultMsg(
+          `Nota de Crédito fiscal emitida: ${result.numero_control}`
+        );
+        return;
+      }
+
+    const payload = buildPayload();
+    const result = await fiscalNotesService.createNotaCredito(payload);
 
     if (!result.success) {
       setStep("error");
@@ -105,7 +149,7 @@ export default function FiscalNoteDialog({ order, onClose }: FiscalNoteDialogPro
 
     setStep("result");
     setResultMsg(
-      `Nota de ${type === "NC" ? "Crédito" : "Débito"} emitida: ${
+      `Nota de Crédito emitida: ${
         result.response?.numero_control || "OK"
       }`
     );
@@ -237,7 +281,7 @@ export default function FiscalNoteDialog({ order, onClose }: FiscalNoteDialogPro
                 Cancelar
               </button>
               <button
-                onClick={() => handleEmit("NC")}
+                onClick={() => handleEmit()}
                 disabled={!motivo.trim() || !usesDigitalBilling}
                 className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg disabled:opacity-50"
               >

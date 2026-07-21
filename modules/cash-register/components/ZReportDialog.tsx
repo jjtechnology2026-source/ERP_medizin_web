@@ -11,6 +11,7 @@ import {
   HiOutlineCurrencyDollar,
 } from "react-icons/hi";
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import type { ZReportData, ZReportSession } from "@/modules/cash-register/types/fiscal-z-report.types";
 
@@ -20,6 +21,7 @@ interface ZReportDialogProps {
 
 export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const profile = useAuthStore((s) => s.profile);
+  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const rif = profile?.rif || "";
 
@@ -36,6 +38,19 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     }
 
     setStep("loading");
+
+    if (!usesDigitalBilling) {
+      try {
+        await fiscalPrinterClient.reportZ();
+        setReport(null);
+        setStep("result");
+      } catch (error: any) {
+        setStep("error");
+        setErrorMessage(error.message || "La impresora fiscal rechazó el Reporte Z.");
+      }
+      return;
+    }
+
     const date = new Date().toISOString().split("T")[0];
 
     const result = await fiscalZReportService.fetchZReport({
@@ -119,7 +134,9 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             <div>
               <p className="text-lg font-bold text-slate-800 mb-2">¿Deseas generar el reporte Z?</p>
               <p className="text-sm text-slate-500 max-w-md">
-                Se generará el reporte Z de facturación electrónica para la fecha de hoy.
+                {usesDigitalBilling
+                  ? "Se generará el reporte Z de facturación electrónica para la fecha de hoy."
+                  : "Se imprimirá el Reporte Z directamente en la impresora fiscal. Esta acción cierra la jornada fiscal."}
                 Esta acción no afecta el turno actual de caja.
               </p>
             </div>
@@ -134,7 +151,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 <p><span className="text-slate-400">Fact. electrónica:</span> <span className={`font-bold ${profile?.usesDigitalBilling ? "text-emerald-600" : "text-red-600"}`}>{profile?.usesDigitalBilling ? "Activada" : "Desactivada"}</span></p>
                 {!profile?.usesDigitalBilling && (
                   <p className="mt-2 pt-2 border-t border-slate-200 text-amber-600 font-bold text-xs">
-                    ⚠ La facturación electrónica está desactivada. Consulta con el administrador.
+                    ⚠ El Reporte Z se imprimirá en la impresora fiscal local y cerrará la jornada fiscal.
                   </p>
                 )}
               </div>
@@ -200,7 +217,23 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
           </div>
         )}
 
-        {/* Report Detail */}
+        {/* Report Detail — Fiscal mode */}
+        {step === "result" && !report && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div className="p-5 bg-emerald-50 rounded-full text-emerald-500">
+              <HiOutlineDocumentReport size={48} />
+            </div>
+            <p className="text-sm font-bold text-emerald-700">Reporte Z impreso correctamente.</p>
+            <button
+              onClick={onClose}
+              className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+
+        {/* Report Detail — Digital mode */}
         {step === "result" && report && (
           <div className="p-6 space-y-6">
             {/* Company info */}

@@ -13,7 +13,7 @@ import type { FiscalNoteDetail } from "@/modules/cash-register/types/fiscal-note
 
 interface FiscalNoteDetailDialogProps {
   noteId: string;
-  noteType: "NC" | "ND";
+  noteType: "NC";
   onClose: () => void;
 }
 

@@ -136,14 +136,11 @@ export default function Reportes() {
 
   const noteStats = useMemo(() => {
     let creditNotes = 0;
-    let debitNotes = 0;
     let ordersWithNotes = 0;
     for (const order of orders) {
-      if (order.notaCredito || order.notaDebito) ordersWithNotes++;
-      if (order.notaCredito) creditNotes++;
-      if (order.notaDebito) debitNotes++;
+      if (order.notaCredito) { ordersWithNotes++; creditNotes++; }
     }
-    return { creditNotes, debitNotes, ordersWithNotes };
+    return { creditNotes, ordersWithNotes };
   }, [orders]);
 
   const getTrend = (current: number, previous: number): { percentage: string; trend: "up" | "down" } => {
@@ -214,12 +211,6 @@ export default function Reportes() {
             </span>
             <p className="text-sm text-gray-500 mt-2">Notas de crédito</p>
           </div>
-          <div className="bg-[#fffbeb] p-6 rounded-xl border-l-4 border-amber-400">
-            <span className="text-4xl font-bold text-[#f59e0b]">
-              {noteStats.debitNotes}
-            </span>
-            <p className="text-sm text-gray-500 mt-2">Notas de débito</p>
-          </div>
         </div>
 
         {noteStats.ordersWithNotes === 0 ? (
@@ -228,8 +219,7 @@ export default function Reportes() {
           </p>
         ) : (
           <p className="text-gray-500 text-sm">
-            Se encontraron {noteStats.ordersWithNotes} órdenes con notas emitidas
-            ({noteStats.creditNotes} crédito, {noteStats.debitNotes} débito).
+            Se encontraron {noteStats.ordersWithNotes} órdenes con notas de crédito emitidas
           </p>
         )}
       </div>

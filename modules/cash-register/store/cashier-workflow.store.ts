@@ -4,6 +4,7 @@ import { cashierAccountantService } from "@/modules/cash-register/api/cashier-ac
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -17,7 +18,6 @@ interface CashierWorkflowStore extends CashierWorkflowState {
     options?: { observations?: string; openNewTurn?: boolean; nextCashierId?: string }
   ) => Promise<void>;
   issueCreditNote: (invoiceId: string, reason: string) => Promise<void>;
-  issueDebitNote: (invoiceId: string, reason: string) => Promise<void>;
   clearMessages: () => void;
   setError: (msg: string | null) => void;
   setInfo: (msg: string | null) => void;
@@ -154,12 +154,23 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({ isSubmitting: true, errorMessage: null });
     try {
+      if (saleType === "local") {
+        const fiscalPayload = buildFiscalPayload(order);
+        const fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
+        const numeroControl = fiscalResult.numero_control;
+        if (!numeroControl) {
+          set({ isSubmitting: false, errorMessage: "La impresora fiscal no devolvió número de control" });
+          return null;
+        }
+        (order as any).numeroControlInterno = numeroControl;
+      }
+
       const result = await cashierAccountantService.submitOrder(order, saleType, activeSession.id);
       set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
       await get().load();
       return result;
     } catch (error: any) {
-      const mensaje = error.response?.data?.message || "Error al procesar la venta";
+      const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
       return null;
@@ -223,37 +234,51 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     }
   },
 
-  issueDebitNote: async (invoiceId, reason) => {
-    const { activeSession } = get();
-    if (!activeSession) return;
-    set({ isSubmitting: true });
-    try {
-      const invoice = get().sessionInvoices.find((i) => i.id === invoiceId);
-      if (!invoice) throw new Error("Factura no encontrada");
-
-      await cashierAccountantService.createDebitNote({
-        factura_id: invoiceId,
-        sesion_caja_id: activeSession.id,
-        numero_control: cashierAccountantService.buildControlNumber("ND"),
-        motivo: reason,
-        tasa_cambio: invoice.exchangeRate || 1,
-        detalles: invoice.lines.map((l) => ({
-          detalle_factura_id: l.id,
-          descripcion: l.description,
-          cantidad: l.quantity,
-          precio_unitario_ves: l.unitPriceVes,
-          iva_porcentaje: l.vatPercentage,
-        })),
-      });
-      set({ isSubmitting: false, infoMessage: "Nota de débito emitida" });
-      await get().load();
-    } catch (error: any) {
-      const mensaje = error.response?.data?.message || "Error al emitir nota de débito";
-      set({ isSubmitting: false, errorMessage: mensaje });
-    }
-  },
-
   clearMessages: () => set({ errorMessage: null, infoMessage: null }),
   setError: (msg) => set({ errorMessage: msg }),
   setInfo: (msg) => set({ infoMessage: msg }),
 }));
+
+function mapVatToTaxCode(vat: number): string {
+  switch (vat) {
+    case 0: return "EXENTO";
+    case 8: return "IVA_REDUCIDO";
+    case 31: return "IVA_ADICIONAL";
+    default: return "IVA_GENERAL";
+  }
+}
+
+function mapPaymentToFiscal(p: any, rate: number) {
+  switch (p.method) {
+    case "dollars":
+      return { method: "cash" as const, amount: p.amount, currency: "USD" as const, exchange_rate: rate };
+    case "card":
+      return { method: "card" as const, amount: p.amount };
+    case "mobile":
+      return { method: "mobile_payment" as const, amount: p.amount, reference: p.reference || "" };
+    case "biopago":
+      return { method: "other" as const, amount: p.amount, reference: p.reference || "" };
+    default:
+      return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
+  }
+}
+
+function buildFiscalPayload(order: any) {
+  return {
+    customer: {
+      name: order.client?.name || "Cliente General",
+      document: order.client?.documento || "V-00000000",
+      address: order.client?.direccion || "",
+    },
+    items: order.medications.map((m: any) => ({
+      description: m.name || m.description || "",
+      quantity: m.quantity,
+      unit_price: m.price,
+      tax_code: mapVatToTaxCode(m.vat || 16),
+      sku: m.barCode || "",
+    })),
+    payments: order.payments.map((p: any) => mapPaymentToFiscal(p, order.rate || 1)),
+    prices_include_tax: false,
+    dry_run: false,
+  };
+}
