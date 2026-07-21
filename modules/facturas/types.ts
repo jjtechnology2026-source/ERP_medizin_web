@@ -31,6 +31,19 @@ export interface FacturaDetail {
   url_pdf: string | null;
   observaciones: string | null;
   detalles: FacturaDetalleItem[];
+  transacciones: FacturaTransaccion[];
+}
+
+export interface FacturaTransaccion {
+  id: string;
+  tipo: string;
+  metodo_pago: string;
+  moneda: string;
+  monto_original: number;
+  monto_ves: number;
+  tasa_cambio: number | null;
+  descripcion: string | null;
+  fecha_hora: string;
 }
 
 export interface FacturaDetalleItem {
@@ -41,6 +54,16 @@ export interface FacturaDetalleItem {
   precio_unitario_ves: number;
   iva_porcentaje: number;
   subtotal_ves: number;
+}
+
+export interface NotaCreditoResumen {
+  id: string;
+  factura_id: string;
+  numero_control: string;
+  fecha_emision: string;
+  motivo: string;
+  total_ves: number;
+  total_usd: number;
 }
 
 export interface FacturaFilters {

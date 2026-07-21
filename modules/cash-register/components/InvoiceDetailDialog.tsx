@@ -240,7 +240,9 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
             </div>
 
             {/* Payment info */}
-            {d.transaccion && (
+            {d.transacciones.length > 0 && (() => {
+              const t = d.transacciones[0];
+              return (
               <div className="border-t border-slate-100 px-6 py-3">
                 <div className="flex items-center gap-3 mb-2.5">
                   <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center">
@@ -251,31 +253,32 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-2 gap-x-4 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-400">Método:</span>
-                    <span className="font-semibold text-slate-700 capitalize">{d.transaccion.metodoPago}</span>
+                    <span className="font-semibold text-slate-700 capitalize">{t.metodoPago}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-400">Moneda:</span>
-                    <span className="font-semibold text-slate-700">{d.transaccion.moneda}</span>
+                    <span className="font-semibold text-slate-700">{t.moneda}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-400">Monto:</span>
                     <span className="font-semibold text-slate-700 font-mono">
-                      {d.transaccion.moneda === "USD" ? "$" : "Bs"} {d.transaccion.montoOriginal.toFixed(2)}
+                      {t.moneda === "USD" ? "$" : "Bs"} {t.montoOriginal.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-400">Monto VES:</span>
-                    <span className="font-semibold text-slate-700 font-mono">Bs {d.transaccion.montoVes.toFixed(2)}</span>
+                    <span className="font-semibold text-slate-700 font-mono">Bs {t.montoVes.toFixed(2)}</span>
                   </div>
-                  {d.transaccion.descripcion && (
+                  {t.descripcion && (
                     <div className="col-span-full flex items-center gap-2">
                       <span className="font-medium text-slate-400 shrink-0">Referencia:</span>
-                      <span className="font-semibold text-slate-600">{d.transaccion.descripcion}</span>
+                      <span className="font-semibold text-slate-600">{t.descripcion}</span>
                     </div>
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Observaciones */}
             {d.observaciones && (

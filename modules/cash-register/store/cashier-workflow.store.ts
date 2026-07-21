@@ -225,6 +225,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           precio_unitario_ves: l.unitPriceVes,
           iva_porcentaje: l.vatPercentage,
         })),
+        movimientos_caja: [{ moneda: "VES", monto_original: invoice.totalVes, metodo_pago: "EFECTIVO" }],
       });
       set({ isSubmitting: false, infoMessage: "Nota de crédito emitida" });
       await get().load();

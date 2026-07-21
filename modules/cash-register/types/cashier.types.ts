@@ -78,7 +78,7 @@ export interface CashierInvoiceDetail {
   ivaRetenidoClienteVes: number | null;
   ivaAPagarEmpresaVes: number | null;
   lines: CashierInvoiceLine[];
-  transaccion: CashierPaymentTransaction | null;
+  transacciones: CashierPaymentTransaction[];
 }
 
 export interface CashierPaymentTransaction {
@@ -163,6 +163,14 @@ export interface CashierWorkflowState {
   infoMessage: string | null;
 }
 
+export interface MovimientoCajaPayload {
+  moneda: string;
+  monto_original: number;
+  tasa_cambio?: number;
+  metodo_pago: string;
+  descripcion?: string;
+}
+
 export interface CreateInvoicePayload {
   sesion_caja_id: string;
   numero_control: string;
@@ -177,13 +185,7 @@ export interface CreateInvoicePayload {
     precio_unitario_ves: number;
     iva_porcentaje: number;
   }[];
-  movimiento_caja?: {
-    moneda: string;
-    monto_original: number;
-    tasa_cambio?: number;
-    metodo_pago: string;
-    descripcion: string;
-  };
+  movimientos_caja: MovimientoCajaPayload[];
 }
 
 export interface CloseSessionPayload {
