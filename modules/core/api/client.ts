@@ -78,6 +78,16 @@ api.interceptors.response.use(
             const parts = originalUrl.split("?")[0].split("/").filter(Boolean);
             const entityName = parts.length > 0 ? parts.join("/") : "system";
 
+            // Normalizar a objeto puro (Map en backend)
+            const normalize = (d: any) => {
+              if (d === null || d === undefined) return null;
+              if (Array.isArray(d)) return { items: d };
+              if (typeof d !== "object") return { value: d };
+              return d;
+            };
+
+            const normData = normalize(originalData);
+
             // Se envía usando axios directo para evitar loops de interceptores
             axios.post(
               "/api/proxy",
@@ -88,8 +98,8 @@ api.interceptors.response.use(
                   action,
                   entity_name: entityName,
                   entity_id: "auto",
-                  new_values: originalData ?? null,
-                  old_values: action === "CREATE" ? null : {}, // El backend requiere old_values para UPDATE y DELETE
+                  new_values: action === "DELETE" ? null : (normData ?? null),
+                  old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
                 },
               },
               {
