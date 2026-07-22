@@ -14,6 +14,7 @@ export function audit(
       action,
       entity_name: entityName,
       entity_id: entityId,
+      origen: "WEB",
       old_values: oldValues ?? null,
       new_values: newValues ?? null,
     })
