@@ -94,9 +94,8 @@ api.interceptors.response.use(
               action,
               entity_name: entityName,
               entity_id: "system:auto",
-              origen: "WEB",
-              new_values: action === "DELETE" ? null : (normData ?? null),
-              old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
+              new_values: action === "DELETE" ? null : { ...(normData ?? {}), origen: "WEB" },
+              old_values: action === "CREATE" ? null : (action === "DELETE" ? { ...(normData ?? {}), origen: "WEB" } : { origen: "WEB" }),
             }).catch((e) => {
                console.error(
                  "[Audit Error Background]",
