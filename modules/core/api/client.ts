@@ -53,7 +53,59 @@ api.interceptors.request.use(async (config) => {
 }, (err) => Promise.reject(err));
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Auditoría automática en segundo plano (fire-and-forget)
+    try {
+      const isProxy = (res.config as any).skipProxyInterceptor;
+      if (isProxy && res.config.data) {
+        const parsedBody =
+          typeof res.config.data === "string"
+            ? JSON.parse(res.config.data)
+            : res.config.data;
+            
+        const originalMethod = (parsedBody.method || "GET").toUpperCase();
+        const originalUrl = parsedBody.url || "";
+        const originalData = parsedBody.data;
+
+        if (["POST", "PUT", "PATCH", "DELETE"].includes(originalMethod)) {
+          let action = "UPDATE";
+          if (originalMethod === "POST") action = "CREATE";
+          if (originalMethod === "DELETE") action = "DELETE";
+
+          // Evitar bucle infinito de logs
+          if (!originalUrl.includes("/admin/audit/logs")) {
+            // Extraer nombre aproximado de la entidad (ej: /admin/products -> products)
+            const parts = originalUrl.split("?")[0].split("/").filter(Boolean);
+            const entityName = parts.length > 0 ? parts.join("/") : "system";
+
+            // Se envía usando axios directo para evitar loops de interceptores
+            axios.post(
+              "/api/proxy",
+              {
+                url: "/admin/audit/logs",
+                method: "POST",
+                data: {
+                  action,
+                  entity_name: entityName,
+                  entity_id: "auto",
+                  new_values: originalData ?? null,
+                },
+              },
+              {
+                headers: {
+                  Authorization: res.config.headers?.Authorization,
+                },
+              }
+            ).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      // Ignorar errores del log para no detener el flujo principal
+    }
+
+    return res;
+  },
   async (err) => {
     const req = err.config;
     const status = err.response?.status;
