@@ -12,7 +12,8 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   load: (pharmacyId?: string) => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
-  registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string } | null>;
+  registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; pendingControlNumber?: boolean } | null>;
+  confirmFiscalControlNumber: (controlNumber: string) => Promise<{ facturacion: any; ordenId: string }>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
     options?: { observations?: string; openNewTurn?: boolean; nextCashierId?: string }
@@ -35,6 +36,7 @@ const initialState: CashierWorkflowState & { currentRate: number } = {
   errorMessage: null,
   infoMessage: null,
   currentRate: 0,
+  pendingFiscalOrder: null,
 };
 
 export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) => ({
@@ -157,12 +159,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       if (saleType === "local") {
         const fiscalPayload = buildFiscalPayload(order);
         const fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
-        const numeroControl = fiscalResult.numero_control;
-        if (!numeroControl) {
+        if (!fiscalResult.numero_control) {
           set({ isSubmitting: false, errorMessage: "La impresora fiscal no devolvió número de control" });
           return null;
         }
-        (order as any).numeroControlInterno = numeroControl;
+        set({ pendingFiscalOrder: order, isSubmitting: false });
+        return { pendingControlNumber: true, facturacion: null, ordenId: "" };
       }
 
       const result = await cashierAccountantService.submitOrder(order, saleType, activeSession.id);
@@ -174,6 +176,27 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       console.error("❌ [registerSale] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
       return null;
+    }
+  },
+
+  confirmFiscalControlNumber: async (controlNumber: string) => {
+    const { pendingFiscalOrder, activeSession } = get();
+    if (!pendingFiscalOrder || !activeSession?.id) {
+      throw new Error("No hay orden fiscal pendiente");
+    }
+
+    pendingFiscalOrder.numeroControlInterno = controlNumber;
+
+    set({ isSubmitting: true, errorMessage: null });
+    try {
+      const result = await cashierAccountantService.submitOrder(pendingFiscalOrder, "local", activeSession.id);
+      set({ isSubmitting: false, pendingFiscalOrder: null, infoMessage: "Venta procesada exitosamente" });
+      await get().load();
+      return result;
+    } catch (error: any) {
+      const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
+      set({ isSubmitting: false, errorMessage: mensaje, pendingFiscalOrder: null });
+      throw new Error(mensaje);
     }
   },
 

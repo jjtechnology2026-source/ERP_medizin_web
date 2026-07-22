@@ -61,12 +61,14 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, activeSession, errorMessage, setError } = useCashierWorkflowStore();
+  const { registerSale, confirmFiscalControlNumber, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
+  const [isAwaitingControlNumber, setIsAwaitingControlNumber] = useState(false);
+  const [controlNumberInput, setControlNumberInput] = useState("");
 
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
@@ -263,6 +265,13 @@ export default function PaymentDialog({
         throw new Error("No se pudo procesar la venta");
       }
 
+      if (result.pendingControlNumber) {
+        setIsAwaitingControlNumber(true);
+        setControlNumberInput("");
+        setIsProcessing(false);
+        return;
+      }
+
       if (result.facturacion?.success) {
         console.log("✅ Factura fiscal:", result.facturacion.numeroControl);
       }
@@ -289,7 +298,30 @@ export default function PaymentDialog({
     }
   };
 
-  return createPortal(
+  const handleControlNumberConfirm = async () => {
+    if (!controlNumberInput.trim()) return;
+    setIsProcessing(true);
+    try {
+      await confirmFiscalControlNumber(controlNumberInput.trim());
+      const order = useCurrentOrderStore.getState().getCurrentOrder();
+      const soldMeds = order?.medications ?? [];
+      if (soldMeds.length > 0) {
+        useProductsStore.getState().decrementStock(
+          soldMeds.map((med) => ({ barCode: med.barCode, quantity: med.quantity }))
+        );
+      }
+      useCurrentOrderStore.getState().clearCurrentOrder();
+      onComplete();
+    } catch (err: any) {
+      setLocalError(err.message || "Error al registrar la orden");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <>
+    {createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col text-slate-800">
         <div className="flex items-center justify-between p-6 pb-3 flex-shrink-0">
@@ -551,6 +583,82 @@ export default function PaymentDialog({
                           : "Cobrar e Imprimir"}
             </button>
           </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+    )}
+    {isAwaitingControlNumber && (
+      <ControlNumberDialog
+        controlNumber={controlNumberInput}
+        onChange={setControlNumberInput}
+        onConfirm={handleControlNumberConfirm}
+        onCancel={() => {
+          setIsAwaitingControlNumber(false);
+          setControlNumberInput("");
+          setLocalError("Venta cancelada — la factura fiscal ya fue impresa pero no se registró en el sistema.");
+        }}
+        isProcessing={isProcessing}
+      />
+    )}
+    </>
+  );
+}
+
+function ControlNumberDialog({
+  controlNumber,
+  onChange,
+  onConfirm,
+  onCancel,
+  isProcessing,
+}: {
+  controlNumber: string;
+  onChange: (v: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isProcessing: boolean;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 backdrop-blur-md">
+      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
+        <div className="text-center">
+          <h2 className="text-xl font-black text-slate-800">Número de control interno</h2>
+          <p className="text-sm font-bold text-slate-400 mt-1">
+            Ingresá el número de control que aparece en el ticket fiscal impreso
+          </p>
+        </div>
+
+        <input
+          type="text"
+          value={controlNumber}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Ej: 00000123"
+          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 text-center text-lg tracking-widest"
+          autoFocus
+        />
+
+        {isProcessing && (
+          <div className="flex items-center justify-center gap-2 text-sm font-bold text-blue-600">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
+            Registrando venta...
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isProcessing}
+            className="flex-1 py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!controlNumber.trim() || isProcessing}
+            className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Confirmar
+          </button>
         </div>
       </div>
     </div>,

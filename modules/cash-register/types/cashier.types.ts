@@ -161,6 +161,7 @@ export interface CashierWorkflowState {
   selectedCashBoxId: string | null;
   errorMessage: string | null;
   infoMessage: string | null;
+  pendingFiscalOrder: Record<string, any> | null;
 }
 
 export interface MovimientoCajaPayload {
