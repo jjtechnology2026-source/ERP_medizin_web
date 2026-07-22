@@ -89,6 +89,7 @@ api.interceptors.response.use(
                   entity_name: entityName,
                   entity_id: "auto",
                   new_values: originalData ?? null,
+                  old_values: action === "CREATE" ? null : {}, // El backend requiere old_values para UPDATE y DELETE
                 },
               },
               {
