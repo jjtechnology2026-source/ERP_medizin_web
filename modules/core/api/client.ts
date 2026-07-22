@@ -93,7 +93,7 @@ api.interceptors.response.use(
             api.post("/admin/audit/logs", {
               action,
               entity_name: entityName,
-              entity_id: "auto",
+              entity_id: "system:auto",
               new_values: action === "DELETE" ? null : (normData ?? null),
               old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
             }).catch((e) => {
