@@ -88,26 +88,17 @@ api.interceptors.response.use(
 
             const normData = normalize(originalData);
 
-            // Se envía usando axios directo para evitar loops de interceptores
-            axios.post(
-              "/api/proxy",
-              {
-                url: "/admin/audit/logs",
-                method: "POST",
-                data: {
-                  action,
-                  entity_name: entityName,
-                  entity_id: "auto",
-                  new_values: action === "DELETE" ? null : (normData ?? null),
-                  old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
-                },
-              },
-              {
-                headers: {
-                  Authorization: res.config.headers?.Authorization,
-                },
-              }
-            ).catch(() => {});
+            // Usamos api.post para heredar automáticamente los headers y el token de sesión,
+            // dejándolo en segundo plano sin await.
+            api.post("/admin/audit/logs", {
+              action,
+              entity_name: entityName,
+              entity_id: "auto",
+              new_values: action === "DELETE" ? null : (normData ?? null),
+              old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
+            }).catch((e) => {
+               console.error("[Audit Error Background]", e?.response?.data || e.message);
+            });
           }
         }
       }
