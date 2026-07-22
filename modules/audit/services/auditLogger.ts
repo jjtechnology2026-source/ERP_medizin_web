@@ -19,6 +19,9 @@ export function audit(
       new_values: newValues ?? null,
     })
     .catch((error) => {
-      console.error("Error sending audit log:", error);
+      console.error(
+        "Error sending audit log:", 
+        error?.response?.data ? JSON.stringify(error.response.data, null, 2) : error
+      );
     });
 }

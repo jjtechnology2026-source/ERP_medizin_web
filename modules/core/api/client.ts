@@ -98,7 +98,10 @@ api.interceptors.response.use(
               new_values: action === "DELETE" ? null : (normData ?? null),
               old_values: action === "CREATE" ? null : (action === "DELETE" ? (normData ?? {}) : {}),
             }).catch((e) => {
-               console.error("[Audit Error Background]", e?.response?.data || e.message);
+               console.error(
+                 "[Audit Error Background]",
+                 e?.response?.data ? JSON.stringify(e.response.data, null, 2) : e.message
+               );
             });
           }
         }
