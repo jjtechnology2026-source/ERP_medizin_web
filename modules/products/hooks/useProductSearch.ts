@@ -31,7 +31,12 @@ export function useProductSearch({
       source = source.filter((m) => m.stock > 0);
     }
 
-    const q = debouncedQuery.toLowerCase().trim();
+    const normalizeStr = (str: string | undefined | null) => {
+      if (!str) return "";
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
+
+    const q = normalizeStr(debouncedQuery).trim();
     if (!q) return source;
 
     const exactBarcode = source.find((m) => m.barCode === debouncedQuery);
@@ -40,19 +45,19 @@ export function useProductSearch({
     return source
       .filter(
         (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.activeIngredient.toLowerCase().includes(q) ||
-          m.brand.toLowerCase().includes(q) ||
-          m.barCode.toLowerCase().includes(q)
+          normalizeStr(m.name).includes(q) ||
+          normalizeStr(m.activeIngredient).includes(q) ||
+          normalizeStr(m.brand).includes(q) ||
+          normalizeStr(m.barCode).includes(q)
       )
       .sort((a, b) => {
         const aStarts =
-          a.activeIngredient.toLowerCase().startsWith(q) ? 0
-          : a.name.toLowerCase().startsWith(q) ? 1
+          normalizeStr(a.activeIngredient).startsWith(q) ? 0
+          : normalizeStr(a.name).startsWith(q) ? 1
           : 2;
         const bStarts =
-          b.activeIngredient.toLowerCase().startsWith(q) ? 0
-          : b.name.toLowerCase().startsWith(q) ? 1
+          normalizeStr(b.activeIngredient).startsWith(q) ? 0
+          : normalizeStr(b.name).startsWith(q) ? 1
           : 2;
         return aStarts - bStarts;
       });

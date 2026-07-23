@@ -14,8 +14,9 @@ export function audit(
       action,
       entity_name: entityName,
       entity_id: entityId,
-      old_values: oldValues ? { ...oldValues, origen: "WEB" } : { origen: "WEB" },
-      new_values: newValues ? { ...newValues, origen: "WEB" } : { origen: "WEB" },
+      origen: "WEB",
+      old_values: oldValues ?? null,
+      new_values: newValues ?? null,
     })
     .catch((error) => {
       console.error(

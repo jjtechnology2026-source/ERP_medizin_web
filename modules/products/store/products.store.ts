@@ -331,7 +331,13 @@ export const useProductsStore = create<ProductsStore>()(
 
       getFilteredInventory: () => {
         const { inventory, filter, searchQuery } = get();
-        const q = searchQuery.toLowerCase().trim();
+        
+        const normalizeStr = (str: string | undefined | null) => {
+          if (!str) return "";
+          return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        };
+
+        const q = normalizeStr(searchQuery).trim();
         let filtered = [...inventory];
 
         if (filter === "LOW") {
@@ -341,10 +347,10 @@ export const useProductsStore = create<ProductsStore>()(
         if (q) {
           filtered = filtered.filter(
             (m) =>
-              (m.name || "").toLowerCase().includes(q) ||
-              (m.barCode || "").toLowerCase().includes(q) ||
-              (m.activeIngredient || "").toLowerCase().includes(q) ||
-              (m.brand || "").toLowerCase().includes(q)
+              normalizeStr(m.name).includes(q) ||
+              normalizeStr(m.barCode).includes(q) ||
+              normalizeStr(m.activeIngredient).includes(q) ||
+              normalizeStr(m.brand).includes(q)
           );
         }
 

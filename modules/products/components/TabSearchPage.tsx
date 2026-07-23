@@ -55,12 +55,14 @@ export default function CatalogSearchPage({
   const catalogList = useMemo(() => {
     const map = new Map<string, Medication>();
 
-    catalog.forEach(m => {
+    catalog.forEach((m, idx) => {
       if (m.barCode) map.set(m.barCode, m);
+      else map.set(`cat-${idx}`, m);
     });
 
-    inventory.forEach(m => {
+    inventory.forEach((m, idx) => {
       if (m.barCode) map.set(m.barCode, m);
+      else map.set(`inv-${idx}`, m);
     });
 
     return Array.from(map.values());
@@ -84,17 +86,22 @@ export default function CatalogSearchPage({
     return Array.from(set).sort();
   }, [catalogList]);
 
+  const normalizeStr = (str: string | undefined | null) => {
+    if (!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  };
+
   const filteredResults = useMemo(() => {
-    const q = debouncedQuery.toLowerCase().trim();
+    const q = normalizeStr(debouncedQuery).trim();
     if (!q || q.length < 1) return [];
     let list = catalogList.filter(
       (m) =>
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.activeIngredient || "").toLowerCase().includes(q) ||
-        (m.barCode || "").toLowerCase().includes(q) ||
-        (m.brand || "").toLowerCase().includes(q) ||
-        (m.dosage || "").toLowerCase().includes(q) ||
-        (m.tablets || "").toLowerCase().includes(q)
+        normalizeStr(m.name).includes(q) ||
+        normalizeStr(m.activeIngredient).includes(q) ||
+        normalizeStr(m.barCode).includes(q) ||
+        normalizeStr(m.brand).includes(q) ||
+        normalizeStr(m.dosage).includes(q) ||
+        normalizeStr(m.tablets).includes(q)
     );
     if (filterInStock === "yes") list = list.filter(m => m.stock > 0);
     else if (filterInStock === "no") list = list.filter(m => m.stock <= 0);
