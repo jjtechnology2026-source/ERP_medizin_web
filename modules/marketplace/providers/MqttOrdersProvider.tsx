@@ -626,6 +626,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
           MQTT_TOPICS.paymentAccepted(orderId),
           MQTT_TOPICS.acceptedDelivery(orderId),
           MQTT_TOPICS.completedOrder(orderId),
+          MQTT_TOPICS.clientToPharmacy(orderId),
         ], (profile as any)?.id_agent).catch(() => {});
       }
     });
@@ -637,6 +638,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
           MQTT_TOPICS.paymentAccepted(orderId),
           MQTT_TOPICS.acceptedDelivery(orderId),
           MQTT_TOPICS.completedOrder(orderId),
+          MQTT_TOPICS.clientToPharmacy(orderId),
         ]).catch(() => {});
       }
     });
