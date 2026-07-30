@@ -8,11 +8,13 @@ export interface FiscalNoteItem {
 }
 
 export interface FiscalNoteCliente {
-  rif: string;
+  tipo_identificacion: string;
+  numero_identificacion: string;
   razon_social: string;
   direccion: string;
   telefono: string;
   correo: string;
+  pais?: string;
 }
 
 export interface FiscalNoteDocumentoAfectado {
@@ -20,6 +22,7 @@ export interface FiscalNoteDocumentoAfectado {
   fecha_emision: string;
   monto_total: number;
   motivo: string;
+  serie?: string;
 }
 
 export interface FiscalNoteCreateRequest {
@@ -35,6 +38,9 @@ export interface FiscalNoteCreateRequest {
   id_order?: string;
   sesion_caja_id?: string;
   factura_id?: string;
+  tipo_de_pago?: string;
+  moneda?: string;
+  codigo_ciiu?: string;
 }
 
 export interface FiscalNoteResponse {

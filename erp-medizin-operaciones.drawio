@@ -1,0 +1,215 @@
+<mxfile host="65bd71144e">
+    <diagram id="PLj1-ySbaTuObSoqSbh5" name="Página-1">
+        <mxGraphModel dx="433" dy="697" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="t1" value="&lt;b&gt;ERP MEDIZIN — PROCESOS OPERATIVOS&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=22;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="10" width="560" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="al" value="Ingresar credenciales" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EEF2FF;strokeColor=#6366F1;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="1" vertex="1">
+                    <mxGeometry x="420" y="56" width="320" height="38" as="geometry"/>
+                </mxCell>
+                <mxCell id="av" value="Credenciales validas?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="1" vertex="1">
+                    <mxGeometry x="490" y="114" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ap" value="Asignar permisos segun rol: superadmin, admin, administrativo, contable, gestion, seniat" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EEF2FF;strokeColor=#6366F1;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="1" vertex="1">
+                    <mxGeometry x="320" y="190" width="520" height="38" as="geometry"/>
+                </mxCell>
+                <mxCell id="ea1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="al" target="av" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ea2" value="Si" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="av" target="ap" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ea2b" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="av" target="al" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="da" value="&lt;b&gt;PANEL DE CONTROL&lt;/b&gt; — Ventas, tendencias, top productos, tipos de venta, impresora fiscal" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F5F3FF;strokeColor=#8B5CF6;strokeWidth=2;fontColor=#1E293B;fontSize=12" parent="1" vertex="1">
+                    <mxGeometry x="220" y="260" width="720" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eda" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="ap" target="da" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="inv" value="&lt;b&gt;INVENTARIO&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#047857;strokeColor=#047857;gradientColor=#57a58f;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="330" width="360" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="i1" value="Ver stock disponible" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#0F766E;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="inv" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="idc" value="Que desea hacer?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=12" parent="inv" vertex="1">
+                    <mxGeometry x="110" y="100" width="140" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="ic" value="Buscar catalogo" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#0F766E;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="inv" vertex="1">
+                    <mxGeometry x="20" y="166" width="150" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="im" value="Crear manual" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#0F766E;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="inv" vertex="1">
+                    <mxGeometry x="180" y="166" width="160" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ix" value="Importar Excel" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#0F766E;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="inv" vertex="1">
+                    <mxGeometry x="220" y="225" width="140" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="id" value="Completar: nombre, marca, dosis, codigo, categoria, precio, stock, IVA" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#0F766E;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="inv" vertex="1">
+                    <mxGeometry x="20" y="274" width="320" height="38" as="geometry"/>
+                </mxCell>
+                <mxCell id="ik" value="Producto listo en inventario" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="inv" vertex="1">
+                    <mxGeometry x="20" y="334" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="i1" target="idc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei2" value="Cat." style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="idc" target="ic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei3" value="Manual" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="idc" target="im" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei4" value="Excel" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="idc" target="ix" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="180" y="210"/>
+                            <mxPoint x="290" y="210"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ei5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="ic" target="id" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="im" target="id" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="260" y="220"/>
+                            <mxPoint x="180" y="220"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ei7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="ix" target="id" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ei8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="inv" source="id" target="ik" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="pos" value="&lt;b&gt;CAJA DE VENTAS&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#1D4ED8;strokeColor=#1D4ED8;gradientColor=#6889e5;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="320" width="360" height="530" as="geometry"/>
+                </mxCell>
+                <mxCell id="p1" value="Seleccionar caja y abrir sesion" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pb" value="Supervisor aprueba?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=12" parent="pos" vertex="1">
+                    <mxGeometry x="90" y="100" width="180" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="po" value="Crear nueva orden de venta" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="166" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pm" value="Buscar medicamentos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="224" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pc" value="Datos del cliente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="pos" vertex="1">
+                    <mxGeometry x="185" y="224" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pp" value="Seleccionar metodo de pago" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="280" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pt" value="Tipo de venta?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="pos" vertex="1">
+                    <mxGeometry x="95" y="350" width="170" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="pl" value="Venta local: factura fiscal" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FEF2F2;strokeColor=#EF4444;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="416" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pd" value="Venta digital" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FEF2F2;strokeColor=#EF4444;strokeWidth=2;fontColor=#1E293B;fontSize=11" parent="pos" vertex="1">
+                    <mxGeometry x="185" y="416" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="pk" value="Venta completada — Orden registrada" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="472" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="p1" target="pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep2" value="Si" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pb" target="po" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="po" target="pm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="po" target="pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pm" target="pp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pc" target="pp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pp" target="pt" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep8" value="Local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pt" target="pl" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep9" value="Digital" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pt" target="pd" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pl" target="pk" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="pos" source="pd" target="pk" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="pmt" value="Efectivo Bs · Dolares · Tarjeta · Pago Movil · Biopago" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontColor=#3B82F6;fontSize=10;fontStyle=1" parent="pos" vertex="1">
+                    <mxGeometry x="20" y="320" width="320" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="mp" value="&lt;b&gt;MARKETPLACE&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#BE185D;strokeColor=#BE185D;gradientColor=#d36593;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="330" width="360" height="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="m1" value="Recibir notificacion de nuevo pedido" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FDF2F8;strokeColor=#EC4899;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="mp" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="m2" value="Revisar detalle: cliente, productos, total" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FDF2F8;strokeColor=#EC4899;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="mp" vertex="1">
+                    <mxGeometry x="20" y="100" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="mdc" value="Aceptar o rechazar?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="mp" vertex="1">
+                    <mxGeometry x="70" y="156" width="220" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="ma" value="Aceptar pedido" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="mp" vertex="1">
+                    <mxGeometry x="20" y="222" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="mr" value="Rechazar con motivo" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FDF2F8;strokeColor=#EC4899;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="mp" vertex="1">
+                    <mxGeometry x="185" y="222" width="155" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="mc" value="Chatear con el cliente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FDF2F8;strokeColor=#EC4899;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="mp" vertex="1">
+                    <mxGeometry x="20" y="278" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="mk" value="Preparar y marcar completado" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="mp" vertex="1">
+                    <mxGeometry x="20" y="334" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="em1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="m1" target="m2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="em2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="m2" target="mdc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="em3" value="Si" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="mdc" target="ma" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="em4" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="mdc" target="mr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="em5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="ma" target="mc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="em6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="mp" source="mc" target="mk" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="di" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;dashed=1;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="da" target="inv" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="dp" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;dashed=1;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="da" target="pos" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="dm" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;dashed=1;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="1" source="da" target="mp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

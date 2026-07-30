@@ -47,16 +47,20 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     [order.medications]
   );
 
-  const cliente: FiscalNoteCliente = useMemo(
-    () => ({
-      rif: order.client?.documento || "",
+  const cliente: FiscalNoteCliente = useMemo(() => {
+    const doc = order.client?.documento || "";
+    const tipoId = (doc.match(/^[A-Za-z]/)?.[0] || "V").toUpperCase();
+    const numeroId = doc.replace(/^[A-Za-z]-?/, "").replace(/-/g, "");
+    return {
+      tipo_identificacion: tipoId,
+      numero_identificacion: numeroId,
       razon_social: order.client?.name || "Cliente General",
       direccion: order.client?.direccion || "",
       telefono: order.client?.phone || "",
       correo: order.client?.email || "",
-    }),
-    [order.client]
-  );
+      pais: "VE",
+    };
+  }, [order.client]);
 
   const documentoAfectado: FiscalNoteDocumentoAfectado = useMemo(() => {
     const facturacion = order.facturacion;
@@ -74,11 +78,13 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
   const buildPayload = () => ({
     id_pharmacy: pharmacyId,
-    entidad: "SMART",
+    entidad: "TFHKA",
     tasa_cambio: tasaCambio,
     rif_emisor: rifEmisor,
     tracking_id: order.id,
     numero_control_interno: `INT-${Date.now()}`,
+    tipo_de_pago: "Contado",
+    moneda: "VED",
     cliente,
     documento_afectado: { ...documentoAfectado, motivo },
     items: defaultItems,
@@ -97,7 +103,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         const payload = {
           customer: {
             name: cliente.razon_social,
-            document: cliente.rif,
+            document: `${cliente.tipo_identificacion}${cliente.numero_identificacion}`,
             address: cliente.direccion,
           },
           items: defaultItems.map((item) => ({
@@ -181,8 +187,10 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <span className="text-slate-400 block">RIF</span>
-                  <span className="font-bold text-slate-800">{cliente.rif || "—"}</span>
+                  <span className="text-slate-400 block">Identificación</span>
+                  <span className="font-bold text-slate-800">
+                    {cliente.tipo_identificacion}-{cliente.numero_identificacion || "—"}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Razón Social</span>
