@@ -36,7 +36,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
   const [ncPorFactura, setNcPorFactura] = useState<Record<string, NotaCreditoResumen[]>>({});
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
+  const loadNcPorFactura = () => {
     if (!filtros.pharmacy_id) return;
     facturasService.listNotasCredito({
       pharmacy_id: filtros.pharmacy_id,
@@ -50,6 +50,10 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
       }
       setNcPorFactura(map);
     }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadNcPorFactura();
   }, [filtros.pharmacy_id, filtros.fecha_desde, filtros.fecha_hasta]);
   const perPage = 20;
 
@@ -260,7 +264,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
         <FacturaNotaCreditoDialog
           factura={selectedFactura}
           onClose={() => setSelectedFactura(null)}
-          onSuccess={onRefresh}
+          onSuccess={() => { loadNcPorFactura(); onRefresh(); }}
         />
       )}
     </div>
