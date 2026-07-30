@@ -5,6 +5,7 @@ import {
   HiOutlineDocumentReport,
   HiOutlineCash,
 } from "react-icons/hi";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
@@ -34,7 +35,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
   const [step, setStep] = useState<"loading" | "form" | "submitting" | "error" | "success">("loading");
   const [detail, setDetail] = useState<FacturaDetail | null>(null);
   const [motivo, setMotivo] = useState("");
-  const [metodoPago, setMetodoPago] = useState("EFECTIVO");
+  const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [moneda, setMoneda] = useState("VES");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -64,12 +65,18 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         monto_original: montoOriginal,
         tasa_cambio: moneda === "USD" ? detail.tasa_cambio : undefined,
         metodo_pago: metodoPago,
+        descripcion: undefined,
       };
 
       if (mode === "tfhka") {
         const rif = parseRif(detail.cliente_rif || "");
+        const authProfile = useAuthStore.getState().profile;
+        const rifEmisor = (authProfile as any)?.rif || (authProfile as any)?.rifPharmacy || "J-00000000-0";
+
         await facturasService.createCreditNoteTFHKA({
           id_pharmacy: detail.pharmacy_id,
+          rif_emisor: rifEmisor,
+          entidad: undefined,
           tasa_cambio: detail.tasa_cambio,
           tracking_id: uuidv4(),
           numero_control_interno: `NC-${Date.now()}`,
@@ -114,6 +121,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           numero_control: `NC-${Date.now()}`,
           motivo: motivo.trim(),
           tasa_cambio: detail.tasa_cambio,
+          observaciones: undefined,
           detalles: detail.detalles.map((d) => ({
             detalle_factura_id: d.id,
             descripcion: d.descripcion,
@@ -243,12 +251,12 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
                     onChange={(e) => setMetodoPago(e.target.value)}
                     className="w-full p-2.5 text-xs font-semibold bg-white border border-[#E4E7EB] rounded-xl outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
                   >
-                    <option value="EFECTIVO">Efectivo</option>
-                    <option value="TRANSFERENCIA">Transferencia</option>
-                    <option value="PUNTO_DE_VENTA">Punto de Venta</option>
-                    <option value="ZELLE">Zelle</option>
-                    <option value="PAGOMOVIL">Pago Móvil</option>
-                    <option value="OTRO">Otro</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="TarjetaDebito">Tarjeta Débito</option>
+                    <option value="TarjetaCredito">Tarjeta Crédito</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Biopago">Biopago</option>
                   </select>
                 </div>
                 <div>

@@ -69,6 +69,8 @@ export const facturasService = {
 
   async createCreditNoteTFHKA(payload: {
     id_pharmacy: string;
+    rif_emisor: string;
+    entidad?: string;
     tasa_cambio: number;
     tracking_id: string;
     numero_control_interno: string;
@@ -112,7 +114,7 @@ export const facturasService = {
       descripcion?: string;
     }[];
   }): Promise<void> {
-    await api.post("/facturacion/nota_credito", payload);
+    await api.post("/admin/Facturacion/nota_credito", payload);
   },
 };
 
