@@ -66,6 +66,54 @@ export const facturasService = {
   }): Promise<void> {
     await api.post("/admin/notas-credito", payload);
   },
+
+  async createCreditNoteTFHKA(payload: {
+    id_pharmacy: string;
+    tasa_cambio: number;
+    tracking_id: string;
+    numero_control_interno: string;
+    cliente: {
+      tipo_identificacion: string;
+      numero_identificacion: string;
+      razon_social: string;
+      direccion: string;
+      telefono: string;
+      correo: string;
+    };
+    documento_afectado: {
+      numero_documento: string;
+      fecha_emision: string;
+      monto_total: number;
+      motivo: string;
+    };
+    items: {
+      descripcion: string;
+      codigo_plu: string;
+      cantidad: number;
+      precio_unitario: number;
+      vat: number;
+      es_exento: boolean;
+    }[];
+    sesion_caja_id: string;
+    factura_id: string;
+    detalles_persist: {
+      detalle_factura_id: string;
+      descripcion: string;
+      cantidad: number;
+      precio_unitario_ves: number;
+      iva_porcentaje: number;
+      subtotal_ves: number;
+    }[];
+    movimientos_persist: {
+      moneda: string;
+      monto_original: number;
+      tasa_cambio?: number;
+      metodo_pago: string;
+      descripcion?: string;
+    }[];
+  }): Promise<void> {
+    await api.post("/facturacion/nota_credito", payload);
+  },
 };
 
 function parseFacturaListItem(raw: any): FacturaListItem {

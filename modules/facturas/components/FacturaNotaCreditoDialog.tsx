@@ -12,9 +12,25 @@ interface FacturaNotaCreditoDialogProps {
   factura: FacturaListItem;
   onClose: () => void;
   onSuccess: () => void;
+  mode?: "legacy" | "tfhka";
 }
 
-export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }: FacturaNotaCreditoDialogProps) {
+function parseRif(rif: string): { tipo: string; numero: string } {
+  const cleaned = rif.replace(/-/g, "").trim().toUpperCase();
+  if (/^[JVE PG]/.test(cleaned)) {
+    return { tipo: cleaned[0], numero: cleaned.slice(1) };
+  }
+  return { tipo: "J", numero: cleaned || "000000000" };
+}
+
+function uuidv4(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, mode = "legacy" }: FacturaNotaCreditoDialogProps) {
   const [step, setStep] = useState<"loading" | "form" | "submitting" | "error" | "success">("loading");
   const [detail, setDetail] = useState<FacturaDetail | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -43,26 +59,71 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess }
     setStep("submitting");
     try {
       const montoOriginal = moneda === "USD" ? detail.total_usd : detail.total_ves;
-      await facturasService.createCreditNote({
-        factura_id: detail.id,
-        sesion_caja_id: detail.sesion_caja_id,
-        numero_control: `NC-${Date.now()}`,
-        motivo: motivo.trim(),
-        tasa_cambio: detail.tasa_cambio,
-        detalles: detail.detalles.map((d) => ({
-          detalle_factura_id: d.id,
-          descripcion: d.descripcion,
-          cantidad: d.cantidad,
-          precio_unitario_ves: d.precio_unitario_ves,
-          iva_porcentaje: d.iva_porcentaje,
-        })),
-        movimientos_caja: [{
-          moneda,
-          monto_original: montoOriginal,
-          tasa_cambio: moneda === "USD" ? detail.tasa_cambio : undefined,
-          metodo_pago: metodoPago,
-        }],
-      });
+      const movimiento = {
+        moneda,
+        monto_original: montoOriginal,
+        tasa_cambio: moneda === "USD" ? detail.tasa_cambio : undefined,
+        metodo_pago: metodoPago,
+      };
+
+      if (mode === "tfhka") {
+        const rif = parseRif(detail.cliente_rif || "");
+        await facturasService.createCreditNoteTFHKA({
+          id_pharmacy: detail.pharmacy_id,
+          tasa_cambio: detail.tasa_cambio,
+          tracking_id: uuidv4(),
+          numero_control_interno: `NC-${Date.now()}`,
+          cliente: {
+            tipo_identificacion: rif.tipo,
+            numero_identificacion: rif.numero,
+            razon_social: detail.cliente_nombre,
+            direccion: "",
+            telefono: "",
+            correo: "",
+          },
+          documento_afectado: {
+            numero_documento: detail.numero_control,
+            fecha_emision: detail.fecha_emision,
+            monto_total: detail.total_ves,
+            motivo: motivo.trim(),
+          },
+          items: detail.detalles.map((d) => ({
+            descripcion: d.descripcion,
+            codigo_plu: "000",
+            cantidad: d.cantidad,
+            precio_unitario: d.precio_unitario_ves,
+            vat: d.iva_porcentaje,
+            es_exento: false,
+          })),
+          sesion_caja_id: detail.sesion_caja_id,
+          factura_id: detail.id,
+          detalles_persist: detail.detalles.map((d) => ({
+            detalle_factura_id: d.id,
+            descripcion: d.descripcion,
+            cantidad: d.cantidad,
+            precio_unitario_ves: d.precio_unitario_ves,
+            iva_porcentaje: d.iva_porcentaje,
+            subtotal_ves: d.subtotal_ves,
+          })),
+          movimientos_persist: [movimiento],
+        });
+      } else {
+        await facturasService.createCreditNote({
+          factura_id: detail.id,
+          sesion_caja_id: detail.sesion_caja_id,
+          numero_control: `NC-${Date.now()}`,
+          motivo: motivo.trim(),
+          tasa_cambio: detail.tasa_cambio,
+          detalles: detail.detalles.map((d) => ({
+            detalle_factura_id: d.id,
+            descripcion: d.descripcion,
+            cantidad: d.cantidad,
+            precio_unitario_ves: d.precio_unitario_ves,
+            iva_porcentaje: d.iva_porcentaje,
+          })),
+          movimientos_caja: [movimiento],
+        });
+      }
       setSuccessMsg("Nota de crédito emitida correctamente");
       setStep("success");
       setTimeout(onSuccess, 1500);
