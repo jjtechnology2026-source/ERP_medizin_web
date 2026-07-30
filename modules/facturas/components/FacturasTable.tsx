@@ -55,6 +55,12 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
   useEffect(() => {
     loadNcPorFactura();
   }, [filtros.pharmacy_id, filtros.fecha_desde, filtros.fecha_hasta]);
+
+  const handleRefresh = () => {
+    loadNcPorFactura();
+    onRefresh();
+  };
+
   const perPage = 20;
 
   const totalPages = Math.ceil(facturas.length / perPage);
@@ -85,7 +91,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
           )}
         </div>
         <button
-          onClick={onRefresh}
+          onClick={handleRefresh}
           disabled={isLoading}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8FAFC] hover:bg-[#F1F3F5] text-slate-600 rounded-lg text-[11px] font-bold transition-all duration-200 border border-[#E4E7EB] disabled:opacity-50"
         >
@@ -264,7 +270,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
         <FacturaNotaCreditoDialog
           factura={selectedFactura}
           onClose={() => setSelectedFactura(null)}
-          onSuccess={() => { loadNcPorFactura(); onRefresh(); }}
+          onSuccess={handleRefresh}
         />
       )}
     </div>
