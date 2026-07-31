@@ -66,7 +66,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     const facturacion = order.facturacion;
     return {
       numero_documento:
-        facturacion?.resp?.numero_control ||
+        facturacion?.resp?.numerocontrol ||
         facturacion?.numero_control ||
         order.id ||
         "",
