@@ -50,6 +50,7 @@ export interface FacturaTransaccion {
 export interface FacturaDetalleItem {
   id: string;
   factura_id: string;
+  producto_id?: string;
   descripcion: string;
   cantidad: number;
   precio_unitario_ves: number;

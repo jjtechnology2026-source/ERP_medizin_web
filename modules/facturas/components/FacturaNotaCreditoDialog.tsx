@@ -96,7 +96,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           },
           items: detail.detalles.map((d) => ({
             descripcion: d.descripcion,
-            codigo_plu: "000",
+            codigo_plu: d.producto_id || "000",
             cantidad: d.cantidad,
             precio_unitario: d.precio_unitario_ves,
             vat: d.iva_porcentaje,

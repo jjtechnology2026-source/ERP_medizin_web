@@ -8,6 +8,7 @@ import {
 } from "react-icons/hi";
 import type { FacturaListItem, NotaCreditoResumen, FacturaFilters } from "../types";
 import { facturasService } from "../api/facturas.service";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import FacturaNotaCreditoDialog from "./FacturaNotaCreditoDialog";
 import FacturaDetailDialog from "./FacturaDetailDialog";
 
@@ -31,6 +32,8 @@ function SkeletonRow() {
 }
 
 export default function FacturasTable({ facturas, isLoading, onRefresh, filtros }: FacturasTableProps) {
+  const profile = useAuthStore((s) => s.profile);
+  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const [selectedFactura, setSelectedFactura] = useState<FacturaListItem | null>(null);
   const [selectedDetailFactura, setSelectedDetailFactura] = useState<FacturaListItem | null>(null);
   const [ncPorFactura, setNcPorFactura] = useState<Record<string, NotaCreditoResumen[]>>({});
@@ -271,6 +274,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
           factura={selectedFactura}
           onClose={() => setSelectedFactura(null)}
           onSuccess={handleRefresh}
+          mode={usesDigitalBilling ? "tfhka" : "legacy"}
         />
       )}
     </div>

@@ -173,6 +173,7 @@ function parseFacturaDetail(raw: any): FacturaDetail {
       ? detalles.map((d: any) => ({
           id: d.id ?? "",
           factura_id: d.factura_id ?? "",
+          producto_id: d.producto_id ?? undefined,
           descripcion: d.descripcion ?? "",
           cantidad: Number(d.cantidad ?? 0),
           precio_unitario_ves: Number(d.precio_unitario_ves ?? 0),
