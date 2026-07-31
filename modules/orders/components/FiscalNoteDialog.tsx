@@ -66,13 +66,14 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     const facturacion = order.facturacion;
     return {
       numero_documento:
-        facturacion?.resp?.numerocontrol ||
+        facturacion?.resp?.numero_control ||
         facturacion?.numero_control ||
         order.id ||
         "",
       fecha_emision: facturacion?.resp?.fecha || order.date || "",
       monto_total: order.totalreal || 0,
       motivo: "",
+      serie: facturacion?.resp?.serie || "001",
     };
   }, [order]);
 
