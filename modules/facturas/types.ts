@@ -24,6 +24,7 @@ export interface FacturaDetail {
   cliente_rif: string;
   cliente_correo?: string | null;
   cliente_direccion?: string | null;
+  serie_fiscal?: string | null;
   total_ves: number;
   total_usd: number;
   tasa_cambio: number;
