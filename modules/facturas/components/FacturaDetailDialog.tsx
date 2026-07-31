@@ -104,6 +104,24 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
                   <p className="font-semibold text-slate-700 font-mono text-xs">{d.cliente_rif || "—"}</p>
                 </div>
               </div>
+              {d.cliente_direccion && (
+                <div className="flex items-start gap-3">
+                  <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Dirección</span>
+                    <p className="font-semibold text-slate-700 text-xs">{d.cliente_direccion}</p>
+                  </div>
+                </div>
+              )}
+              {d.cliente_correo && (
+                <div className="flex items-start gap-3">
+                  <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Correo</span>
+                    <p className="font-semibold text-slate-700 text-xs break-all">{d.cliente_correo}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
                 <div>
