@@ -160,6 +160,8 @@ function parseFacturaDetail(raw: any): FacturaDetail {
     fecha_emision: f.fecha_emision ?? "",
     cliente_nombre: f.cliente_nombre ?? "Cliente General",
     cliente_rif: f.cliente_rif ?? "",
+    cliente_correo: f.cliente_correo ?? null,
+    cliente_direccion: f.cliente_direccion ?? null,
     total_ves: Number(f.total_ves ?? 0),
     total_usd: Number(f.total_usd ?? 0),
     tasa_cambio: Number(f.tasa_cambio ?? 1),
