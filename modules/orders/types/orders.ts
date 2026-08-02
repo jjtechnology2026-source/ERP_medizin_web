@@ -52,7 +52,7 @@ export interface Facturacion {
     trackingid: string;
     urlpdf: string;
     fecha: string;
-    serie: string;
+    serie: string | null;
   } | null;
   error: any;
 }
