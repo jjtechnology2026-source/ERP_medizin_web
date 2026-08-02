@@ -30,7 +30,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
 
-  const initialStep = usesDigitalBilling ? "form" : "fiscal_printing";
+  const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
   const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
   const [report, setReport] = useState<CreatedZReport | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -39,17 +39,41 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const [printError, setPrintError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (step !== "fiscal_printing") return;
-    setPrintError(null);
-    (async () => {
-      try {
-        await fiscalPrinterClient.reportZ();
-        setStep("form");
-      } catch (e: any) {
-        setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
-      }
-    })();
-  }, [step]);
+    if (step === "fiscal_printing") {
+      setPrintError(null);
+      (async () => {
+        try {
+          await fiscalPrinterClient.reportZ();
+          setStep("form");
+        } catch (e: any) {
+          setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
+        }
+      })();
+      return;
+    }
+
+    if (step === "loading" && usesDigitalBilling) {
+      (async () => {
+        const result = await fiscalZReportService.createZReport(pharmacyId, {});
+
+        if (!result.success || !result.report) {
+          setStep("error");
+          let msg = result.message || "No se pudo registrar el reporte Z.";
+          if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
+          else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
+          else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
+          else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
+          else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
+          setErrorMessage(msg);
+          setErrorDetails(result.details);
+          return;
+        }
+
+        setReport(result.report);
+        setStep("result");
+      })();
+    }
+  }, [step, usesDigitalBilling, pharmacyId]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");
@@ -106,6 +130,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
         else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
         else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
+        else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
         setErrorMessage(msg);
         setErrorDetails(result.details);
         return;
@@ -338,7 +363,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep("form")}
+                onClick={() => setStep(usesDigitalBilling ? "loading" : "form")}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
                 Reintentar

@@ -134,14 +134,14 @@ export interface ZReportListResult {
 
 /** Body para POST /admin/farmacias/{id}/z-reports */
 export interface CreateZReportDto {
-  z_number: number;
-  fiscal_serial: string;
+  z_number?: number | null;
+  fiscal_serial?: string | null;
   fiscal_date?: string;
-  invoices: {
+  invoices?: {
     count: number;
     doc_from: string;
     doc_to: string;
-  };
+  } | null;
 }
 
 export interface ZReportDocRange {
