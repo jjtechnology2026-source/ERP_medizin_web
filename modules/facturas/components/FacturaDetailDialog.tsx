@@ -138,6 +138,15 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
                   </div>
                 </div>
               )}
+              {d.igtf_monto_ves > 0 && (
+                <div className="flex items-start gap-3">
+                  <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">IGTF</span>
+                    <p className="font-semibold text-slate-500 font-mono text-xs">Bs {d.igtf_monto_ves.toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
                 <div>

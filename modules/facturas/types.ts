@@ -32,6 +32,7 @@ export interface FacturaDetail {
   total_exento_ves: number;
   iva_porcentaje: number;
   iva_monto_ves: number;
+  igtf_monto_ves: number;
   url_pdf: string | null;
   observaciones: string | null;
   detalles: FacturaDetalleItem[];

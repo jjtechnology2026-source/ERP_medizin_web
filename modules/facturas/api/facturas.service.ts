@@ -170,6 +170,7 @@ function parseFacturaDetail(raw: any): FacturaDetail {
     total_exento_ves: Number(f.total_exento_ves ?? 0),
     iva_porcentaje: Number(f.iva_porcentaje ?? 0),
     iva_monto_ves: Number(f.iva_monto_ves ?? 0),
+    igtf_monto_ves: Number(f.igtf_monto_ves ?? 0),
     url_pdf: f.url_pdf ?? null,
     observaciones: f.observaciones ?? null,
     detalles: Array.isArray(detalles)
