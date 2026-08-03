@@ -58,8 +58,9 @@ export default function StockFeaturesForm({
 
   const discountedPrice = useMemo(() => {
     if (!hasDiscount) return priceWithVat;
-    return priceWithVat * (1 - discountPercent / 100);
-  }, [priceWithVat, discountPercent, hasDiscount]);
+    const p = parseInput(priceWithoutVat);
+    return p * (1 - discountPercent / 100) * (1 + selectedVat / 100);
+  }, [priceWithVat, priceWithoutVat, selectedVat, discountPercent, hasDiscount, parseInput]);
 
   const finalPriceUSD = discountedPrice;
   const finalPriceVES = discountedPrice * rate;
