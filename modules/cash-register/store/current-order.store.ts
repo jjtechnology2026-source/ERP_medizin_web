@@ -359,7 +359,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         email: order.client?.email || "",
         direccion: order.client?.direccion || "",
         phone: order.client?.phone || "0000000000",
-        retencion: parseFloat((order.client as any)?.retencion) || 0,
+        retencion: (() => { const v = parseFloat((order.client as any)?.retencion); return v > 0 ? v : null; })(),
         tipo_documento: (order.client?.documento?.match(/^[A-Za-z]/)?.[0]?.toUpperCase()) || "V",
       },
       facturacion: null,
