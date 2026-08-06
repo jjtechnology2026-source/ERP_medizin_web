@@ -80,12 +80,13 @@ export default function PaymentDialog({
 
   const totalVes = totals.total * rate;
 
-  // IGTF: 3% sobre pagos en divisas (USD), mismo criterio que el backend
+  // IGTF: 3% sobre pagos en divisas (USD), doble redondeo igual que backend
   const usdPayments = activePaymentMethods
     .filter((m) => m === "dolares" || (m === "efectivo" && (payments[m] as any)?.currency === "USD"))
     .map((m) => payments[m]?.amount || 0);
   const usdTotal = usdPayments.reduce((s, a) => s + a, 0);
-  const igtfVes = usdTotal > 0 ? r2(usdTotal * 0.03 * rate) : 0;
+  const igtfUsd = r2(usdTotal * 0.03);
+  const igtfVes = usdTotal > 0 ? r2(igtfUsd * rate) : 0;
   const totalConIgtfVes = r2(totalVes + igtfVes);
 
   const updatePayment = (method: PaymentMethod, partial: Record<string, any>) => {

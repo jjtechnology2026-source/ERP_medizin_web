@@ -310,6 +310,43 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
     const rate = useCurrencyStore.getState().getEffectiveRate();
     const subtotal = order.medications.reduce((s, m) => s + m.price * m.quantity, 0);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    // IGTF: 3% sobre pagos en divisas, doble redondeo (igual que backend build_formas_pago_and_igtf)
+    const usdPayment = invoicePayments.filter(
+      (p: any) => p.type === "dolares" || (p.type === "efectivo" && p.currency === "USD")
+    );
+    const usdTotal = usdPayment.reduce((s: number, p: any) => s + p.amount, 0);
+    const igtfUsd = r2(usdTotal * 0.03);
+    const igtfVes = usdTotal > 0 ? r2(igtfUsd * rate) : 0;
+    const totalConIgtfVes = r2(subtotal * rate + igtfVes);
+
+    const totalPaidIn = invoicePayments.reduce((s, p) => {
+      if (p.type === "dolares") return s + p.amount * rate;
+      return s + p.amount;
+    }, 0);
+
+    // Ajustar pagos para que la suma coincida con el total de la orden.
+    // El exceso se registra como cambio (totalChangeOut) sin ir a TFHKA.
+    let totalChangeOut = 0;
+    let finalPayments = backendPayments;
+    const excesso = totalPaidIn - totalConIgtfVes;
+    if (excesso > rate * 0.01) {
+      for (let i = backendPayments.length - 1; i >= 0; i--) {
+        const p = backendPayments[i];
+        if (p.method !== "dollars" && p.currency !== "USD") {
+          const reduced = r2(p.amount - excesso);
+          if (reduced >= 0) {
+            finalPayments = backendPayments.map((bp, idx) =>
+              idx === i ? { ...bp, amount: reduced } : bp
+            );
+            totalChangeOut = excesso;
+            break;
+          }
+        }
+      }
+    }
+
     const rif = (profile as any)?.rif || (profile as any)?.rifPharmacy || "J-00000000-0";
 
     return {
@@ -344,13 +381,10 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       totalreal: subtotal,
       totalsystem: subtotal,
       rate,
-      payments: backendPayments,
+      payments: finalPayments,
       changes: [],
-      totalPaidIn: invoicePayments.reduce((s, p) => {
-        if (p.type === "dolares") return s + p.amount * rate;
-        return s + p.amount;
-      }, 0),
-      totalChangeOut: 0,
+      totalPaidIn,
+      totalChangeOut,
       rifEmisor: rif,
       client: {
         id: order.client?.id || "",
