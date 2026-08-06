@@ -218,7 +218,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
                   <span className="font-bold text-slate-700 font-mono">Bs {formatMoney(detail.base_imponible_ves)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">IVA ({detail.iva_porcentaje}%)</span>
+                  <span className="text-slate-400 block">IVA</span>
                   <span className="font-bold text-slate-700 font-mono">Bs {formatMoney(detail.iva_monto_ves)}</span>
                 </div>
               </div>

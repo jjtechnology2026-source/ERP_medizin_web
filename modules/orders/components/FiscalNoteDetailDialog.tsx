@@ -118,7 +118,7 @@ export default function FiscalNoteDetailDialog({ noteId, noteType, onClose }: Fi
               </h4>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Base imponible" value={`Bs ${note.base_imponible_ves.toFixed(2)}`} />
-                <Field label={`IVA (${note.iva_porcentaje}%)`} value={`Bs ${note.iva_monto_ves.toFixed(2)}`} />
+                <Field label="IVA" value={`Bs ${note.iva_monto_ves.toFixed(2)}`} />
                 <Field label="Total VES" value={`Bs ${note.total_ves.toFixed(2)}`} />
                 <Field label="Total USD" value={`$ ${note.total_usd.toFixed(2)}`} />
                 <Field label="Tasa de cambio" value={note.tasa_cambio?.toFixed(2)} />

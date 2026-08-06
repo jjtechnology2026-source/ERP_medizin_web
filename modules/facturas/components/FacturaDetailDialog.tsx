@@ -152,7 +152,7 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
                 <div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">IVA</span>
                   <p className="font-semibold text-[#1E3A5F] font-mono text-xs">
-                    Bs {d.iva_monto_ves.toFixed(2)} <span className="text-slate-400 font-normal">({d.iva_porcentaje}%)</span>
+                    Bs {d.iva_monto_ves.toFixed(2)}
                   </p>
                 </div>
               </div>

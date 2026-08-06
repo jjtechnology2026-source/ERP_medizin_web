@@ -122,7 +122,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
               <div className="flex items-start gap-3">
                 <HiHashtag className="text-slate-300 mt-0.5 shrink-0" size={14} />
                 <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">IVA ({d.ivaPorcentaje}%)</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">IVA</span>
                   <p className="font-semibold text-slate-700 font-mono">Bs {d.ivaMontoVes.toFixed(2)}</p>
                 </div>
               </div>
