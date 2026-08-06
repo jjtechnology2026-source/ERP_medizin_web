@@ -231,40 +231,43 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
             </div>
 
             {/* Payment info */}
-            {d.transacciones.length > 0 && (() => {
-              const t = d.transacciones[0];
-              const monedaSymbol = t.moneda === "USD" ? "$" : "Bs";
-              const badgeColor = metodoPagoColor[t.metodo_pago] || "bg-slate-100 text-slate-600 border-slate-200";
-              return (
-                <div className="border-t border-[#E4E7EB] px-6 py-3">
-                  <div className="flex items-center gap-2 mb-3">
-                    <HiCash size={14} className="text-slate-400" />
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Información de pago</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${badgeColor}`}>
-                      {t.metodo_pago}
-                    </span>
-                    <span className="font-semibold text-slate-500">
-                      {t.moneda}
-                    </span>
-                    <span className="font-bold text-[#0F172A] font-mono">
-                      {monedaSymbol} {t.monto_original.toFixed(2)}
-                    </span>
-                    {t.monto_ves > 0 && (
-                      <span className="font-medium text-slate-400 font-mono">
-                        ≈ Bs {t.monto_ves.toFixed(2)}
-                      </span>
-                    )}
-                    {t.descripcion && (
-                      <span className="text-slate-400">
-                        Ref: <span className="font-semibold text-slate-600">{t.descripcion}</span>
-                      </span>
-                    )}
-                  </div>
+            {d.transacciones.length > 0 && (
+              <div className="border-t border-[#E4E7EB] px-6 py-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <HiCash size={14} className="text-slate-400" />
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Información de pago</span>
                 </div>
-              );
-            })()}
+                <div className="flex flex-col gap-2">
+                  {d.transacciones.map((t, i) => {
+                    const monedaSymbol = t.moneda === "USD" ? "$" : "Bs";
+                    const badgeColor = metodoPagoColor[t.metodo_pago] || "bg-slate-100 text-slate-600 border-slate-200";
+                    return (
+                      <div key={t.id || i} className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${badgeColor}`}>
+                          {t.metodo_pago}
+                        </span>
+                        <span className="font-semibold text-slate-500">
+                          {t.moneda}
+                        </span>
+                        <span className="font-bold text-[#0F172A] font-mono">
+                          {monedaSymbol} {t.monto_original.toFixed(2)}
+                        </span>
+                        {t.monto_ves > 0 && (
+                          <span className="font-medium text-slate-400 font-mono">
+                            ≈ Bs {t.monto_ves.toFixed(2)}
+                          </span>
+                        )}
+                        {t.descripcion && (
+                          <span className="text-slate-400">
+                            Ref: <span className="font-semibold text-slate-600">{t.descripcion}</span>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {d.observaciones && (
               <div className="border-t border-[#E4E7EB] px-6 py-3">

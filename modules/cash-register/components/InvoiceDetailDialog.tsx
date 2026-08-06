@@ -240,9 +240,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
             </div>
 
             {/* Payment info */}
-            {d.transacciones.length > 0 && (() => {
-              const t = d.transacciones[0];
-              return (
+            {d.transacciones.length > 0 && (
               <div className="border-t border-slate-100 px-6 py-3">
                 <div className="flex items-center gap-3 mb-2.5">
                   <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center">
@@ -250,35 +248,38 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                   </div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Información de pago</span>
                 </div>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-2 gap-x-4 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Método:</span>
-                    <span className="font-semibold text-slate-700 capitalize">{t.metodoPago}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Moneda:</span>
-                    <span className="font-semibold text-slate-700">{t.moneda}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Monto:</span>
-                    <span className="font-semibold text-slate-700 font-mono">
-                      {t.moneda === "USD" ? "$" : "Bs"} {t.montoOriginal.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-400">Monto VES:</span>
-                    <span className="font-semibold text-slate-700 font-mono">Bs {t.montoVes.toFixed(2)}</span>
-                  </div>
-                  {t.descripcion && (
-                    <div className="col-span-full flex items-center gap-2">
-                      <span className="font-medium text-slate-400 shrink-0">Referencia:</span>
-                      <span className="font-semibold text-slate-600">{t.descripcion}</span>
+                <div className="flex flex-col gap-3">
+                  {d.transacciones.map((t, i) => (
+                    <div key={t.id || i} className="grid grid-cols-2 lg:grid-cols-4 gap-y-2 gap-x-4 text-xs pb-2 border-b border-slate-50 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-400">Método:</span>
+                        <span className="font-semibold text-slate-700 capitalize">{t.metodoPago}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-400">Moneda:</span>
+                        <span className="font-semibold text-slate-700">{t.moneda}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-400">Monto:</span>
+                        <span className="font-semibold text-slate-700 font-mono">
+                          {t.moneda === "USD" ? "$" : "Bs"} {t.montoOriginal.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-400">Monto VES:</span>
+                        <span className="font-semibold text-slate-700 font-mono">Bs {t.montoVes.toFixed(2)}</span>
+                      </div>
+                      {t.descripcion && (
+                        <div className="col-span-full flex items-center gap-2">
+                          <span className="font-medium text-slate-400 shrink-0">Referencia:</span>
+                          <span className="font-semibold text-slate-600">{t.descripcion}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
-              );
-            })()}
+            )}
 
             {/* Observaciones */}
             {d.observaciones && (
