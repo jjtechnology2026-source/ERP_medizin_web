@@ -345,6 +345,22 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
           }
         }
       }
+      // VES insuficiente → reducir último pago USD
+      if (totalChangeOut === 0) {
+        for (let i = backendPayments.length - 1; i >= 0; i--) {
+          const p = backendPayments[i];
+          if (p.method === "dollars" || p.currency === "USD") {
+            const reducedUsd = r2(p.amount - excesso / rate);
+            if (reducedUsd >= 0) {
+              finalPayments = backendPayments.map((bp, idx) =>
+                idx === i ? { ...bp, amount: reducedUsd } : bp
+              );
+              totalChangeOut = excesso;
+              break;
+            }
+          }
+        }
+      }
     }
 
     const rif = (profile as any)?.rif || (profile as any)?.rifPharmacy || "J-00000000-0";
