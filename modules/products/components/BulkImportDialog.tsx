@@ -125,10 +125,10 @@ export default function BulkImportDialog({
           return;
         }
 
-        const priceRaw = getCol(row, ["Precio (USD)", "price", "PRECIO"]);
-        const stockRaw = getCol(row, ["Stock", "stock", "STOCK"]);
-        const minRaw = getCol(row, ["Stock Mínimo", "minimum", "MINIMO"]);
-        const vatRaw = getCol(row, ["IVA (%)", "vat", "IVA"]);
+        const priceRaw = getCol(row, ["Precio (USD)", "Precio", "price", "PRECIO"]);
+        const stockRaw = getCol(row, ["Stock", "Stock Inicial", "stock", "STOCK"]);
+        const minRaw = getCol(row, ["Stock Mínimo", "Mínimo Stock", "Mínimo", "minimum", "MINIMO", "minimo"]);
+        const vatRaw = getCol(row, ["IVA (%)", "IVA", "vat"]);
 
         parsed.push({
           name,
