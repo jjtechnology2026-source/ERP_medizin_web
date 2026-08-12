@@ -52,7 +52,16 @@ export interface FiscalInvoiceResponse {
   }>;
   planned_commands: string[];
   message?: string | null;
-  numero_control?: string | null;
+  fiscal_number?: string | null;
+}
+
+export interface FiscalReportZResponse {
+  printed: boolean;
+  print_error?: string | null;
+  command?: string | null;
+  frame_hex?: string | null;
+  response?: Record<string, string | number> | null;
+  report?: Record<string, unknown>;
 }
 
 const api = {
@@ -85,7 +94,7 @@ const api = {
     return api.request("POST", "/credit-notes", payload);
   },
 
-  async reportZ(): Promise<{ command: string; response: Record<string, string | number> }> {
+  async reportZ(): Promise<FiscalReportZResponse> {
     return api.request("POST", "/reports/z", { confirm: true });
   },
 };

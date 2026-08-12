@@ -159,7 +159,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       if (saleType === "local") {
         const fiscalPayload = buildFiscalPayload(order);
         const fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
-        if (!fiscalResult.numero_control) {
+        if (!fiscalResult.fiscal_number) {
           set({ isSubmitting: false, errorMessage: "La impresora fiscal no devolvió número de control" });
           return null;
         }
@@ -301,8 +301,13 @@ function buildFiscalPayload(order: any) {
       tax_code: mapVatToTaxCode(m.vat || 16),
       sku: m.barCode || "",
     })),
-    payments: order.payments.map((p: any) => mapPaymentToFiscal(p, order.rate || 1)),
-    prices_include_tax: false,
+    // Los precios del catálogo ya incluyen IVA (el total pagado lo incluye);
+    // el servicio desglosa el impuesto según tax_code antes de imprimir.
+    payments:
+      order.payments?.length > 0
+        ? order.payments.map((p: any) => mapPaymentToFiscal(p, order.rate || 1))
+        : [{ method: "cash" as const, amount: order.totalreal, currency: "VES" as const }],
+    prices_include_tax: true,
     dry_run: false,
   };
 }

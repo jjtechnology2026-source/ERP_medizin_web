@@ -121,7 +121,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
                 return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
               })
             : [{ method: "cash" as const, amount: order.totalreal, currency: "VES" as const }],
-          prices_include_tax: false,
+          prices_include_tax: true,
           dry_run: false,
           affected_fiscal_number: documentoAfectado.numero_documento,
           affected_invoice_date: documentoAfectado.fecha_emision
@@ -132,7 +132,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
         const result = await fiscalPrinterClient.createCreditNote(payload);
 
-        if (!result.numero_control) {
+        if (!result.fiscal_number) {
           setStep("error");
           setErrorMsg("La impresora fiscal no devolvió número de control");
           return;
@@ -140,7 +140,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
         setStep("result");
         setResultMsg(
-          `Nota de Crédito fiscal emitida: ${result.numero_control}`
+          `Nota de Crédito fiscal emitida: ${result.fiscal_number}`
         );
         return;
       }
