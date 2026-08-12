@@ -3,6 +3,7 @@ import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocument
 import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -124,6 +125,7 @@ export default function CreateProductPage({ setView }: any) {
   const { createMedication, isLoading, error } = useCreateMedication();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const pharmacyId = useAuthStore((s: any) => s.profile?.pharmacy_id ?? s.profile?.pharmacyId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -591,6 +593,7 @@ export default function CreateProductPage({ setView }: any) {
         </form>
       </div>
       <BulkImportDialog
+        pharmacyId={pharmacyId}
         isOpen={showBulkImport}
         onClose={() => setShowBulkImport(false)}
         onComplete={() => {

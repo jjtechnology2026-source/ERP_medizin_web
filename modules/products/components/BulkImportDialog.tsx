@@ -9,18 +9,20 @@ interface BulkImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
+  pharmacyId?: string;
 }
 
 export default function BulkImportDialog({
   isOpen,
   onClose,
   onComplete,
+  pharmacyId,
 }: BulkImportDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [products, setProducts] = useState<BulkProductRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: string[]; created: Medication[] } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: string[]; created: Medication[]; inventoryUpdated: number } | null>(null);
 
   const downloadTemplate = async () => {
     try {
@@ -134,8 +136,8 @@ export default function BulkImportDialog({
           stock: stockRaw ? parseInt(stockRaw, 10) : undefined,
           minimum: minRaw ? parseInt(minRaw, 10) : undefined,
           vat: vatRaw ? parseInt(vatRaw, 10) : undefined,
-          controlled: String(row["Controlado (SI/NO)"] || row["controlled"] || "").trim().toUpperCase() === "SI",
-          antibiotic: String(row["Antibiótico (SI/NO)"] || row["antibiotic"] || "").trim().toUpperCase() === "SI",
+          controlled: String(getCol(row, ["Controlado (SI/NO)", "controlled", "CONTROLADO"]) || "").trim().toUpperCase() === "SI",
+          antibiotic: String(getCol(row, ["Antibiótico (SI/NO)", "antibiotic", "ANTIBIOTICO"]) || "").trim().toUpperCase() === "SI",
         });
       });
 
@@ -171,7 +173,32 @@ export default function BulkImportDialog({
     if (res.created.length > 0) {
       useProductsStore.getState().addToInventory(res.created);
     }
-    setResult(res);
+
+    let inventoryCount = 0;
+    if (pharmacyId && res.created.length > 0) {
+      const itemsWithStock = res.created.filter(
+        (p) => (p.stock ?? 0) > 0 || (p.quantity !== undefined && p.quantity > 0)
+      );
+      if (itemsWithStock.length > 0) {
+        try {
+          await productsService.increaseInventory(
+            pharmacyId,
+            itemsWithStock.map((p) => ({
+              bar_code: p.barCode,
+              stock: p.stock ?? (p.quantity ?? 0),
+              price: p.price ?? 0,
+              minimum: (p as any).minimum ?? 0,
+              discount: (p as any).discount,
+            }))
+          );
+          inventoryCount = itemsWithStock.length;
+        } catch (err: any) {
+          console.error("Error al insertar inventario:", err);
+        }
+      }
+    }
+
+    setResult({ ...res, inventoryUpdated: inventoryCount });
     setIsSaving(false);
     if (res.errors.length === 0) {
       setTimeout(() => {
@@ -333,7 +360,11 @@ export default function BulkImportDialog({
               )}
               <p className="text-lg font-black text-slate-800">
                 {result.success > 0
-                  ? `${result.success} productos creados exitosamente`
+                  ? result.inventoryUpdated > 0
+                    ? `${result.success} productos creados, ${result.inventoryUpdated} con inventario actualizado`
+                    : pharmacyId
+                      ? `${result.success} productos creados exitosamente`
+                      : `${result.success} productos creados (inventario no actualizado: falta farmacia)`
                   : "No se pudieron crear productos"}
               </p>
               {result.errors.length > 0 && (
