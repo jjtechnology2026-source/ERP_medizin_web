@@ -90,9 +90,17 @@ export default function BulkImportDialog({
       function getCol(row: Record<string, string>, keys: string[]): string {
         const rowKeys = Object.keys(row);
         for (const key of keys) {
-          const match = rowKeys.find(
-            rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() === key.toLowerCase().trim()
+          const normalizedKey = key.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim();
+          // First try exact match
+          let match = rowKeys.find(
+            rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() === normalizedKey
           );
+          // Then try substring match (e.g. "Stock Inicial" matches "stock")
+          if (!match) {
+            match = rowKeys.find(
+              rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim().includes(normalizedKey)
+            );
+          }
           if (match) return String(row[match] || "").trim();
         }
         return "";
