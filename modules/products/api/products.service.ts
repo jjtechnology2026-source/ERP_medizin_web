@@ -32,6 +32,23 @@ export const productsService = {
     };
   },
 
+  /** Busca productos en la tabla products (catálogo nacional) por nombre, principio activo, marca o código */
+  async searchProducts(text: string, size = 20): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+  }> {
+    const { data } = await api.post(
+      "/admin/products/search",
+      { text, size },
+      { headers: { "Content-Type": "application/json" } }
+    );
+    const rawItems = Array.isArray(data?.products) ? data.products : [];
+    return {
+      medications: rawItems.map(cleanImg),
+      next_cursor: data?.cursor ?? null,
+    };
+  },
+
   /** Carga inventario de una farmacia con cursor paginado */
   async getCursorInventory(pharmacyId: string, cursor?: string, limit = 200): Promise<{
     medications: Medication[];
