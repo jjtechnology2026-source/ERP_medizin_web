@@ -64,6 +64,13 @@ export interface FiscalReportZResponse {
   report?: Record<string, unknown>;
 }
 
+export interface FiscalReportXResponse {
+  command: string;
+  frame_hex: string;
+  response: Record<string, string | number>;
+  data?: string | null;
+}
+
 const api = {
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
@@ -100,6 +107,10 @@ const api = {
 
   async reportZ(): Promise<FiscalReportZResponse> {
     return api.request("POST", "/reports/z", { confirm: true });
+  },
+
+  async reportX(): Promise<FiscalReportXResponse> {
+    return api.request("POST", "/reports/x");
   },
 };
 
