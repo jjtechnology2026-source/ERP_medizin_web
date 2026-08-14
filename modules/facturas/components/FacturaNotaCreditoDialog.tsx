@@ -104,7 +104,16 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
     setStep("submitting");
     try {
-      const montoOriginal = moneda === "USD" ? detail.total_usd : detail.total_ves;
+      let montoOriginal = moneda === "USD" ? detail.total_usd : detail.total_ves;
+      if (montoOriginal <= 0) {
+        const totalPagos = (detail.transacciones ?? []).reduce(
+          (sum, t) => sum + (t.monto_original || t.monto_ves || 0),
+          0
+        );
+        if (totalPagos > 0) {
+          montoOriginal = moneda === "USD" ? detail.total_usd || totalPagos : detail.total_ves || totalPagos;
+        }
+      }
       const movimiento = {
         moneda,
         monto_original: montoOriginal,
