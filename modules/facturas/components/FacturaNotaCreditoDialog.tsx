@@ -7,6 +7,7 @@ import {
 } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
 interface FacturaNotaCreditoDialogProps {
@@ -29,6 +30,50 @@ function uuidv4(): string {
     const r = (Math.random() * 16) | 0;
     return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
+}
+
+async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): Promise<void> {
+  const rif = parseRif(detail.cliente_rif || "");
+  const payload = {
+    customer: {
+      name: detail.cliente_nombre,
+      document: `${rif.tipo}${rif.numero}`,
+      address: detail.cliente_direccion || "",
+    },
+    items: detail.detalles.map((d) => ({
+      description: d.descripcion,
+      quantity: d.cantidad,
+      unit_price: d.precio_unitario_ves,
+      tax_code:
+        d.iva_porcentaje === 0
+          ? "EXENTO"
+          : d.iva_porcentaje === 8
+            ? "IVA_REDUCIDO"
+            : d.iva_porcentaje === 31
+              ? "IVA_ADICIONAL"
+              : "IVA_GENERAL",
+      sku: d.producto_id || "",
+    })),
+    payments: detail.transacciones?.length
+      ? detail.transacciones.map((t) => ({
+          method: "cash",
+          amount: t.monto_original || t.monto_ves,
+          currency: t.moneda === "USD" ? "USD" : "VES",
+          ...(t.moneda === "USD" && t.tasa_cambio ? { exchange_rate: t.tasa_cambio } : {}),
+        }))
+      : [{ method: "cash", amount: detail.total_ves, currency: "VES" }],
+    prices_include_tax: true,
+    dry_run: false,
+    affected_fiscal_number: detail.numero_control,
+    affected_invoice_date: detail.fecha_emision
+      ? new Date(detail.fecha_emision).toLocaleDateString("es-VE")
+      : undefined,
+    reason: motivo,
+  };
+  const result = await fiscalPrinterClient.createCreditNote(payload);
+  if (!result.fiscal_number) {
+    throw new Error("La impresora fiscal no devolvió número de control");
+  }
 }
 
 export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, mode = "legacy" }: FacturaNotaCreditoDialogProps) {
@@ -131,6 +176,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           })),
           movimientos_caja: [movimiento],
         });
+        await emitirNotaCreditoFiscal(detail, motivo.trim());
       }
       setSuccessMsg("Nota de crédito emitida correctamente");
       setStep("success");
