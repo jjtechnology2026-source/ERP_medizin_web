@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 
@@ -34,6 +35,7 @@ export default function FiscalConfigCard() {
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   useEffect(() => {
     fiscalPrinterClient
@@ -158,7 +160,7 @@ export default function FiscalConfigCard() {
                       : "Guardar Configuración Fiscal"}
               </button>
               <button
-                onClick={() => handleAction("Abrir Diagnóstico Fiscal")}
+                onClick={() => setShowDiagnostic(true)}
                 className="px-10 py-5 bg-[#E0E3FF] text-[#4F46E5] font-black text-[15px] rounded-xl hover:brightness-105 transition-all active:scale-95"
               >
                 Abrir Diagnóstico Fiscal
@@ -249,6 +251,7 @@ export default function FiscalConfigCard() {
     </div>
       {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
       {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
+      {showDiagnostic && <FiscalDiagnosticDialog onClose={() => setShowDiagnostic(false)} />}
     </>
   );
 }
