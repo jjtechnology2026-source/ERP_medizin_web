@@ -45,23 +45,23 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
       quantity: d.cantidad,
       unit_price: d.precio_unitario_ves,
       tax_code:
-        d.iva_porcentaje === 0
+        (d.iva_porcentaje === 0
           ? "EXENTO"
           : d.iva_porcentaje === 8
             ? "IVA_REDUCIDO"
             : d.iva_porcentaje === 31
               ? "IVA_ADICIONAL"
-              : "IVA_GENERAL",
+              : "IVA_GENERAL") as "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO",
       sku: d.producto_id || "",
     })),
     payments: detail.transacciones?.length
       ? detail.transacciones.map((t) => ({
-          method: "cash",
+          method: "cash" as const,
           amount: t.monto_original || t.monto_ves,
-          currency: t.moneda === "USD" ? "USD" : "VES",
+          currency: (t.moneda === "USD" ? "USD" : "VES") as "VES" | "USD",
           ...(t.moneda === "USD" && t.tasa_cambio ? { exchange_rate: t.tasa_cambio } : {}),
         }))
-      : [{ method: "cash", amount: detail.total_ves, currency: "VES" }],
+      : [{ method: "cash" as const, amount: detail.total_ves, currency: "VES" as const }],
     prices_include_tax: true,
     dry_run: false,
     affected_fiscal_number: detail.numero_control,
