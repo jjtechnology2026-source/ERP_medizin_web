@@ -29,6 +29,7 @@ const FISCAL_SUPPORT_DATA = [
 export default function FiscalConfigCard() {
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
+  const [availablePorts, setAvailablePorts] = useState<string[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
   const [showZReport, setShowZReport] = useState(false);
@@ -43,6 +44,15 @@ export default function FiscalConfigCard() {
       .catch(() => {
         // Servicio fiscal no disponible; se mantiene el valor local.
       });
+
+    fiscalPrinterClient
+      .listSerialPorts()
+      .then((res) => {
+        setAvailablePorts((res.ports ?? []).map((p) => p.device));
+      })
+      .catch(() => {
+        // Sin listado de puertos; el input queda libre.
+      });
   }, []);
 
   const handleAction = (action: string) => {
@@ -52,7 +62,8 @@ export default function FiscalConfigCard() {
   const handleSavePort = async () => {
     setPortStatus("saving");
     try {
-      await fiscalPrinterClient.setSerialPort(port);
+      const res = await fiscalPrinterClient.setSerialPort(port);
+      if (res?.serial_port) setPort(res.serial_port);
       setPortStatus("saved");
     } catch {
       setPortStatus("error");
@@ -114,8 +125,19 @@ export default function FiscalConfigCard() {
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
                 placeholder="99"
+                list="fiscal-serial-ports"
                 className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600"
               />
+              <datalist id="fiscal-serial-ports">
+                {availablePorts.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {availablePorts.length > 0 && (
+                <p className="text-[11px] font-bold text-slate-400 ml-1">
+                  Puertos detectados: {availablePorts.join(", ")}
+                </p>
+              )}
             </div>
           </div>
 

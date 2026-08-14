@@ -93,6 +93,10 @@ const api = {
     return api.request("PUT", "/config/serial-port", { serial_port: serialPort });
   },
 
+  async listSerialPorts(): Promise<{ ports: Array<{ device: string; description: string }> }> {
+    return api.request("GET", "/config/serial-ports");
+  },
+
   async getPrinterStatus() {
     return api.request<any>("GET", "/printer/status");
   },
