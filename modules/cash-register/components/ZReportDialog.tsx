@@ -43,7 +43,11 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
       setPrintError(null);
       (async () => {
         try {
-          await fiscalPrinterClient.reportZ();
+          const res = await fiscalPrinterClient.reportZ();
+          if (!res.printed) {
+            setPrintError(res.print_error || "La impresora no imprimió el reporte Z.");
+            return;
+          }
           setStep("form");
         } catch (e: any) {
           setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
