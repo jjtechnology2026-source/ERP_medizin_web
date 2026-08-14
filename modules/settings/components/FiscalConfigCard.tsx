@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
@@ -28,6 +29,7 @@ const FISCAL_SUPPORT_DATA = [
 ];
 
 export default function FiscalConfigCard() {
+  const chatToast = useChatToast();
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
   const [availablePorts, setAvailablePorts] = useState<string[]>([]);
@@ -67,8 +69,12 @@ export default function FiscalConfigCard() {
       const res = await fiscalPrinterClient.setSerialPort(port);
       if (res?.serial_port) setPort(res.serial_port);
       setPortStatus("saved");
-    } catch {
+      chatToast.show(`Configuración fiscal guardada correctamente (puerto ${res.serial_port ?? port}).`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    } catch (e) {
       setPortStatus("error");
+      chatToast.show(`Error al guardar la configuración fiscal: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      setTimeout(() => setPortStatus("idle"), 4000);
     }
   };
 
@@ -77,8 +83,12 @@ export default function FiscalConfigCard() {
     try {
       await fiscalPrinterClient.reportX();
       setReportXStatus("done");
-    } catch {
+      chatToast.show("Reporte X generado correctamente.");
+      setTimeout(() => setReportXStatus("idle"), 4000);
+    } catch (e) {
       setReportXStatus("error");
+      chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      setTimeout(() => setReportXStatus("idle"), 4000);
     }
   };
 
