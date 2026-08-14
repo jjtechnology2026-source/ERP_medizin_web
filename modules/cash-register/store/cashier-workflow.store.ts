@@ -158,10 +158,24 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     try {
       if (saleType === "local") {
         const fiscalPayload = buildFiscalPayload(order);
-        const fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
-        if (!fiscalResult.fiscal_number) {
-          set({ isSubmitting: false, errorMessage: "La impresora fiscal no devolvió número de control" });
+        let fiscalResult: Awaited<ReturnType<typeof fiscalPrinterClient.createInvoice>> | null = null;
+        try {
+          fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
+        } catch (error: any) {
+          const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
+          console.error("❌ [registerSale] Error fiscal:", mensaje);
+          // La factura se imprimió pero el comando de cierre no confirmó:
+          // se conserva la orden pendiente para ingresar el número de control del ticket impreso.
+          if (/no respondio|no respondió|comando/i.test(mensaje)) {
+            set({ pendingFiscalOrder: order, isSubmitting: false });
+            return { pendingControlNumber: true, facturacion: null, ordenId: "" };
+          }
+          set({ isSubmitting: false, errorMessage: mensaje });
           return null;
+        }
+        if (!fiscalResult?.fiscal_number) {
+          set({ pendingFiscalOrder: order, isSubmitting: false });
+          return { pendingControlNumber: true, facturacion: null, ordenId: "" };
         }
         set({ pendingFiscalOrder: order, isSubmitting: false });
         return { pendingControlNumber: true, facturacion: null, ordenId: "" };

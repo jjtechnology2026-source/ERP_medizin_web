@@ -267,7 +267,7 @@ export default function PaymentDialog({
       );
 
       if (!result) {
-        throw new Error("No se pudo procesar la venta");
+        throw new Error(errorMessage || "No se pudo procesar la venta");
       }
 
       if (result.pendingControlNumber) {
