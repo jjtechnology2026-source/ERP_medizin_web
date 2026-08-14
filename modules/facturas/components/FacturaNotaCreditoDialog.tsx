@@ -104,20 +104,17 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
     setStep("submitting");
     try {
-      let montoOriginal = moneda === "USD" ? detail.total_usd : detail.total_ves;
-      if (montoOriginal <= 0) {
-        const totalPagos = (detail.transacciones ?? []).reduce(
-          (sum, t) => sum + (t.monto_original || t.monto_ves || 0),
-          0
-        );
-        if (totalPagos > 0) {
-          montoOriginal = moneda === "USD" ? detail.total_usd || totalPagos : detail.total_ves || totalPagos;
-        }
-      }
+      const ncTotalVes = (detail.detalles ?? []).reduce((sum, d) => {
+        const base = (d.cantidad || 0) * (d.precio_unitario_ves || 0);
+        return sum + base * (1 + (d.iva_porcentaje || 0) / 100);
+      }, 0);
+      const totalVes = Math.round(ncTotalVes * 100) / 100;
+      const tasa = detail.tasa_cambio > 0 ? detail.tasa_cambio : 1;
+      let montoOriginal = moneda === "USD" ? Math.round((totalVes / tasa) * 100) / 100 : totalVes;
       const movimiento = {
         moneda,
         monto_original: montoOriginal,
-        tasa_cambio: moneda === "USD" ? detail.tasa_cambio : undefined,
+        tasa_cambio: moneda === "USD" ? tasa : undefined,
         metodo_pago: metodoPago,
         descripcion: undefined,
       };
@@ -145,7 +142,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           documento_afectado: {
             numero_documento: detail.numero_control,
             fecha_emision: detail.fecha_emision,
-            monto_total: detail.total_ves,
+            monto_total: totalVes,
             motivo: motivo.trim(),
           },
           items: detail.detalles.map((d) => ({
