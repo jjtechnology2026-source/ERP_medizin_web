@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 
@@ -28,8 +27,6 @@ const FISCAL_SUPPORT_DATA = [
 ];
 
 export default function FiscalConfigCard() {
-  const profile = useAuthStore((s) => s.profile);
-  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -146,21 +143,19 @@ export default function FiscalConfigCard() {
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-4">
-              {!usesDigitalBilling && (
-                <button
-                  onClick={handleReportX}
-                  disabled={reportXStatus === "printing"}
-                  className="px-10 py-5 bg-[#0f766e] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {reportXStatus === "printing"
-                    ? "Imprimiendo reporte X..."
-                    : reportXStatus === "done"
-                      ? "Reporte X generado"
-                      : reportXStatus === "error"
-                        ? "Error en reporte X"
-                        : "Generar reporte X"}
-                </button>
-              )}
+              <button
+                onClick={handleReportX}
+                disabled={reportXStatus === "printing"}
+                className="px-10 py-5 bg-[#0f766e] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {reportXStatus === "printing"
+                  ? "Imprimiendo reporte X..."
+                  : reportXStatus === "done"
+                    ? "Reporte X generado"
+                    : reportXStatus === "error"
+                      ? "Error en reporte X"
+                      : "Generar reporte X"}
+              </button>
               <button
                 onClick={() => setShowZReport(true)}
                 className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
