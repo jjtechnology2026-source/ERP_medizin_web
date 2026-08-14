@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 
@@ -28,11 +29,33 @@ const FISCAL_SUPPORT_DATA = [
 export default function FiscalConfigCard() {
   const [implementation, setImplementation] = useState("POS Venezuela");
   const [port, setPort] = useState("99");
+  const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
 
+  useEffect(() => {
+    fiscalPrinterClient
+      .getHealth()
+      .then((health) => {
+        if (health?.serial_port) setPort(String(health.serial_port));
+      })
+      .catch(() => {
+        // Servicio fiscal no disponible; se mantiene el valor local.
+      });
+  }, []);
+
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
+  };
+
+  const handleSavePort = async () => {
+    setPortStatus("saving");
+    try {
+      await fiscalPrinterClient.setSerialPort(port);
+      setPortStatus("saved");
+    } catch {
+      setPortStatus("error");
+    }
   };
 
   return (
@@ -89,10 +112,17 @@ export default function FiscalConfigCard() {
           <div className="flex flex-col gap-5 mt-2">
             <div className="flex flex-wrap items-center gap-4">
               <button
-                onClick={() => handleAction("Guardar Configuración Fiscal")}
-                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95"
+                onClick={handleSavePort}
+                disabled={portStatus === "saving"}
+                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
               >
-                Guardar Configuración Fiscal
+                {portStatus === "saving"
+                  ? "Guardando..."
+                  : portStatus === "saved"
+                    ? "Puerto guardado"
+                    : portStatus === "error"
+                      ? "Error al guardar"
+                      : "Guardar Configuración Fiscal"}
               </button>
               <button
                 onClick={() => handleAction("Abrir Diagnóstico Fiscal")}

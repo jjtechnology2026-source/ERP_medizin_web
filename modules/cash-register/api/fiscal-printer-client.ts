@@ -82,6 +82,10 @@ const api = {
     return api.request<any>("GET", "/health");
   },
 
+  async setSerialPort(serialPort: string): Promise<{ status: string; serial_port: string }> {
+    return api.request("PUT", "/config/serial-port", { serial_port: serialPort });
+  },
+
   async getPrinterStatus() {
     return api.request<any>("GET", "/printer/status");
   },
