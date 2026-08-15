@@ -366,7 +366,7 @@ export default function PaymentDialog({
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 {activePaymentMethods.map((method) => (
                   <div key={method} className="bg-slate-50 rounded-2xl p-5 space-y-3">
                     <p className="text-sm font-black text-slate-600">{method.charAt(0).toUpperCase() + method.slice(1)}</p>
@@ -399,42 +399,51 @@ export default function PaymentDialog({
                       <>
                         <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
-                        <select
-                          value={(payments.tarjeta as CardPayment).cardType}
-                          onChange={(e) => updatePayment("tarjeta", { cardType: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
-                        >
-                          <option value="">Tipo de tarjeta</option>
-                          {CARD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Tipo de tarjeta</label>
+                          <select
+                            value={(payments.tarjeta as CardPayment).cardType}
+                            onChange={(e) => updatePayment("tarjeta", { cardType: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                          >
+                            <option value="">Tipo de tarjeta</option>
+                            {CARD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
                       </>
                     )}
                     {method === "pagomovil" && (
                       <>
                         <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
-                        <select
-                          value={(payments.pagomovil as MobilePayment).bank}
-                          onChange={(e) => updatePayment("pagomovil", { bank: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
-                        >
-                          <option value="">Banco</option>
-                          {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
-                        </select>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
+                          <select
+                            value={(payments.pagomovil as MobilePayment).bank}
+                            onChange={(e) => updatePayment("pagomovil", { bank: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                          >
+                            <option value="">Banco</option>
+                            {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                        </div>
                       </>
                     )}
                     {method === "biopago" && (
                       <>
                         <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
-                        <select
-                          value={(payments.biopago as BiopagoPayment).bank}
-                          onChange={(e) => updatePayment("biopago", { bank: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
-                        >
-                          <option value="">Banco</option>
-                          {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
-                        </select>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
+                          <select
+                            value={(payments.biopago as BiopagoPayment).bank}
+                            onChange={(e) => updatePayment("biopago", { bank: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                          >
+                            <option value="">Banco</option>
+                            {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                        </div>
                       </>
                     )}
                   </div>
@@ -712,13 +721,13 @@ function PaymentField({ label, value, onChange, placeholder, fullAmount, rate }:
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="flex-1 min-w-0 px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
         />
         {fullAmount !== undefined && fullAmount > 0 && (
           <button
             type="button"
             onClick={() => onChange(String(r2(fullAmount)))}
-            className="px-3 py-3 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 transition-all whitespace-nowrap"
+            className="px-3 py-3 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 transition-all whitespace-nowrap flex-shrink-0"
             title="Pago completo"
           >
             Total
