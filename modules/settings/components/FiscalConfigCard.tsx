@@ -38,6 +38,8 @@ export default function FiscalConfigCard() {
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
+  const [showManualInstall, setShowManualInstall] = useState(false);
 
   useEffect(() => {
     fiscalPrinterClient
@@ -61,6 +63,66 @@ export default function FiscalConfigCard() {
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
+  };
+
+  // Instala el servicio fiscal en la PC de la caja con un solo clic:
+  // 1. Consulta /health: si ya corre, no hace nada.
+  // 2. Si no corre, dispara el protocolo local medizin-fiscal://install
+  //    (registrado por el instalador; ejecuta el launcher silencioso).
+  // 3. Hace polling de /health y muestra el resultado en la card.
+  // Plan B (primera vez en una maquina nueva): si el protocolo no esta
+  // registrado, se ofrece descargar el instalador .cmd (una sola vez).
+  const handleInstallService = () => {
+    setInstallStatus("installing");
+    setShowManualInstall(false);
+
+    fiscalPrinterClient
+      .getHealth()
+      .then(() => {
+        setInstallStatus("done");
+        chatToast.show("El servicio fiscal ya está instalado y funcionando.");
+        setTimeout(() => setInstallStatus("idle"), 4000);
+      })
+      .catch(() => {
+        window.location.href = "medizin-fiscal://install";
+
+        const startedAt = Date.now();
+        const interval = setInterval(async () => {
+          try {
+            const health = await fiscalPrinterClient.getHealth();
+            if (health?.status === "ok") {
+              clearInterval(interval);
+              setInstallStatus("done");
+              chatToast.show("Servicio fiscal instalado correctamente. ¡Listo para facturar!");
+              setTimeout(() => setInstallStatus("idle"), 4000);
+              return;
+            }
+          } catch {
+            // aun instalando
+          }
+          if (Date.now() - startedAt > 15000) {
+            clearInterval(interval);
+            setInstallStatus("error");
+            setShowManualInstall(true);
+            chatToast.show("La instalación automática no se pudo iniciar. Use el instalador manual (una sola vez).");
+          }
+        }, 2000);
+      });
+  };
+
+  const handleDownloadInstaller = () => {
+    const origin = window.location.origin;
+    const cmd = `@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -Command "$u='${origin}/install-fiscal-service.ps1'; $p=Join-Path $env:TEMP 'install_fiscal_service.ps1'; Invoke-WebRequest $u -OutFile $p; & $p"\r\npause\r\n`;
+    const blob = new Blob([cmd], { type: "application/x-msdownload" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instalar-servicio-fiscal.cmd";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    chatToast.show("Descargado. Haga doble clic en 'instalar-servicio-fiscal.cmd' (una sola vez) y luego siempre use el botón Instalar servicio.");
   };
 
   const handleSavePort = async () => {
@@ -156,6 +218,27 @@ export default function FiscalConfigCard() {
           {/* Acciones */}
           <div className="flex flex-col gap-5 mt-2">
             <div className="flex flex-wrap items-center gap-4">
+              <button
+                onClick={handleInstallService}
+                disabled={installStatus === "installing"}
+                className="px-10 py-5 bg-[#16a34a] text-white font-black text-[15px] rounded-xl shadow-lg shadow-green-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {installStatus === "installing"
+                  ? "Instalando servicio..."
+                  : installStatus === "done"
+                    ? "Servicio instalado"
+                    : installStatus === "error"
+                      ? "Reintentar instalación"
+                      : "Instalar servicio"}
+              </button>
+              {showManualInstall && (
+                <button
+                  onClick={handleDownloadInstaller}
+                  className="px-10 py-5 bg-[#f59e0b] text-white font-black text-[15px] rounded-xl hover:brightness-110 transition-all active:scale-95"
+                >
+                  Descargar instalador (una sola vez)
+                </button>
+              )}
               <button
                 onClick={handleSavePort}
                 disabled={portStatus === "saving"}
