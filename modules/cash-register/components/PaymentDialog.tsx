@@ -101,6 +101,21 @@ export default function PaymentDialog({
   }, 0);
 
   const remaining = Math.max(0, r2(totalConIgtfVes - totalPaid));
+
+  // Monto que debe llenar el botón "Total" de cada método para que el pendiente quede en 0,
+  // considerando lo ya pagado en otros métodos y el IGTF (3% que el propio USD genera).
+  const fillAmountFor = (method: PaymentMethod): number => {
+    const safeRate = rate > 0 ? rate : 300;
+    const ownVes = method === "dolares"
+      ? (payments.dolares.amount || 0) * rate
+      : (payments[method].amount || 0);
+    const othersVes = totalPaid - ownVes;
+
+    if (method === "dolares") {
+      return r2(Math.max(0, r2(totalVes - othersVes)) / (safeRate * 0.97));
+    }
+    return r2(Math.max(0, r2(totalConIgtfVes - othersVes)));
+  };
   const exceso = totalPaid > totalConIgtfVes ? r2(totalPaid - totalConIgtfVes) : 0;
   const VES_TOLERANCE = rate * 0.01;
 
@@ -379,7 +394,7 @@ export default function PaymentDialog({
                           updatePayment("efectivo", { amount: amt, change: r2(Math.max(0, amt - totalConIgtfVes)) });
                         }}
                         placeholder="0.00"
-                        fullAmount={totalConIgtfVes}
+                        fullAmount={fillAmountFor("efectivo")}
                         rate={rate}
                       />
                     )}
@@ -392,12 +407,12 @@ export default function PaymentDialog({
                           updatePayment("dolares", { amount: amt, change: 0 });
                         }}
                         placeholder="0.00"
-                        fullAmount={totalConIgtfVes / rate}
+                        fullAmount={fillAmountFor("dolares")}
                       />
                     )}
                     {method === "tarjeta" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
+                        <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("tarjeta")} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
                         <div>
                           <label className="text-[10px] font-bold text-slate-600 mb-1 block">Tipo de tarjeta</label>
@@ -414,7 +429,7 @@ export default function PaymentDialog({
                     )}
                     {method === "pagomovil" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
+                        <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("pagomovil")} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
                         <div>
                           <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
@@ -431,7 +446,7 @@ export default function PaymentDialog({
                     )}
                     {method === "biopago" && (
                       <>
-                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={totalConIgtfVes} rate={rate} />
+                        <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("biopago")} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
                         <div>
                           <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
