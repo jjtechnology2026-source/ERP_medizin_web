@@ -28,10 +28,24 @@ const FISCAL_SUPPORT_DATA = [
   },
 ];
 
+const FISCAL_PORT_STORAGE_KEY = "fiscal-serial-port";
+
+// Puerto persistido en localStorage: sobrevive al refresh aunque el
+// servicio fiscal no responda en ese momento.
+function getStoredPort(): string {
+  if (typeof window === "undefined") return "99";
+  return window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY) ?? "99";
+}
+
+function persistPort(serialPort: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(FISCAL_PORT_STORAGE_KEY, serialPort);
+}
+
 export default function FiscalConfigCard() {
   const chatToast = useChatToast();
   const [implementation, setImplementation] = useState("POS Venezuela");
-  const [port, setPort] = useState("99");
+  const [port, setPort] = useState<string>(getStoredPort);
   const [availablePorts, setAvailablePorts] = useState<string[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
@@ -45,7 +59,10 @@ export default function FiscalConfigCard() {
     fiscalPrinterClient
       .getHealth()
       .then((health) => {
-        if (health?.serial_port) setPort(String(health.serial_port));
+        if (health?.serial_port) {
+          setPort(String(health.serial_port));
+          persistPort(String(health.serial_port));
+        }
       })
       .catch(() => {
         // Servicio fiscal no disponible; se mantiene el valor local.
@@ -129,7 +146,10 @@ export default function FiscalConfigCard() {
     setPortStatus("saving");
     try {
       const res = await fiscalPrinterClient.setSerialPort(port);
-      if (res?.serial_port) setPort(res.serial_port);
+      if (res?.serial_port) {
+        setPort(res.serial_port);
+        persistPort(res.serial_port);
+      }
       setPortStatus("saved");
       chatToast.show(`Configuración fiscal guardada correctamente (puerto ${res.serial_port ?? port}).`);
       setTimeout(() => setPortStatus("idle"), 4000);
