@@ -50,7 +50,6 @@ export default function FiscalConfigCard() {
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -98,49 +97,71 @@ export default function FiscalConfigCard() {
     console.log(`Ejecutando acción: ${action}`);
   };
 
-  // Instala el servicio fiscal en la PC de la caja con un solo clic:
-  // 1. Consulta /health: si ya corre, no hace nada.
-  // 2. Si no corre, dispara el protocolo local medizin-fiscal://install
-  //    (registrado por el instalador; ejecuta el launcher silencioso).
-  // 3. Hace polling de /health y muestra el resultado en la card.
+  // Instala o actualiza el servicio fiscal en la PC de la caja con un solo clic.
+  // Si el servicio ya responde (/health), actua como "Actualizar servicio":
+  // dispara el protocolo que fuerza la verificacion de actualizaciones
+  // (update.ps1 -Restart) y arranca el servicio si hace falta.
+  // Si el servicio no responde, actua como "Instalar servicio":
+  // 1. Dispara el protocolo local medizin-fiscal://install (registrado por el
+  //    instalador; ejecuta el launcher silencioso).
+  // 2. Hace polling de /health y muestra el resultado en la card.
   // Plan B (primera vez en una maquina nueva): si el protocolo no esta
   // registrado, se ofrece descargar el instalador .cmd (una sola vez).
   const handleInstallService = () => {
     setInstallStatus("installing");
     setShowManualInstall(false);
 
-    fiscalPrinterClient
-      .getHealth()
-      .then(() => {
-        setInstallStatus("done");
-        chatToast.show("El servicio fiscal ya está instalado y funcionando.");
-        setTimeout(() => setInstallStatus("idle"), 4000);
-      })
-      .catch(() => {
-        window.location.href = "medizin-fiscal://install";
+    if (serviceInstalled) {
+      chatToast.show("Buscando actualizaciones del servicio fiscal...");
+      window.location.href = "medizin-fiscal://install";
 
-        const startedAt = Date.now();
-        const interval = setInterval(async () => {
-          try {
-            const health = await fiscalPrinterClient.getHealth();
-            if (health?.status === "ok") {
-              clearInterval(interval);
-              setInstallStatus("done");
-              chatToast.show("Servicio fiscal instalado correctamente. ¡Listo para facturar!");
-              setTimeout(() => setInstallStatus("idle"), 4000);
-              return;
-            }
-          } catch {
-            // aun instalando
-          }
-          if (Date.now() - startedAt > 15000) {
+      const startedAt = Date.now();
+      const interval = setInterval(async () => {
+        try {
+          const health = await fiscalPrinterClient.getHealth();
+          if (health?.status === "ok") {
             clearInterval(interval);
-            setInstallStatus("error");
-            setShowManualInstall(true);
-            chatToast.show("La instalación automática no se pudo iniciar. Use el instalador manual (una sola vez).");
+            setInstallStatus("done");
+            chatToast.show("Verificación de actualizaciones completada.");
+            setTimeout(() => setInstallStatus("idle"), 4000);
+            return;
           }
-        }, 2000);
-      });
+        } catch {
+          // el servicio se esta reiniciando por la actualizacion
+        }
+        if (Date.now() - startedAt > 30000) {
+          clearInterval(interval);
+          setInstallStatus("error");
+          chatToast.show("El servicio fiscal no respondió tras la verificación.");
+          setTimeout(() => setInstallStatus("idle"), 4000);
+        }
+      }, 3000);
+      return;
+    }
+
+    window.location.href = "medizin-fiscal://install";
+
+    const startedAt = Date.now();
+    const interval = setInterval(async () => {
+      try {
+        const health = await fiscalPrinterClient.getHealth();
+        if (health?.status === "ok") {
+          clearInterval(interval);
+          setInstallStatus("done");
+          chatToast.show("Servicio fiscal instalado correctamente. ¡Listo para facturar!");
+          setTimeout(() => setInstallStatus("idle"), 4000);
+          return;
+        }
+      } catch {
+        // aun instalando
+      }
+      if (Date.now() - startedAt > 15000) {
+        clearInterval(interval);
+        setInstallStatus("error");
+        setShowManualInstall(true);
+        chatToast.show("La instalación automática no se pudo iniciar. Use el instalador manual (una sola vez).");
+      }
+    }, 2000);
   };
 
   const handleDownloadInstaller = () => {
@@ -188,57 +209,6 @@ export default function FiscalConfigCard() {
       chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
       setTimeout(() => setReportXStatus("idle"), 4000);
     }
-  };
-
-  const handleInstallOrUpdate = async () => {
-    // El protocolo medizin-fiscal://install lanza fiscal_launcher.ps1, que:
-    //   - fuerz la verificacion de actualizacion (update.ps1 -Restart) y
-    //   - arranca el servicio si no esta corriendo.
-    // Sirve tanto para instalar (servicio ausente) como para actualizar
-    // (servicio presente), sin depender de la version del exe instalado.
-    setUpdateStatus("checking");
-    if (serviceInstalled) {
-      chatToast.show("Buscando actualizaciones del servicio fiscal...");
-    } else {
-      chatToast.show("Instalando el servicio fiscal...");
-    }
-
-    try {
-      window.location.href = "medizin-fiscal://install";
-    } catch {
-      // El navegador no lanza error sincrono; se confirma con el polling de /health.
-    }
-
-    // Confirma el resultado con reintentos sobre /health.
-    const deadline = Date.now() + 30000;
-    const poll = () => {
-      fiscalPrinterClient
-        .getHealth()
-        .then(() => {
-          setServiceInstalled(true);
-          setUpdateStatus("done");
-          chatToast.show(
-            serviceInstalled
-              ? "Verificación de actualizaciones completada."
-              : "Servicio fiscal instalado y funcionando."
-          );
-          setTimeout(() => setUpdateStatus("idle"), 4000);
-        })
-        .catch(() => {
-          if (Date.now() < deadline) {
-            setTimeout(poll, 3000);
-          } else {
-            setUpdateStatus("error");
-            chatToast.show(
-              serviceInstalled
-                ? "El servicio fiscal no respondió tras la verificación."
-                : "No se pudo instalar el servicio fiscal. Ejecuta el instalador y vuelve a intentarlo."
-            );
-            setTimeout(() => setUpdateStatus("idle"), 4000);
-          }
-        });
-    };
-    setTimeout(poll, 4000);
   };
 
   return (
@@ -311,12 +281,16 @@ export default function FiscalConfigCard() {
                 className="px-10 py-5 bg-[#16a34a] text-white font-black text-[15px] rounded-xl shadow-lg shadow-green-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
               >
                 {installStatus === "installing"
-                  ? "Instalando servicio..."
+                  ? serviceInstalled
+                    ? "Buscando actualizaciones..."
+                    : "Instalando servicio..."
                   : installStatus === "done"
-                    ? "Servicio instalado"
+                    ? "Listo"
                     : installStatus === "error"
-                      ? "Reintentar instalación"
-                      : "Instalar servicio"}
+                      ? "Reintentar"
+                      : serviceInstalled
+                        ? "Actualizar servicio"
+                        : "Instalar servicio"}
               </button>
               {showManualInstall && (
                 <button
@@ -338,23 +312,6 @@ export default function FiscalConfigCard() {
                     : portStatus === "error"
                       ? "Error al guardar"
                       : "Guardar Configuración Fiscal"}
-              </button>
-              <button
-                onClick={handleInstallOrUpdate}
-                disabled={updateStatus === "checking" || serviceInstalled === null}
-                className="px-10 py-5 bg-[#059669] text-white font-black text-[15px] rounded-xl shadow-lg shadow-emerald-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {updateStatus === "checking"
-                  ? serviceInstalled
-                    ? "Buscando actualizaciones..."
-                    : "Instalando..."
-                  : updateStatus === "done"
-                    ? "Actualización iniciada"
-                    : updateStatus === "error"
-                      ? "Reintentar"
-                      : serviceInstalled
-                        ? "Actualizar servicio fiscal"
-                        : "Instalar servicio fiscal"}
               </button>
               <button
                 onClick={() => setShowDiagnostic(true)}
