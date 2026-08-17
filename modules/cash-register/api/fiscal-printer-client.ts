@@ -116,6 +116,10 @@ const api = {
   async reportX(): Promise<FiscalReportXResponse> {
     return api.request("POST", "/reports/x");
   },
+
+  async forceUpdate(): Promise<{ status: string; version: string }> {
+    return api.request("POST", "/update");
+  },
 };
 
 export default api;

@@ -49,11 +49,27 @@ export default function FiscalConfigCard() {
   const [availablePorts, setAvailablePorts] = useState<string[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
+  const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
   const [showManualInstall, setShowManualInstall] = useState(false);
+
+  useEffect(() => {
+    const checkService = () => {
+      fiscalPrinterClient
+        .getHealth()
+        .then(() => setServiceInstalled(true))
+        .catch(() => setServiceInstalled(false));
+    };
+
+    checkService();
+    const timer = setInterval(checkService, 15000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fiscalPrinterClient
@@ -174,6 +190,57 @@ export default function FiscalConfigCard() {
     }
   };
 
+  const handleInstallOrUpdate = async () => {
+    // El protocolo medizin-fiscal://install lanza fiscal_launcher.ps1, que:
+    //   - fuerz la verificacion de actualizacion (update.ps1 -Restart) y
+    //   - arranca el servicio si no esta corriendo.
+    // Sirve tanto para instalar (servicio ausente) como para actualizar
+    // (servicio presente), sin depender de la version del exe instalado.
+    setUpdateStatus("checking");
+    if (serviceInstalled) {
+      chatToast.show("Buscando actualizaciones del servicio fiscal...");
+    } else {
+      chatToast.show("Instalando el servicio fiscal...");
+    }
+
+    try {
+      window.location.href = "medizin-fiscal://install";
+    } catch {
+      // El navegador no lanza error sincrono; se confirma con el polling de /health.
+    }
+
+    // Confirma el resultado con reintentos sobre /health.
+    const deadline = Date.now() + 30000;
+    const poll = () => {
+      fiscalPrinterClient
+        .getHealth()
+        .then(() => {
+          setServiceInstalled(true);
+          setUpdateStatus("done");
+          chatToast.show(
+            serviceInstalled
+              ? "Verificación de actualizaciones completada."
+              : "Servicio fiscal instalado y funcionando."
+          );
+          setTimeout(() => setUpdateStatus("idle"), 4000);
+        })
+        .catch(() => {
+          if (Date.now() < deadline) {
+            setTimeout(poll, 3000);
+          } else {
+            setUpdateStatus("error");
+            chatToast.show(
+              serviceInstalled
+                ? "El servicio fiscal no respondió tras la verificación."
+                : "No se pudo instalar el servicio fiscal. Ejecuta el instalador y vuelve a intentarlo."
+            );
+            setTimeout(() => setUpdateStatus("idle"), 4000);
+          }
+        });
+    };
+    setTimeout(poll, 4000);
+  };
+
   return (
     <>
     <div className="flex flex-col gap-8 w-full">
@@ -271,6 +338,23 @@ export default function FiscalConfigCard() {
                     : portStatus === "error"
                       ? "Error al guardar"
                       : "Guardar Configuración Fiscal"}
+              </button>
+              <button
+                onClick={handleInstallOrUpdate}
+                disabled={updateStatus === "checking" || serviceInstalled === null}
+                className="px-10 py-5 bg-[#059669] text-white font-black text-[15px] rounded-xl shadow-lg shadow-emerald-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {updateStatus === "checking"
+                  ? serviceInstalled
+                    ? "Buscando actualizaciones..."
+                    : "Instalando..."
+                  : updateStatus === "done"
+                    ? "Actualización iniciada"
+                    : updateStatus === "error"
+                      ? "Reintentar"
+                      : serviceInstalled
+                        ? "Actualizar servicio fiscal"
+                        : "Instalar servicio fiscal"}
               </button>
               <button
                 onClick={() => setShowDiagnostic(true)}
