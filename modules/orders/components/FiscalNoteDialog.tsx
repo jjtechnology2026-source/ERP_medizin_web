@@ -40,11 +40,12 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         descripcion: m.name || m.brand || "",
         codigo_plu: m.barCode || "",
         cantidad: m.quantity || 0,
-        precio_unitario: m.price || 0,
+        precio_unitario:
+          Math.round(((m.price || 0) / (1 + (m.vat || 0) / 100)) * (order.rate || 1) * 100) / 100,
         vat: m.vat || 0,
         es_exento: m.vat === 0,
       })),
-    [order.medications]
+    [order.medications],
   );
 
   const cliente: FiscalNoteCliente = useMemo(() => {
@@ -71,7 +72,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         order.id ||
         "",
       fecha_emision: facturacion?.resp?.fecha || order.date || "",
-      monto_total: order.totalreal || 0,
+      monto_total: Math.round((order.totalreal || 0) * (order.rate || 1) * 100) / 100,
       motivo: "",
       serie: facturacion?.resp?.serie || "001",
     };
@@ -120,8 +121,8 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
                 if (p.method === "card") return { method: "card" as const, amount: p.amount };
                 return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
               })
-            : [{ method: "cash" as const, amount: order.totalreal, currency: "VES" as const }],
-          prices_include_tax: true,
+            : [{ method: "cash" as const, amount: Math.round((order.totalreal || 0) * tasaCambio * 100) / 100, currency: "VES" as const }],
+          prices_include_tax: false,
           dry_run: false,
           affected_fiscal_number: documentoAfectado.numero_documento,
           affected_invoice_date: documentoAfectado.fecha_emision

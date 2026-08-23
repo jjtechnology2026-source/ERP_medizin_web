@@ -5,6 +5,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { buildFiscalPayload, computeFiscalItemsExpectedTotal } from "@/modules/cash-register/lib/fiscal-payload";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -177,6 +178,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           set({ pendingFiscalOrder: order, isSubmitting: false });
           return { pendingControlNumber: true, facturacion: null, ordenId: "" };
         }
+        const printed = Number(fiscalResult.total || 0);
+        const expected = computeFiscalItemsExpectedTotal(fiscalPayload.items);
+        if (Math.abs(printed - expected) > 0.01) {
+          const note = `[RECON-FISCAL] impreso=${printed.toFixed(2)} esperado=${expected.toFixed(2)}`;
+          order.observaciones = order.observaciones ? `${order.observaciones} ${note}` : note;
+        }
         set({ pendingFiscalOrder: order, isSubmitting: false });
         return { pendingControlNumber: true, facturacion: null, ordenId: "" };
       }
@@ -276,52 +283,3 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
   setError: (msg) => set({ errorMessage: msg }),
   setInfo: (msg) => set({ infoMessage: msg }),
 }));
-
-function mapVatToTaxCode(vat: number): string {
-  switch (vat) {
-    case 0: return "EXENTO";
-    case 8: return "IVA_REDUCIDO";
-    case 31: return "IVA_ADICIONAL";
-    default: return "IVA_GENERAL";
-  }
-}
-
-function mapPaymentToFiscal(p: any, rate: number) {
-  switch (p.method) {
-    case "dollars":
-      return { method: "cash" as const, amount: p.amount, currency: "USD" as const, exchange_rate: rate };
-    case "card":
-      return { method: "card" as const, amount: p.amount };
-    case "mobile":
-      return { method: "mobile_payment" as const, amount: p.amount, reference: p.reference || "" };
-    case "biopago":
-      return { method: "other" as const, amount: p.amount, reference: p.reference || "" };
-    default:
-      return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
-  }
-}
-
-function buildFiscalPayload(order: any) {
-  return {
-    customer: {
-      name: order.client?.name || "Cliente General",
-      document: order.client?.documento || "V-00000000",
-      address: order.client?.direccion || "",
-    },
-    items: order.medications.map((m: any) => ({
-      description: m.name || m.description || "",
-      quantity: m.quantity,
-      unit_price: m.price,
-      tax_code: mapVatToTaxCode(m.vat || 16),
-      sku: m.barCode || "",
-    })),
-    // Los precios del catálogo ya incluyen IVA (el total pagado lo incluye);
-    // el servicio desglosa el impuesto según tax_code antes de imprimir.
-    payments:
-      order.payments?.length > 0
-        ? order.payments.map((p: any) => mapPaymentToFiscal(p, order.rate || 1))
-        : [{ method: "cash" as const, amount: order.totalreal, currency: "VES" as const }],
-    prices_include_tax: true,
-    dry_run: false,
-  };
-}

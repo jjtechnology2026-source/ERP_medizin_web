@@ -54,6 +54,7 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
               : "IVA_GENERAL") as "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO",
       sku: d.producto_id || "",
     })),
+    // precio_unitario_ves viene como base sin IVA desde la BD
     payments: detail.transacciones?.length
       ? detail.transacciones.map((t) => ({
           method: "cash" as const,
@@ -62,7 +63,7 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
           ...(t.moneda === "USD" && t.tasa_cambio ? { exchange_rate: t.tasa_cambio } : {}),
         }))
       : [{ method: "cash" as const, amount: detail.total_ves, currency: "VES" as const }],
-    prices_include_tax: true,
+    prices_include_tax: false,
     dry_run: false,
     affected_fiscal_number: detail.numero_control,
     affected_invoice_date: detail.fecha_emision
