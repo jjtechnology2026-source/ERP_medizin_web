@@ -5,7 +5,8 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
-import { buildFiscalPayload, computeFiscalItemsExpectedTotal } from "@/modules/cash-register/lib/fiscal-payload";
+import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
+import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -178,11 +179,9 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           set({ pendingFiscalOrder: order, isSubmitting: false });
           return { pendingControlNumber: true, facturacion: null, ordenId: "" };
         }
-        const printed = Number(fiscalResult.total || 0);
-        const expected = computeFiscalItemsExpectedTotal(fiscalPayload.items);
-        if (Math.abs(printed - expected) > 0.01) {
-          const note = `[RECON-FISCAL] impreso=${printed.toFixed(2)} esperado=${expected.toFixed(2)}`;
-          order.observaciones = order.observaciones ? `${order.observaciones} ${note}` : note;
+        const recon = reconcileFiscalTotal(fiscalResult.total, fiscalPayload.items);
+        if (recon) {
+          order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
         }
         set({ pendingFiscalOrder: order, isSubmitting: false });
         return { pendingControlNumber: true, facturacion: null, ordenId: "" };

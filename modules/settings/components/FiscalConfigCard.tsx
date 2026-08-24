@@ -1,30 +1,26 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import fiscalPrinterClient, { setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 
-// Datos de soporte fiscal agrupados
+// Implementaciones fiscales reales cableadas al servicio (service_fiscal).
+// El value es la marca que usa el cliente para enrutar a /bematech/* o a las
+// rutas raiz (hka80). "PNP" se descarta: no tiene implementacion en el servicio.
 const FISCAL_SUPPORT_DATA = [
   {
-    id: "pos_venezuela",
-    name: "POS Venezuela",
-    status: "Soportado",
-    description: "Disponible mediante la integracion de la libreria POSV.",
-  },
-  {
-    id: "pnp",
-    name: "PNP",
-    status: "Soportado",
-    description: "Soportado mediante PFAbreNF, PFLine aNF y PFCierraNF en la DLL PNP.",
-  },
-  {
-    id: "factory_hka",
+    id: "hka80",
     name: "The Factory HKA",
     status: "Soportado",
-    description: "Disponible mediante la secuencia 80/81/810 del paquete The Factory.",
+    description: "FISCAT HKA80 (protocolo HKA v8.5.0) via las rutas raiz del servicio fiscal.",
+  },
+  {
+    id: "bematech",
+    name: "Potencia de POS Venezuela",
+    status: "Soportado",
+    description: "Bematech MP-4200 FI / SX4200 (FW 01.00.22) via /bematech/*.",
   },
 ];
 
@@ -44,7 +40,10 @@ function persistPort(serialPort: string) {
 
 export default function FiscalConfigCard() {
   const chatToast = useChatToast();
-  const [implementation, setImplementation] = useState("POS Venezuela");
+  const [implementation, setImplementation] = useState<string>(() => {
+    if (typeof window === "undefined") return "hka80";
+    return window.localStorage.getItem("fiscal-implementation") ?? "hka80";
+  });
   const [port, setPort] = useState<string>(getStoredPort);
   const [availablePorts, setAvailablePorts] = useState<string[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -95,6 +94,13 @@ export default function FiscalConfigCard() {
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
+  };
+
+  // Cambia la marca activa del cliente fiscal (enruta a hka80 o /bematech/*).
+  const handleImplementationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const brand = e.target.value as "hka80" | "bematech";
+    setImplementation(brand);
+    setFiscalBrand(brand);
   };
 
   // Instala o actualiza el servicio fiscal en la PC de la caja con un solo clic.
@@ -233,12 +239,11 @@ export default function FiscalConfigCard() {
               <div className="relative">
                 <select
                   value={implementation}
-                  onChange={(e) => setImplementation(e.target.value)}
+                  onChange={handleImplementationChange}
                   className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 appearance-none pr-12"
                 >
-                  <option>POS Venezuela</option>
-                  <option>PNP</option>
-                  <option>The Factory HKA</option>
+                  <option value="hka80">The Factory HKA</option>
+                  <option value="bematech">Potencia de POS Venezuela</option>
                 </select>
                 <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
@@ -375,7 +380,7 @@ export default function FiscalConfigCard() {
             </div>
             
             <p className="text-xs font-bold text-slate-400 px-4 leading-relaxed">
-              Disponible mediante la integracion de la libreria POSV.
+              Soporte operativo para maquinas fiscales HKA80 y Bematech (Potencia de POS Venezuela).
             </p>
           </div>
         </div>

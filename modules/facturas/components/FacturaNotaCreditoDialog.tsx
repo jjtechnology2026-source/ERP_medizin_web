@@ -8,6 +8,7 @@ import {
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
 interface FacturaNotaCreditoDialogProps {
@@ -43,7 +44,9 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
     items: detail.detalles.map((d) => ({
       description: d.descripcion,
       quantity: d.cantidad,
-      unit_price: d.precio_unitario_ves,
+      // precio_unitario_ves viene como BASE sin IVA desde la BD: lo llevamos a
+      // CON IVA (2 decimales) para respetar la convencion unica del sistema fiscal.
+      unit_price: toBs2(d.precio_unitario_ves * (1 + (d.iva_porcentaje || 0) / 100)),
       tax_code:
         (d.iva_porcentaje === 0
           ? "EXENTO"
@@ -54,16 +57,15 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
               : "IVA_GENERAL") as "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO",
       sku: d.producto_id || "",
     })),
-    // precio_unitario_ves viene como base sin IVA desde la BD
     payments: detail.transacciones?.length
       ? detail.transacciones.map((t) => ({
           method: "cash" as const,
-          amount: t.monto_original || t.monto_ves,
+          amount: toBs2(t.monto_original || t.monto_ves),
           currency: (t.moneda === "USD" ? "USD" : "VES") as "VES" | "USD",
           ...(t.moneda === "USD" && t.tasa_cambio ? { exchange_rate: t.tasa_cambio } : {}),
         }))
-      : [{ method: "cash" as const, amount: detail.total_ves, currency: "VES" as const }],
-    prices_include_tax: false,
+      : [{ method: "cash" as const, amount: toBs2(detail.total_ves), currency: "VES" as const }],
+    prices_include_tax: true,
     dry_run: false,
     affected_fiscal_number: detail.numero_control,
     affected_invoice_date: detail.fecha_emision
@@ -72,6 +74,8 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
     reason: motivo,
   };
   const result = await fiscalPrinterClient.createCreditNote(payload);
+  const recon = reconcileFiscalTotal(result.total, payload.items);
+  if (recon) console.error("❌ [FacturaNotaCreditoDialog]", recon);
   if (!result.fiscal_number) {
     throw new Error("La impresora fiscal no devolvió número de control");
   }

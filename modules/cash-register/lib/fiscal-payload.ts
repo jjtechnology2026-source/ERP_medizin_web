@@ -1,3 +1,5 @@
+import { toBs2, fiscalItemsTotal } from "./money.ts";
+
 export type FiscalTaxCode = "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO";
 
 export interface FiscalPayloadItem {
@@ -24,13 +26,11 @@ export interface FiscalPayload {
   dry_run: boolean;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
+const r2 = (n: number) => toBs2(n);
 
 /** Suma que la máquina/servicio totaliza por línea (centavos por línea). */
 export function computeFiscalItemsExpectedTotal(items: Array<{ quantity: number; unit_price: number }>): number {
-  return r2(
-    items.reduce((sum, it) => sum + Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100, 0)
-  );
+  return fiscalItemsTotal(items);
 }
 
 export function mapVatToTaxCode(vat: number): FiscalTaxCode {

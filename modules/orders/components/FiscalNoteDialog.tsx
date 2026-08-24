@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
   FiscalNoteItem,
@@ -111,18 +112,19 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
           items: defaultItems.map((item) => ({
             description: item.descripcion,
             quantity: item.cantidad,
-            unit_price: item.precio_unitario,
+            // Precio CON IVA, 2 decimales (convencion unica del sistema fiscal).
+            unit_price: toBs2(item.precio_unitario),
             tax_code: item.vat === 0 ? "EXENTO" as const : item.vat === 8 ? "IVA_REDUCIDO" as const : item.vat === 31 ? "IVA_ADICIONAL" as const : "IVA_GENERAL" as const,
             sku: item.codigo_plu,
           })),
           payments: order.payments?.length
             ? order.payments.map((p: any) => {
-                if (p.method === "dollars") return { method: "cash" as const, amount: p.amount, currency: "USD" as const, exchange_rate: tasaCambio };
-                if (p.method === "card") return { method: "card" as const, amount: p.amount };
-                return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
+                if (p.method === "dollars") return { method: "cash" as const, amount: toBs2(p.amount), currency: "USD" as const, exchange_rate: tasaCambio };
+                if (p.method === "card") return { method: "card" as const, amount: toBs2(p.amount) };
+                return { method: "cash" as const, amount: toBs2(p.amount), currency: "VES" as const };
               })
-            : [{ method: "cash" as const, amount: Math.round((order.totalreal || 0) * tasaCambio * 100) / 100, currency: "VES" as const }],
-          prices_include_tax: false,
+            : [{ method: "cash" as const, amount: toBs2((order.totalreal || 0) * tasaCambio), currency: "VES" as const }],
+          prices_include_tax: true,
           dry_run: false,
           affected_fiscal_number: documentoAfectado.numero_documento,
           affected_invoice_date: documentoAfectado.fecha_emision
@@ -132,6 +134,9 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         };
 
         const result = await fiscalPrinterClient.createCreditNote(payload);
+
+        const recon = reconcileFiscalTotal(result.total, payload.items);
+        if (recon) console.error("❌ [FiscalNoteDialog]", recon);
 
         if (!result.fiscal_number) {
           setStep("error");

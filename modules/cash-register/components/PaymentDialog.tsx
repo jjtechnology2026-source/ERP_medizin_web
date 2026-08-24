@@ -78,7 +78,7 @@ export default function PaymentDialog({
     return `Bs ${r2(amountInUsd * rate).toFixed(2)}`;
   };
 
-  const totalVes = totals.total * rate;
+  const totalVes = totals.totalBs;
 
   // IGTF: 3% sobre pagos en divisas (USD), doble redondeo igual que backend
   const usdPayments = activePaymentMethods

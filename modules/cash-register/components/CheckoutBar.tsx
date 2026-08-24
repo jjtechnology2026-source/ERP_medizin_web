@@ -5,11 +5,10 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void }) {
   const { getComputedTotals, getCurrentOrder, deleteAllOrders } = useCurrentOrderStore();
-  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const { isDollar } = useCurrencyStore();
 
   const totals = getComputedTotals();
   const order = getCurrentOrder();
-  const rate = getEffectiveRate();
 
   return (
     <div className="bg-[#0055ff] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -34,7 +33,7 @@ export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void })
               {isDollar ? "USD" : "Bs"}
             </span>
             <span className="text-base font-black text-[#0055ff] font-mono leading-none">
-              {isDollar ? totals.total.toFixed(2) : (totals.total * (rate || 1)).toFixed(2)}
+              {isDollar ? totals.total.toFixed(2) : totals.totalBs.toFixed(2)}
             </span>
           </div>
         </div>

@@ -4,6 +4,7 @@ import {
   buildFiscalPayload,
   computeFiscalItemsExpectedTotal,
 } from "../modules/cash-register/lib/fiscal-payload.ts";
+import { toBs2, fiscalItemsTotal } from "../modules/cash-register/lib/money.ts";
 
 // Convención service_fiscal (schemas.py): precios incluyen IVA ->
 // line_total = round2(qty * price); total = round2(sum(line_total))
@@ -104,4 +105,27 @@ test("fallback de pago único en VES usa totalreal convertido", () => {
   assert.deepEqual(payload.payments, [
     { method: "cash", amount: r2(2.5 * RATE), currency: "VES" },
   ]);
+});
+
+// El servicio fiscal usa ROUND_HALF_UP (Decimal). toBs2 debe coincidir
+// EXACTAMENTE; el round() builtin de Python es banker's rounding y da 0.01 de
+// diferencia (9125.625 -> 9125.62 vs 9125.63). Este test clava el comportamiento.
+test("toBs2 redondea half-up (no banker's rounding)", () => {
+  assert.equal(toBs2(9125.625), 9125.63);
+  assert.equal(toBs2(0.005), 0.01);
+  assert.equal(toBs2(2.675), 2.68);
+  assert.equal(toBs2(10.44 * RATE), r2(10.44 * RATE));
+});
+
+test("fiscalItemsTotal replica subtotal del servicio (round2 por linea + round2 suma)", () => {
+  const items = [
+    { quantity: 1, unit_price: r2(10.44 * RATE) },
+    { quantity: 3, unit_price: r2(3.33 * RATE) },
+    { quantity: 2, unit_price: r2(5.0 * RATE) },
+    { quantity: 1.5, unit_price: r2(7.89 * RATE) },
+  ];
+  const ups = Object.fromEntries(items.map((it, i) => [i, it.unit_price]));
+  const expected = r2(items.reduce((s, it, i) => s + r2(it.quantity * ups[i]), 0));
+  assert.equal(fiscalItemsTotal(items), expected);
+  assert.equal(serviceTotal(items), expected);
 });

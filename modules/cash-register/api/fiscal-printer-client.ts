@@ -1,5 +1,30 @@
 const BASE_URL = "http://127.0.0.1:8000";
 
+export type FiscalBrand = "hka80" | "bematech";
+
+// Marca activa: decide si se usan las rutas raíz (hka80) o /bematech/*.
+// Se inicializa desde localStorage para que todos los consumidores del
+// singleton (store, dialogs) enruten a la misma marca sin coordinación.
+let activeBrand: FiscalBrand = "hka80";
+
+export function setFiscalBrand(brand: FiscalBrand): void {
+  activeBrand = brand;
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem("fiscal-implementation", brand);
+  }
+}
+
+function brandPrefix(): string {
+  return activeBrand === "bematech" ? "/bematech" : "";
+}
+
+if (typeof window !== "undefined") {
+  const stored = window.localStorage.getItem("fiscal-implementation");
+  if (stored === "hka80" || stored === "bematech") {
+    activeBrand = stored;
+  }
+}
+
 export interface FiscalCustomer {
   name: string;
   document: string;
@@ -86,35 +111,35 @@ const api = {
   },
 
   async getHealth() {
-    return api.request<any>("GET", "/health");
+    return api.request<any>("GET", `${brandPrefix()}/health`);
   },
 
   async setSerialPort(serialPort: string): Promise<{ status: string; serial_port: string }> {
-    return api.request("PUT", "/config/serial-port", { serial_port: serialPort });
+    return api.request("PUT", `${brandPrefix()}/config/serial-port`, { serial_port: serialPort });
   },
 
   async listSerialPorts(): Promise<{ ports: Array<{ device: string; description: string }> }> {
-    return api.request("GET", "/config/serial-ports");
+    return api.request("GET", `${brandPrefix()}/config/serial-ports`);
   },
 
   async getPrinterStatus() {
-    return api.request<any>("GET", "/printer/status");
+    return api.request<any>("GET", `${brandPrefix()}/printer/status`);
   },
 
   async createInvoice(payload: FiscalInvoicePayload): Promise<FiscalInvoiceResponse> {
-    return api.request("POST", "/invoices", payload);
+    return api.request("POST", `${brandPrefix()}/invoices`, payload);
   },
 
   async createCreditNote(payload: FiscalCreditNotePayload): Promise<FiscalInvoiceResponse> {
-    return api.request("POST", "/credit-notes", payload);
+    return api.request("POST", `${brandPrefix()}/credit-notes`, payload);
   },
 
   async reportZ(): Promise<FiscalReportZResponse> {
-    return api.request("POST", "/reports/z", { confirm: true });
+    return api.request("POST", `${brandPrefix()}/reports/z`, { confirm: true });
   },
 
   async reportX(): Promise<FiscalReportXResponse> {
-    return api.request("POST", "/reports/x");
+    return api.request("POST", `${brandPrefix()}/reports/x`);
   },
 
   async forceUpdate(): Promise<{ status: string; version: string }> {
