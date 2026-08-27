@@ -272,7 +272,7 @@ export default function CreateProductPage({ setView }: any) {
       controlled: false,
       antibiotic: false,
       basePrice: formData.basePrice,
-      profitPercentage: formData.profit ? parseFloat(formData.profit) / 100 : undefined,
+      profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
     };
 
     const result = await createMedication(payload, images);
