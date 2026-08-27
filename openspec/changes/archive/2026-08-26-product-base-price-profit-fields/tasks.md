@@ -25,12 +25,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Backend Slice (SLICE 1 — repo Backend-administrativo)
 
-- [ ] B1 (R1) `src/shape/src/models/model_medications.rs`: add `pub base_price: Option<f64>`, `pub profit_percentage: Option<f64>` to `ModelInventory` (l.177) + `ModelMedicationsaux` (l.121); `ModelMedications` unchanged. AC: compiles; catalog unaffected.
-- [ ] B2 (R2,R3) `src/features/medications_agent/src/adapters/dto.rs`: same two `Option<f64>` fields on `IncreaseMedicationItem` (l.19) + `IncreaseInventoryRequest` (l.8). AC: payload deserializes with/without fields (R2/R3).
-- [ ] B3 (R4) `src/features/medications_agent/src/adapters/dto.proto`: add `optional double base_price = 19;` + `optional double profit_percentage = 20;` to `MedicationProto`; regenerate Rust stub via protoc/buf. AC: generated struct gains fields; existing consumers decode (R4).
-- [ ] B4 (R3) `.../controllers/increase_inventory.rs` (map l.82-90): set `base_price`/`profit_percentage` on built `MedicationProto` from item; absent→None. AC: increase with/without pricing maps correctly.
-- [ ] B5 (R5) `.../controllers/import_prices.rs` (`ApplyPharmacyMedicationStockUseCase`): read the two Excel columns; if absent→None. AC: columns present→values; absent→NULL (R5).
-- [ ] B6 (R10) `dto.rs` + unit test: reject `profit_percentage > 1.0 || < 0` and `base_price < 0` with 400; allow None. AC: invalid fraction/negative → 400; None passes (R10).
+- [x] B1 (R1) `src/shape/src/models/model_medications.rs`: add `pub base_price: Option<f64>`, `pub profit_percentage: Option<f64>` to `ModelInventory` (l.177) + `ModelMedicationsaux` (l.121); `ModelMedications` unchanged. AC: compiles; catalog unaffected.
+- [x] B2 (R2,R3) `src/features/medications_agent/src/adapters/dto.rs`: same two `Option<f64>` fields on `IncreaseMedicationItem` (l.19) + `IncreaseInventoryRequest` (l.8). AC: payload deserializes with/without fields (R2/R3).
+- [x] B3 (R4) `src/features/medications_agent/src/adapters/dto.proto`: add `optional double base_price = 19;` + `optional double profit_percentage = 20;` to `MedicationProto`; regenerate Rust stub via protoc/buf. AC: generated struct gains fields; existing consumers decode (R4).
+- [x] B4 (R3) `.../controllers/increase_inventory.rs` (map l.82-90): set `base_price`/`profit_percentage` on built `MedicationProto` from item; absent→None. AC: increase with/without pricing maps correctly.
+- [x] B5 (R5) `.../controllers/import_prices.rs` (`ApplyPharmacyMedicationStockUseCase`): read the two Excel columns; if absent→None. AC: columns present→values; absent→NULL (R5).
+- [x] B6 (R10) `dto.rs` + unit test: reject `profit_percentage > 1.0 || < 0` and `base_price < 0` with 400; allow None. AC: invalid fraction/negative → 400; None passes (R10).
 
 ## Phase 2: Frontend Slice (SLICE 2 — repo ERP_medizin_web)
 
@@ -45,8 +45,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Verification (both slices)
 
-- [ ] V1 Backend: `cargo test -p medications_agent` + proto round-trip test (with/without fields).
-- [ ] V2 Frontend: `npx vue-tsc --noEmit` typecheck; manual Playwright submit-blank → null payload.
+- [x] V1 Backend: `cargo test -p medications_agent` + proto round-trip test (with/without fields).
+- [x] V2 Frontend: `npx vue-tsc --noEmit` typecheck; manual Playwright submit-blank → null payload.
 
 ## Implementation Order
 
