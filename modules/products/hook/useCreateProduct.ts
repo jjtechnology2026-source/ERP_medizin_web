@@ -25,6 +25,8 @@ export interface MedicationData {
   image: string;
   detalle: string;
   discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
 }
 
 export const useCreateMedication = () => {
@@ -64,6 +66,8 @@ export const useCreateMedication = () => {
           image: mainImage,
           detalle: "",
           discount: baseData.discount !== undefined ? parseFloat(baseData.discount) : undefined,
+          basePrice: baseData.basePrice !== undefined ? parseFloat(baseData.basePrice) : undefined,
+          profitPercentage: baseData.profitPercentage !== undefined ? parseFloat(baseData.profitPercentage) : undefined,
         };
 
         const { data: medResult } = await api.post(
@@ -101,6 +105,8 @@ export const useCreateMedication = () => {
               antibiotic: payloadData.antibiotic,
               minimum: payloadData.minimum,
               discount: payloadData.discount !== undefined ? payloadData.discount : null,
+              basePrice: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : undefined,
+              profitPercentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : undefined,
             } as any;
 
             const agentId = (useAuthStore.getState().profile as any)?.id_agent || (useAuthStore.getState().profile as any)?.agentId || "web";

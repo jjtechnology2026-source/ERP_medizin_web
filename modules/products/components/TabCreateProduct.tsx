@@ -184,6 +184,8 @@ export default function CreateProductPage({ setView }: any) {
     stock: "",
     vat: "16",
     minimum: "0",
+    basePrice: "",
+    profit: "",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,6 +271,8 @@ export default function CreateProductPage({ setView }: any) {
       vat: parseInt(formData.vat) || 16,
       controlled: false,
       antibiotic: false,
+      basePrice: formData.basePrice,
+      profitPercentage: formData.profit ? parseFloat(formData.profit) / 100 : undefined,
     };
 
     const result = await createMedication(payload, images);
@@ -292,6 +296,8 @@ export default function CreateProductPage({ setView }: any) {
         antibiotic: false,
         minimum: parseInt(payload.minimum) || 0,
         image: images.length > 0 ? images[0].name : "",
+        basePrice: payload.basePrice ? parseFloat(payload.basePrice) : undefined,
+        profitPercentage: payload.profitPercentage,
       };
       useProductsStore.getState().addToInventory([newMed]);
       setSuccessMsg("Producto creado exitosamente. Redirigiendo...");
@@ -562,6 +568,22 @@ export default function CreateProductPage({ setView }: any) {
                   step="1"
                   value={formData.minimum}
                   onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
+                />
+                <InputField
+                  label="Precio Base (costo)"
+                  placeholder="ej: 3.00"
+                  type="number"
+                  step="0.01"
+                  value={formData.basePrice}
+                  onChange={(e: any) => setFormData({ ...formData, basePrice: e.target.value })}
+                />
+                <InputField
+                  label="Ganancia (%)"
+                  placeholder="ej: 20"
+                  type="number"
+                  step="1"
+                  value={formData.profit}
+                  onChange={(e: any) => setFormData({ ...formData, profit: e.target.value })}
                 />
               </div>
             </div>

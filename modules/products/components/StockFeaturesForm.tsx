@@ -25,6 +25,8 @@ export default function StockFeaturesForm({
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("");
   const [discount, setDiscount] = useState("");
+  const [basePrice, setBasePrice] = useState("");
+  const [profit, setProfit] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -46,6 +48,8 @@ export default function StockFeaturesForm({
     setQuantity(""); // ponytail: start empty — stock is added, not replaced
     setMinStock(String(currentMedicine.minimum ?? 0));
     setDiscount(storedDiscount !== undefined ? String(storedDiscount) : "");
+    setBasePrice(currentMedicine.basePrice !== undefined ? String(currentMedicine.basePrice) : "");
+    setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage * 100) : "");
   }, [currentMedicine]);
 
   const priceWithVat = useMemo(() => {
@@ -82,6 +86,8 @@ export default function StockFeaturesForm({
       vat: selectedVat,
       minimum: min,
       discount: disc || undefined,
+      basePrice: parseInput(basePrice) || undefined,
+      profitPercentage: profit ? parseInput(profit) / 100 : undefined,
     };
 
     const success = await saveMedicine(medicine);
@@ -262,6 +268,22 @@ export default function StockFeaturesForm({
                     <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Descuento (%)</label>
                     <input type="text" inputMode="decimal" value={discount}
                       onChange={(e) => setDiscount(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Precio Base (costo)</label>
+                    <input type="text" inputMode="decimal" value={basePrice}
+                      onChange={(e) => setBasePrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Ganancia (%)</label>
+                    <input type="text" inputMode="decimal" value={profit}
+                      onChange={(e) => setProfit(e.target.value)}
                       placeholder="0"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />

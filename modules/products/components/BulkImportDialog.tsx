@@ -197,6 +197,8 @@ export default function BulkImportDialog({
               price: p.price ?? 0,
               minimum: (p as any).minimum ?? 0,
               discount: (p as any).discount,
+              base_price: p.basePrice,
+              profit_percentage: p.profitPercentage,
             }))
           );
           inventoryCount = itemsWithStock.length;
