@@ -17,6 +17,8 @@ export interface Medication {
   antibiotic: boolean;
   minimum: number;
   discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
 }
 
 export type StockFilter = "GENERAL" | "LOW";
@@ -46,6 +48,8 @@ export interface BulkProductRow {
   minimum?: number;
   vat?: number;
   discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
 }
 
 export interface BulkProductParseResult {
