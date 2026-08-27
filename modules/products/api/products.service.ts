@@ -89,6 +89,8 @@ export const productsService = {
       antibiotic: Boolean(medication.antibiotic),
       minimum: Math.round(Number(medication.minimum)) || 0,
       discount: medication.discount !== undefined ? Number(medication.discount) : null,
+      basePrice: medication.basePrice !== undefined ? Number(medication.basePrice) : null,
+      profitPercentage: medication.profitPercentage !== undefined ? Number(medication.profitPercentage) : null,
       detalle: (medication as any).detalle || "",
     }];
 
@@ -134,6 +136,8 @@ export const productsService = {
           stock: product.stock ?? 0,
           vat: product.vat ?? 16,
           minimum: product.minimum ?? 0,
+          basePrice: product.basePrice,
+          profitPercentage: product.profitPercentage,
         });
         created.push(medication);
       } catch (e: any) {
@@ -149,7 +153,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number; base_price?: number; profit_percentage?: number }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,
