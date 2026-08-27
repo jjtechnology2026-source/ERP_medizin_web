@@ -267,6 +267,8 @@ export const useProductsStore = create<ProductsStore>()(
                 price: priceVal,
                 minimum: minVal,
                 ...(discountVal !== undefined ? { discount: discountVal } : {}),
+                ...(medicine.basePrice !== undefined ? { base_price: medicine.basePrice } : {}),
+                ...(medicine.profitPercentage !== undefined ? { profit_percentage: medicine.profitPercentage } : {}),
               }]);
             }
           }
