@@ -262,16 +262,22 @@ export default function CreateProductPage({ setView }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Precio de venta derivado: costo (Precio Base sin IVA) + Ganancia% + IVA
+    const cost = parseFloat(formData.price) || 0;
+    const profitPct = parseFloat(formData.profit) || 0;
+    const vatPct = parseInt(formData.vat) || 16;
+    const sellingPrice = cost * (1 + profitPct / 100) * (1 + vatPct / 100);
+
     const payload = {
       ...formData,
       doseUnit: selectedUnit,
-      price: formData.price || "0",
+      price: sellingPrice > 0 ? String(Number(sellingPrice.toFixed(2))) : "0",
       stock: formData.stock || "0",
       minimum: formData.minimum || "0",
       vat: parseInt(formData.vat) || 16,
       controlled: false,
       antibiotic: false,
-      basePrice: formData.basePrice,
+      basePrice: cost > 0 ? cost : undefined,
       profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
     };
 
@@ -296,7 +302,7 @@ export default function CreateProductPage({ setView }: any) {
         antibiotic: false,
         minimum: parseInt(payload.minimum) || 0,
         image: images.length > 0 ? images[0].name : "",
-        basePrice: payload.basePrice ? parseFloat(payload.basePrice) : undefined,
+        basePrice: payload.basePrice ?? undefined,
         profitPercentage: payload.profitPercentage,
       };
       useProductsStore.getState().addToInventory([newMed]);
@@ -538,8 +544,8 @@ export default function CreateProductPage({ setView }: any) {
               <h3 className="text-lg font-black text-slate-800 mb-4">Precio y Stock</h3>
               <div className="grid grid-cols-2 gap-4">
                 <InputField
-                  label="Precio ($)"
-                  placeholder="ej: 5.00"
+                  label="Precio Base (sin IVA)"
+                  placeholder="ej: 3.00"
                   type="number"
                   step="0.01"
                   value={formData.price}
@@ -568,14 +574,6 @@ export default function CreateProductPage({ setView }: any) {
                   step="1"
                   value={formData.minimum}
                   onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
-                />
-                <InputField
-                  label="Precio Base (costo)"
-                  placeholder="ej: 3.00"
-                  type="number"
-                  step="0.01"
-                  value={formData.basePrice}
-                  onChange={(e: any) => setFormData({ ...formData, basePrice: e.target.value })}
                 />
                 <InputField
                   label="Ganancia (%)"
