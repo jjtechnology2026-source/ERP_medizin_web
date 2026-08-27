@@ -39,6 +39,10 @@ export interface MedicationProto {
   vat: number;
   antibiotic: boolean;
   minimum: number;
+  /** Nullable inventory pricing fields (proto fields 19/20, wire snake_case base_price/profit_percentage) */
+  basePrice?: number;
+  /** Stored as a fraction 0.0-1.0 (0.20 == 20%) */
+  profitPercentage?: number;
 }
 
 export interface OrderContactAndItems {
@@ -179,6 +183,8 @@ function createBaseMedicationProto(): MedicationProto {
     vat: 0,
     antibiotic: false,
     minimum: 0,
+    basePrice: undefined,
+    profitPercentage: undefined,
   };
 }
 
@@ -234,6 +240,12 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     }
     if (message.minimum !== 0) {
       writer.uint32(137).double(message.minimum);
+    }
+    if (message.basePrice !== undefined) {
+      writer.uint32(153).double(message.basePrice);
+    }
+    if (message.profitPercentage !== undefined) {
+      writer.uint32(161).double(message.profitPercentage);
     }
     return writer;
   },
@@ -381,6 +393,22 @@ export const MedicationProto: MessageFns<MedicationProto> = {
           message.minimum = reader.double();
           continue;
         }
+        case 19: {
+          if (tag !== 153) {
+            break;
+          }
+
+          message.basePrice = reader.double();
+          continue;
+        }
+        case 20: {
+          if (tag !== 161) {
+            break;
+          }
+
+          message.profitPercentage = reader.double();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -417,6 +445,16 @@ export const MedicationProto: MessageFns<MedicationProto> = {
       vat: isSet(object.vat) ? globalThis.Number(object.vat) : 0,
       antibiotic: isSet(object.antibiotic) ? globalThis.Boolean(object.antibiotic) : false,
       minimum: isSet(object.minimum) ? globalThis.Number(object.minimum) : 0,
+      basePrice: isSet(object.basePrice)
+        ? globalThis.Number(object.basePrice)
+        : isSet(object.base_price)
+        ? globalThis.Number(object.base_price)
+        : undefined,
+      profitPercentage: isSet(object.profitPercentage)
+        ? globalThis.Number(object.profitPercentage)
+        : isSet(object.profit_percentage)
+        ? globalThis.Number(object.profit_percentage)
+        : undefined,
     };
   },
 
@@ -473,6 +511,12 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     if (message.minimum !== 0) {
       obj.minimum = message.minimum;
     }
+    if (message.basePrice !== undefined) {
+      obj.basePrice = message.basePrice;
+    }
+    if (message.profitPercentage !== undefined) {
+      obj.profitPercentage = message.profitPercentage;
+    }
     return obj;
   },
 
@@ -498,6 +542,8 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     message.vat = object.vat ?? 0;
     message.antibiotic = object.antibiotic ?? false;
     message.minimum = object.minimum ?? 0;
+    message.basePrice = object.basePrice ?? undefined;
+    message.profitPercentage = object.profitPercentage ?? undefined;
     return message;
   },
 };
