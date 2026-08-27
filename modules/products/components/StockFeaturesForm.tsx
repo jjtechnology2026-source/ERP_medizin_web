@@ -49,7 +49,7 @@ export default function StockFeaturesForm({
     setMinStock(String(currentMedicine.minimum ?? 0));
     setDiscount(storedDiscount !== undefined ? String(storedDiscount) : "");
     setBasePrice(currentMedicine.basePrice !== undefined ? String(currentMedicine.basePrice) : "");
-    setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage * 100) : "");
+    setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage) : "");
   }, [currentMedicine]);
 
   const priceWithVat = useMemo(() => {
@@ -87,7 +87,7 @@ export default function StockFeaturesForm({
       minimum: min,
       discount: disc || undefined,
       basePrice: parseInput(basePrice) || undefined,
-      profitPercentage: profit ? parseInput(profit) / 100 : undefined,
+      profitPercentage: profit ? parseInput(profit) : undefined,
     };
 
     const success = await saveMedicine(medicine);
