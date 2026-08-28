@@ -3,6 +3,10 @@ import { useState, useCallback } from "react";
 import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocumentDownload } from "react-icons/hi";
 import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { mqttServer } from "@/modules/core/mqtt/advanced-service";
+import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
+import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
 
 interface BulkImportDialogProps {
@@ -37,7 +41,8 @@ export default function BulkImportDialog({
         "Categoría",
         "Subcategoría",
         "Descripción",
-        "Precio (USD)",
+        "Precio Base (USD)",
+        "Ganancia (%)",
         "Stock",
         "Stock Mínimo",
         "IVA (%)",
@@ -56,7 +61,8 @@ export default function BulkImportDialog({
           "Categoría": "malestar general",
           "Subcategoría": "Dolor",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
-          "Precio (USD)": "5.50",
+          "Precio Base (USD)": "5.50",
+          "Ganancia (%)": "20",
           "Stock": "100",
           "Stock Mínimo": "10",
           "IVA (%)": "16",
@@ -125,10 +131,20 @@ export default function BulkImportDialog({
           return;
         }
 
-        const priceRaw = getCol(row, ["Precio (USD)", "Precio", "price", "PRECIO"]);
+        const priceRaw = getCol(row, ["Precio Base (USD)", "Precio (USD)", "Precio", "price", "PRECIO", "precio base"]);
+        const profitRaw = getCol(row, ["Ganancia (%)", "Ganancia", "profit", "GANANCIA", "ganancia"]);
         const stockRaw = getCol(row, ["Stock", "Stock Inicial", "stock", "STOCK"]);
         const minRaw = getCol(row, ["Stock Mínimo", "Mínimo Stock", "Mínimo", "minimum", "MINIMO", "minimo"]);
         const vatRaw = getCol(row, ["IVA (%)", "IVA", "vat"]);
+
+        const base = priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined;
+        const profitPct = profitRaw ? parseFloat(profitRaw.replace(",", ".")) : undefined;
+        const vatPct = vatRaw ? parseInt(vatRaw, 10) : undefined;
+        // Precio de venta derivado: base (sin IVA) + Ganancia% + IVA (igual que TabCreateProduct/StockFeaturesForm)
+        const sellingPrice =
+          base !== undefined
+            ? Math.round(base * (1 + (profitPct ?? 0) / 100) * (1 + (vatPct ?? 16) / 100) * 100) / 100
+            : undefined;
 
         parsed.push({
           name,
@@ -140,10 +156,12 @@ export default function BulkImportDialog({
           category: getCol(row, ["Categoría", "category", "Categoria"]),
           subcategory: getCol(row, ["Subcategoría", "subcategory", "SUBCATEGORIA"]),
           description: getCol(row, ["Descripción", "description", "DESCRIPCION"]),
-          price: priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined,
+          price: sellingPrice,
           stock: stockRaw ? parseInt(stockRaw, 10) : undefined,
           minimum: minRaw ? parseInt(minRaw, 10) : undefined,
-          vat: vatRaw ? parseInt(vatRaw, 10) : undefined,
+          vat: vatPct,
+          basePrice: base,
+          profitPercentage: profitPct,
           controlled: String(getCol(row, ["Controlado (SI/NO)", "controlled", "CONTROLADO"]) || "").trim().toUpperCase() === "SI",
           antibiotic: String(getCol(row, ["Antibiótico (SI/NO)", "antibiotic", "ANTIBIOTICO"]) || "").trim().toUpperCase() === "SI",
         });
@@ -183,27 +201,53 @@ export default function BulkImportDialog({
     }
 
     let inventoryCount = 0;
-    if (pharmacyId && res.created.length > 0) {
+    if (!pharmacyId) {
+      res.errors.push("Inventario no actualizado: falta pharmacyId en la sesión.");
+    } else if (res.created.length > 0) {
       const itemsWithStock = res.created.filter(
         (p) => (p.stock ?? 0) > 0 || (p.quantity !== undefined && p.quantity > 0)
       );
-      if (itemsWithStock.length > 0) {
+      if (itemsWithStock.length === 0) {
+        res.errors.push("Ningún producto con stock > 0: no se ligó inventario a la farmacia.");
+      } else {
         try {
-          await productsService.increaseInventory(
-            pharmacyId,
-            itemsWithStock.map((p) => ({
-              bar_code: p.barCode,
-              stock: p.stock ?? (p.quantity ?? 0),
+          const agentId =
+            (useAuthStore.getState().profile as any)?.id_agent ||
+            (useAuthStore.getState().profile as any)?.agentId ||
+            "web";
+          const dto = {
+            idAgent: agentId,
+            idPharmacy: pharmacyId,
+            medications: itemsWithStock.map((p) => ({
+              barCode: p.barCode,
+              name: p.name,
               price: p.price ?? 0,
-              minimum: (p as any).minimum ?? 0,
-              discount: (p as any).discount,
-              base_price: p.basePrice,
-              profit_percentage: p.profitPercentage,
-            }))
-          );
+              quantity: p.stock ?? 0,
+              stock: p.stock ?? 0,
+              brand: p.brand || "",
+              activeIngredient: p.activeIngredient || "",
+              dosage: p.dosage || "",
+              tablets: p.tablets || "",
+              image: p.image || "",
+              category: p.category || "",
+              subcategory: p.subcategory || "",
+              description: p.description || "",
+              controlled: p.controlled || false,
+              vat: p.vat ?? 16,
+              antibiotic: p.antibiotic || false,
+              minimum: p.minimum ?? 0,
+              discount: p.discount !== undefined ? p.discount : null,
+              basePrice: p.basePrice !== undefined ? Number(p.basePrice) : undefined,
+              profitPercentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : undefined,
+            })),
+          };
+          const buf = DtoUpdateMedications.encode(dto as any).finish();
+          await mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf, agentId);
           inventoryCount = itemsWithStock.length;
         } catch (err: any) {
-          console.error("Error al insertar inventario:", err);
+          res.errors.push(
+            `Error al ligar inventario por MQTT: ${err?.response?.data?.message || err?.message || "Error desconocido"}`
+          );
         }
       }
     }
