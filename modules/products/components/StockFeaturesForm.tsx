@@ -71,6 +71,13 @@ export default function StockFeaturesForm({
   const finalPriceUSD = discountedPrice;
   const finalPriceVES = discountedPrice * rate;
 
+  const base = parseInput(priceWithoutVat);
+  const profitPct = parseInput(profit);
+  const discountPct = hasDiscount ? discountPercent : 0;
+  const subtotal = base * (1 + profitPct / 100) * (1 - discountPct / 100);
+  const ganancia = subtotal - base;
+  const iva = subtotal * selectedVat / 100;
+
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
     setIsSaving(true);
@@ -237,6 +244,20 @@ export default function StockFeaturesForm({
                     ) : (
                       <p className="text-3xl font-black text-slate-800 mt-1">{format(priceWithVat)}</p>
                     )}
+                    <div className="mt-4 space-y-1.5 pt-4 border-t border-blue-100/70">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Precio base (sin IVA)</span>
+                        <span className="font-black text-slate-700">{format(base)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Ganancia {profit || "0"}%</span>
+                        <span className="font-black text-blue-600">{format(ganancia)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">IVA {selectedVat}%</span>
+                        <span className="font-black text-indigo-600">{format(iva)}</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex flex-col text-xs font-bold text-slate-500 gap-1 border-t md:border-t-0 md:border-l border-blue-100 pt-3 md:pt-0 md:pl-6">
                     <span>USD: <strong className="text-blue-600 font-black">${finalPriceUSD.toFixed(2)}</strong></span>
