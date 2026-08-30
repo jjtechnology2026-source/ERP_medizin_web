@@ -135,7 +135,7 @@ export default function CreateProductPage({ setView }: any) {
       const headers = [
         "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
         "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
-        "Descripción", "Precio", "Stock Inicial", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
       ];
       const dummyData = [
         {
@@ -148,7 +148,8 @@ export default function CreateProductPage({ setView }: any) {
           "Categoría": "Medicamentos",
           "Subcategoría": "Analgesicos",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
-          "Precio": 3.5,
+          "Precio Base (USD)": "3.50",
+          "Ganancia (%)": "20",
           "Stock Inicial": 20,
           "Mínimo Stock": 5,
           "IVA": 16,
