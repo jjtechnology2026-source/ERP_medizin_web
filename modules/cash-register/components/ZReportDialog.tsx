@@ -38,6 +38,33 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
 
+  // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
+  // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
+  // ticket físico auditado. Lo que la máquina no reporta (p. ej. el rango de
+  // documentos) lo deriva el backend desde las facturas reales del día.
+  const registrarAutomatico = useCallback(async (zNumber?: number | null, fiscalSerial?: string | null) => {
+    const payload: Record<string, unknown> = {};
+    if (zNumber && zNumber > 0) payload.z_number = zNumber;
+    if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
+    const result = await fiscalZReportService.createZReport(pharmacyId, payload);
+
+    if (!result.success || !result.report) {
+      setStep("error");
+      let msg = result.message || "No se pudo registrar el reporte Z.";
+      if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
+      else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
+      else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
+      else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
+      else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
+      setErrorMessage(msg);
+      setErrorDetails(result.details);
+      return;
+    }
+
+    setReport(result.report);
+    setStep("result");
+  }, [pharmacyId]);
+
   useEffect(() => {
     if (step === "fiscal_printing") {
       setPrintError(null);
@@ -48,7 +75,12 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             setPrintError(res.print_error || "La impresora no imprimió el reporte Z.");
             return;
           }
-          setStep("form");
+          // El Z ya se imprimió en la máquina: registrar automáticamente con el Nº Z
+          // y serial reales del dispositivo (si la máquina los reporta). Si el backend
+          // lo rechaza, el usuario cae al error y puede ir al formulario manual
+          // (Reintentar) para cargar los datos del ticket físico.
+          setStep("loading");
+          await registrarAutomatico(res.z_number, res.fiscal_serial);
         } catch (e: any) {
           setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
         }
@@ -58,26 +90,10 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
     if (step === "loading" && usesDigitalBilling) {
       (async () => {
-        const result = await fiscalZReportService.createZReport(pharmacyId, {});
-
-        if (!result.success || !result.report) {
-          setStep("error");
-          let msg = result.message || "No se pudo registrar el reporte Z.";
-          if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
-          else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
-          else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
-          else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
-          else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
-          setErrorMessage(msg);
-          setErrorDetails(result.details);
-          return;
-        }
-
-        setReport(result.report);
-        setStep("result");
+        await registrarAutomatico();
       })();
     }
-  }, [step, usesDigitalBilling, pharmacyId]);
+  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");

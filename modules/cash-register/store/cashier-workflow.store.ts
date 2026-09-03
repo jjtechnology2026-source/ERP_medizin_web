@@ -183,8 +183,11 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         if (recon) {
           order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
         }
-        set({ pendingFiscalOrder: order, isSubmitting: false });
-        return { pendingControlNumber: true, facturacion: null, ordenId: "" };
+        order.numeroControlInterno = fiscalResult.fiscal_number;
+        const result = await cashierAccountantService.submitOrder(order, "local", activeSession.id);
+        set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
+        await get().load();
+        return result;
       }
 
       const result = await cashierAccountantService.submitOrder(order, saleType, activeSession.id);

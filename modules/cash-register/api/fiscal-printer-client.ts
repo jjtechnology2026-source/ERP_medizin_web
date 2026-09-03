@@ -86,6 +86,8 @@ export interface FiscalReportZResponse {
   command?: string | null;
   frame_hex?: string | null;
   response?: Record<string, string | number> | null;
+  z_number?: number | null;
+  fiscal_serial?: string | null;
   report?: Record<string, unknown>;
 }
 
