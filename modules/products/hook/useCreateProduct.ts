@@ -1,9 +1,7 @@
 import { useState, useCallback } from "react";
 import api from "@/modules/core/api/client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { mqttServer } from "@/modules/core/mqtt/advanced-service";
-import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
-import { DtoUpdateMedications } from "@/proto/interfaces/dto";
+import { productsService } from "@/modules/products/api/products.service";
 
 export interface MedicationData {
   brand: string;
@@ -81,46 +79,25 @@ export const useCreateMedication = () => {
           )
         );
 
-        // Publicar MQTT para actualizar inventario de la farmacia
+        // Ligar inventario de la farmacia vía HTTP increase (el backend ya no suscribe insert_inventory por MQTT)
         try {
           const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-          if (pharmacyId) {
-            const quantityVal = parseInt(baseData.stock) || 0;
-            const medProto = {
-              barCode: payloadData.barCode,
-              name: payloadData.name,
-              price: payloadData.price,
-              quantity: quantityVal,
-              stock: quantityVal,
-              brand: payloadData.brand,
-              activeIngredient: payloadData.activeIngredient,
-              dosage: payloadData.dosage,
-              tablets: payloadData.tablets,
-              image: payloadData.image,
-              category: payloadData.category,
-              subcategory: payloadData.subcategory,
-              description: payloadData.description,
-              controlled: payloadData.controlled,
-              vat: payloadData.vat,
-              antibiotic: payloadData.antibiotic,
-              minimum: payloadData.minimum,
-              discount: payloadData.discount !== undefined ? payloadData.discount : null,
-              basePrice: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : undefined,
-              profitPercentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : undefined,
-            } as any;
-
-            const agentId = (useAuthStore.getState().profile as any)?.id_agent || (useAuthStore.getState().profile as any)?.agentId || "web";
-            const dto: any = {
-              idAgent: agentId,
-              idPharmacy: pharmacyId,
-              medications: [medProto],
-            };
-
-            const buf = DtoUpdateMedications.encode(dto).finish();
-            mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf, agentId).catch(() => {});
+          const quantityVal = parseInt(baseData.stock) || 0;
+          if (pharmacyId && quantityVal > 0) {
+            await productsService.increaseInventory(pharmacyId, [
+              {
+                bar_code: payloadData.barCode,
+                stock: quantityVal,
+                price: payloadData.price,
+                minimum: payloadData.minimum,
+                discount: payloadData.discount !== undefined ? Number(payloadData.discount) : null,
+                base_price: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : null,
+                profit_percentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : null,
+              },
+            ]);
           }
         } catch (e) {
-          // noop - MQTT es secundario, no debe bloquear la creación
+          // noop - ligar inventario es secundario, no debe bloquear la creación
         }
 
         return { success: true, medication: Array.isArray(medResult) && medResult.length > 0 ? medResult[0] : medResult, images: uploadedImages };

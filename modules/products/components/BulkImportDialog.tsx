@@ -3,10 +3,6 @@ import { useState, useCallback } from "react";
 import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocumentDownload } from "react-icons/hi";
 import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { mqttServer } from "@/modules/core/mqtt/advanced-service";
-import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
-import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
 
 interface BulkImportDialogProps {
@@ -211,42 +207,24 @@ export default function BulkImportDialog({
         res.errors.push("Ningún producto con stock > 0: no se ligó inventario a la farmacia.");
       } else {
         try {
-          const agentId =
-            (useAuthStore.getState().profile as any)?.id_agent ||
-            (useAuthStore.getState().profile as any)?.agentId ||
-            "web";
-          const dto = {
-            idAgent: agentId,
-            idPharmacy: pharmacyId,
-            medications: itemsWithStock.map((p) => ({
-              barCode: p.barCode,
-              name: p.name,
-              price: p.price ?? 0,
-              quantity: p.stock ?? 0,
+          // ponytail: el backend ya no suscribe insert_inventory por MQTT (es HTTP-driven);
+          // ligar inventario vía HTTP increase para que la fila aparezca en la farmacia.
+          await productsService.increaseInventory(
+            pharmacyId,
+            itemsWithStock.map((p) => ({
+              bar_code: p.barCode,
               stock: p.stock ?? 0,
-              brand: p.brand || "",
-              activeIngredient: p.activeIngredient || "",
-              dosage: p.dosage || "",
-              tablets: p.tablets || "",
-              image: p.image || "",
-              category: p.category || "",
-              subcategory: p.subcategory || "",
-              description: p.description || "",
-              controlled: p.controlled || false,
-              vat: p.vat ?? 16,
-              antibiotic: p.antibiotic || false,
+              price: p.price ?? 0,
               minimum: p.minimum ?? 0,
-              discount: p.discount !== undefined ? p.discount : null,
-              basePrice: p.basePrice !== undefined ? Number(p.basePrice) : undefined,
-              profitPercentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : undefined,
-            })),
-          };
-          const buf = DtoUpdateMedications.encode(dto as any).finish();
-          await mqttServer.publish(MQTT_TOPICS.inventoryInsert(pharmacyId), buf, agentId);
+              discount: p.discount !== undefined ? Number(p.discount) : null,
+              base_price: p.basePrice !== undefined ? Number(p.basePrice) : null,
+              profit_percentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : null,
+            }))
+          );
           inventoryCount = itemsWithStock.length;
         } catch (err: any) {
           res.errors.push(
-            `Error al ligar inventario por MQTT: ${err?.response?.data?.message || err?.message || "Error desconocido"}`
+            `Error al ligar inventario: ${err?.response?.data?.message || err?.message || "Error desconocido"}`
           );
         }
       }

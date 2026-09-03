@@ -39,6 +39,9 @@ message MedicationProto {
   double vat = 15;
   bool antibiotic = 16;
   double minimum = 17;
+  // Nullable inventory pricing fields (wire snake_case base_price/profit_percentage)
+  optional double base_price = 19;
+  optional double profit_percentage = 20; // integer percentage 0..=100 (20 == 20%)
 }
 
 
