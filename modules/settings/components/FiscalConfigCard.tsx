@@ -315,6 +315,7 @@ export default function FiscalConfigCard() {
                   <option key={p.device} value={p.device}>
                     {p.device}
                     {p.description ? ` — ${p.description}` : ""}
+                    {p.interface === "usb" ? " (USB)" : p.interface === "serial" ? " (Serial)" : ""}
                     {p.fiscal ? " ★" : ""}
                   </option>
                 ))}
@@ -324,7 +325,7 @@ export default function FiscalConfigCard() {
               </div>
               {availablePorts.length > 0 && (
                 <p className="text-[11px] font-bold text-slate-400 ml-1">
-                  Puertos detectados por el servicio fiscal. ★ = impresora fiscal identificada.
+                  Puertos detectados por el servicio fiscal (USB/Serial según conexión). ★ = impresora fiscal identificada.
                 </p>
               )}
             </div>

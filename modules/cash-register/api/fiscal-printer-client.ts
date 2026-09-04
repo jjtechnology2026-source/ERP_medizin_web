@@ -5,6 +5,8 @@ export type FiscalBrand = "hka80" | "bematech";
 export interface FiscalSerialPort {
   device: string;
   description: string;
+  hwid?: string;
+  interface?: "usb" | "serial";
   fiscal?: boolean;
 }
 
