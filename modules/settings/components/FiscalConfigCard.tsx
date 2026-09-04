@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import fiscalPrinterClient, { type FiscalSerialPort, setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
@@ -54,6 +54,10 @@ export default function FiscalConfigCard() {
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
   const [showManualInstall, setShowManualInstall] = useState(false);
+  // Ref para el auto-guardado: evita reintentos repetidos en el mismo puerto
+  // detectado y no pisa una seleccion manual reciente del operador.
+  const lastAutoApplyRef = useRef<Record<string, number>>({});
+  const manualOverrideRef = useRef(false);
 
   useEffect(() => {
     const checkService = () => {
@@ -69,38 +73,64 @@ export default function FiscalConfigCard() {
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-guardado: cuando el servicio reporta una impresora fiscal (fiscal:true)
+  // que difiere del puerto activo, se aplica sola (sin el boton Guardar).
   useEffect(() => {
-    fiscalPrinterClient
-      .getHealth()
-      .then((health) => {
-        if (health?.serial_port) {
-          setPort(String(health.serial_port));
-          persistPort(String(health.serial_port));
-        }
-      })
-      .catch(() => {
-        // Servicio fiscal no disponible; se mantiene el valor local.
-      });
+    let disposed = false;
 
-    fiscalPrinterClient
-      .listSerialPorts()
-      .then((res) => {
-        const ports = res.ports ?? [];
-        setAvailablePorts(ports);
-        // Preseleccion: el puerto que el servicio marca como impresora fiscal
-        // (Bematech/HKA), o en su defecto el ya guardado en localStorage.
-        const preferred =
-          ports.find((p) => p.fiscal)?.device ??
-          ports.find((p) => p.device === getStoredPort())?.device;
-        if (preferred) {
-          setPort(preferred);
-          persistPort(preferred);
+    const applyFiscalPort = async (fiscalDevice: string) => {
+      const now = Date.now();
+      const last = lastAutoApplyRef.current[fiscalDevice] ?? 0;
+      // Throttle: como mucho un intento por puerto cada 30s.
+      if (now - last < 30000) return;
+      lastAutoApplyRef.current[fiscalDevice] = now;
+      try {
+        const res = await fiscalPrinterClient.setSerialPort(fiscalDevice);
+        if (res?.serial_port) {
+          setPort(res.serial_port);
+          persistPort(res.serial_port);
+          chatToast.show(`Impresora fiscal detectada en ${res.serial_port}. Configuración aplicada automáticamente.`);
         }
-      })
-      .catch(() => {
-        // Sin listado de puertos; el input queda libre.
-      });
-  }, []);
+      } catch {
+        // El servicio no confirmo el puerto (sin maquina o marca equivocada);
+        // se deja el selector para eleccion manual sin molestar al operador.
+      }
+    };
+
+    const sync = async () => {
+      try {
+        const [health, portsRes] = await Promise.all([
+          fiscalPrinterClient.getHealth(),
+          fiscalPrinterClient.listSerialPorts(),
+        ]);
+        const ports = portsRes?.ports ?? [];
+        if (disposed) return;
+        setAvailablePorts(ports);
+
+        const activePort = health?.serial_port ? String(health.serial_port) : "";
+        const fiscalDevice = ports.find((p) => p.fiscal)?.device;
+
+        // Si hay impresora fiscal detectada y no coincide con la activa, y el
+        // operador no acaba de guardar a mano, se aplica automaticamente.
+        if (fiscalDevice && activePort && fiscalDevice !== activePort && !manualOverrideRef.current) {
+          setPort(fiscalDevice);
+          persistPort(fiscalDevice);
+          void applyFiscalPort(fiscalDevice);
+        }
+      } catch {
+        // Servicio no disponible; se mantiene la seleccion local.
+      }
+    };
+
+    sync();
+    const timer = setInterval(sync, 15000);
+
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [implementation]);
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
@@ -111,6 +141,8 @@ export default function FiscalConfigCard() {
     const brand = e.target.value as "hka80" | "bematech";
     setImplementation(brand);
     setFiscalBrand(brand);
+    // Nueva marca => se re-habilita el auto-guardado del puerto fiscal.
+    manualOverrideRef.current = false;
   };
 
   // Instala o actualiza el servicio fiscal en la PC de la caja con un solo clic.
@@ -201,6 +233,7 @@ export default function FiscalConfigCard() {
       return;
     }
     setPortStatus("saving");
+    manualOverrideRef.current = true;
     try {
       const res = await fiscalPrinterClient.setSerialPort(port);
       if (res?.serial_port) {
