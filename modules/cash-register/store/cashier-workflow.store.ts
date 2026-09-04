@@ -166,15 +166,24 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         } catch (error: any) {
           const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
           console.error("❌ [registerSale] Error fiscal:", mensaje);
-          // La factura se imprimió pero el comando de cierre no confirmó:
-          // se conserva la orden pendiente para ingresar el número de control del ticket impreso.
-          if (/no respondio|no respondió|comando/i.test(mensaje)) {
+          const httpStatus = error.response?.status ?? 0;
+          // El servicio fiscal anula el documento ante un rechazo HTTP (409/422/400):
+          // NO se imprimio nada, entonces no corresponde pedir el numero de control.
+          // Solo se conserva la orden pendiente cuando la impresora pudo haber
+          // impreso pero el servicio no pudo confirmar (503 sin respuesta) o hubo
+          // fallo de red (sin respuesta HTTP): ahi el cajero transcribe el ticket.
+          const printedButUnconfirmed =
+            httpStatus === 0 ||
+            (httpStatus === 503 && /no respondio|no respondió|timeout|sin respuesta/i.test(mensaje));
+          if (printedButUnconfirmed) {
             set({ pendingFiscalOrder: order, isSubmitting: false });
             return { pendingControlNumber: true, facturacion: null, ordenId: "" };
           }
           set({ isSubmitting: false, errorMessage: mensaje });
           return null;
         }
+        // Respuesta 200 sin numero de control: el ticket se imprimio (el servicio
+        // confirma el cierre) pero no logro leer el COO; se pide transcribirlo.
         if (!fiscalResult?.fiscal_number) {
           set({ pendingFiscalOrder: order, isSubmitting: false });
           return { pendingControlNumber: true, facturacion: null, ordenId: "" };
