@@ -4,7 +4,7 @@ import { cashierAccountantService } from "@/modules/cash-register/api/cashier-ac
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import fiscalPrinterClient, { getFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 
@@ -166,12 +166,18 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         } catch (error: any) {
           const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
           console.error("❌ [registerSale] Error fiscal:", mensaje);
+          // Bematech: ante CUALQUIER error el servicio anula el documento (ESC 14),
+          // asi que no quedo ticket impreso que transcribir. Nunca pedir el numero
+          // manual; mostrar el error y permitir reintentar la venta.
+          if (getFiscalBrand() === "bematech") {
+            set({ isSubmitting: false, errorMessage: mensaje });
+            return null;
+          }
+          // HKA80: un 503 sin respuesta puede significar que la impresora imprimio
+          // pero el servicio no pudo confirmar el cierre -> se conserva la orden
+          // pendiente para transcribir el numero del ticket. Un rechazo HTTP 4xx
+          // NO imprime, se muestra error.
           const httpStatus = error.response?.status ?? 0;
-          // El servicio fiscal anula el documento ante un rechazo HTTP (409/422/400):
-          // NO se imprimio nada, entonces no corresponde pedir el numero de control.
-          // Solo se conserva la orden pendiente cuando la impresora pudo haber
-          // impreso pero el servicio no pudo confirmar (503 sin respuesta) o hubo
-          // fallo de red (sin respuesta HTTP): ahi el cajero transcribe el ticket.
           const printedButUnconfirmed =
             httpStatus === 0 ||
             (httpStatus === 503 && /no respondio|no respondió|timeout|sin respuesta/i.test(mensaje));

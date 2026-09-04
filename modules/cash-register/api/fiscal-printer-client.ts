@@ -20,6 +20,10 @@ export function setFiscalBrand(brand: FiscalBrand): void {
   }
 }
 
+export function getFiscalBrand(): FiscalBrand {
+  return activeBrand;
+}
+
 function brandPrefix(): string {
   return activeBrand === "bematech" ? "/bematech" : "";
 }
