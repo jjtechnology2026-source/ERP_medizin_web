@@ -254,16 +254,23 @@ if (Test-Health) {
     Write-Ok "Scripts creados."
 
     # 3. Registrar tareas en el Programador de tareas.
+    # RunLevel Highest: el servicio corre ELEVADO (admin) al iniciar sesion. Es
+    # necesario para que la DLL Bematech pueda escribir BemaFI32.ini en System32
+    # (la DLL lo lee de ahi). Sin elevacion, un proceso con token limitado no
+    # puede escribir en C:\Windows\System32 aunque el usuario sea admin (UAC).
+    # Se registra con el usuario actual (Interactive) y nivel mas alto.
     Write-Step "Registrando tareas en el Programador de tareas..."
+    $StartPrincipal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
     $StartAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Dest 'start_fiscal_service.ps1')`""
     $StartTrigger = New-ScheduledTaskTrigger -AtLogOn
-    Register-ScheduledTask -TaskName "Medizin Fiscal Service" -Action $StartAction -Trigger $StartTrigger -Description "Arranca el servicio fiscal al iniciar sesion" -Force | Out-Null
+    Register-ScheduledTask -TaskName "Medizin Fiscal Service" -Action $StartAction -Trigger $StartTrigger -Principal $StartPrincipal -Description "Arranca el servicio fiscal al iniciar sesion (elevado para la DLL Bematech)" -Force | Out-Null
 
+    $UpdatePrincipal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
     $UpdateAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Dest 'update.ps1')`" -Restart"
     $UpdateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 9999)
-    Register-ScheduledTask -TaskName "Medizin Fiscal Update" -Action $UpdateAction -Trigger $UpdateTrigger -Description "Verifica actualizaciones del servicio fiscal cada 30 min" -Force | Out-Null
-    Write-Ok "Tareas creadas: 'Medizin Fiscal Service' y 'Medizin Fiscal Update' (cada 30 min)."
-    Write-Log "Tareas programadas registradas"
+    Register-ScheduledTask -TaskName "Medizin Fiscal Update" -Action $UpdateAction -Trigger $UpdateTrigger -Principal $UpdatePrincipal -Description "Verifica actualizaciones del servicio fiscal cada 30 min" -Force | Out-Null
+    Write-Ok "Tareas creadas: 'Medizin Fiscal Service' y 'Medizin Fiscal Update' (elevadas, cada 30 min)."
+    Write-Log "Tareas programadas registradas (RunLevel Highest)"
 
     # 4. Registrar el protocolo medizin-fiscal://.
     Write-Step "Registrando protocolo medizin-fiscal:// ..."
