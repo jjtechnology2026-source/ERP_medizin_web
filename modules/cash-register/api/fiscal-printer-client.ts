@@ -2,6 +2,12 @@ const BASE_URL = "http://127.0.0.1:8000";
 
 export type FiscalBrand = "hka80" | "bematech";
 
+export interface FiscalSerialPort {
+  device: string;
+  description: string;
+  fiscal?: boolean;
+}
+
 // Marca activa: decide si se usan las rutas raíz (hka80) o /bematech/*.
 // Se inicializa desde localStorage para que todos los consumidores del
 // singleton (store, dialogs) enruten a la misma marca sin coordinación.
@@ -120,7 +126,7 @@ const api = {
     return api.request("PUT", `${brandPrefix()}/config/serial-port`, { serial_port: serialPort });
   },
 
-  async listSerialPorts(): Promise<{ ports: Array<{ device: string; description: string }> }> {
+  async listSerialPorts(): Promise<{ ports: FiscalSerialPort[] }> {
     return api.request("GET", `${brandPrefix()}/config/serial-ports`);
   },
 

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import fiscalPrinterClient, { setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
+import fiscalPrinterClient, { type FiscalSerialPort, setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
@@ -45,7 +45,7 @@ export default function FiscalConfigCard() {
     return window.localStorage.getItem("fiscal-implementation") ?? "hka80";
   });
   const [port, setPort] = useState<string>(getStoredPort);
-  const [availablePorts, setAvailablePorts] = useState<string[]>([]);
+  const [availablePorts, setAvailablePorts] = useState<FiscalSerialPort[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
@@ -85,7 +85,17 @@ export default function FiscalConfigCard() {
     fiscalPrinterClient
       .listSerialPorts()
       .then((res) => {
-        setAvailablePorts((res.ports ?? []).map((p) => p.device));
+        const ports = res.ports ?? [];
+        setAvailablePorts(ports);
+        // Preseleccion: el puerto que el servicio marca como impresora fiscal
+        // (Bematech/HKA), o en su defecto el ya guardado en localStorage.
+        const preferred =
+          ports.find((p) => p.fiscal)?.device ??
+          ports.find((p) => p.device === getStoredPort())?.device;
+        if (preferred) {
+          setPort(preferred);
+          persistPort(preferred);
+        }
       })
       .catch(() => {
         // Sin listado de puertos; el input queda libre.
@@ -186,6 +196,10 @@ export default function FiscalConfigCard() {
   };
 
   const handleSavePort = async () => {
+    if (!port) {
+      chatToast.show("Selecciona un puerto de la lista antes de guardar.");
+      return;
+    }
     setPortStatus("saving");
     try {
       const res = await fiscalPrinterClient.setSerialPort(port);
@@ -251,27 +265,33 @@ export default function FiscalConfigCard() {
               </div>
             </div>
 
-            {/* Input: Puerto */}
-            <div className="flex flex-col gap-2.5">
+            {/* Selector: Puerto */}
+            <div className="relative flex flex-col gap-2.5">
               <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
                 Puerto de la máquina fiscal: <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
-                placeholder="99"
-                list="fiscal-serial-ports"
-                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600"
-              />
-              <datalist id="fiscal-serial-ports">
+                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 appearance-none pr-12"
+              >
+                {availablePorts.length === 0 && (
+                  <option value="">No hay puertos detectados</option>
+                )}
                 {availablePorts.map((p) => (
-                  <option key={p} value={p} />
+                  <option key={p.device} value={p.device}>
+                    {p.device}
+                    {p.description ? ` — ${p.description}` : ""}
+                    {p.fiscal ? " ★" : ""}
+                  </option>
                 ))}
-              </datalist>
+              </select>
+              <div className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-slate-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+              </div>
               {availablePorts.length > 0 && (
                 <p className="text-[11px] font-bold text-slate-400 ml-1">
-                  Puertos detectados: {availablePorts.join(", ")}
+                  Puertos detectados por el servicio fiscal. ★ = impresora fiscal identificada.
                 </p>
               )}
             </div>
