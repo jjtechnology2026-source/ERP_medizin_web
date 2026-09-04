@@ -11,11 +11,23 @@
 
 $ErrorActionPreference = "Stop"
 
+# Auto-elevacion: registrar tareas en el Programador y el protocolo HKLM requiere
+# privilegios de administrador. Si este proceso no es admin, se relanza elevado
+# (UAC) y se sale.
+$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
+if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Solicitando permisos de administrador (UAC)..." -ForegroundColor Yellow
+    Start-Process powershell -Verb RunAs -ArgumentList (
+        "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+    )
+    exit 0
+}
+
 $Dest = Join-Path $env:LOCALAPPDATA "Medizin\fiscal_service"
 $UpdateBaseUrl = "https://updates.medizins.com/fiscal-service"
 $ExePath = Join-Path $Dest "FiscalService.exe"
 $LogFile = Join-Path $Dest "install.log"
-
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    $msg" -ForegroundColor Green }
 function Write-Fail($msg) { Write-Host "    $msg" -ForegroundColor Red }
@@ -64,6 +76,8 @@ $env:HKA_BAUDRATE = "9600"
 $env:HKA_REPORT_Z_DELAY_SECONDS = "25"
 $env:HKA_REPORT_Z_COMMAND = "I0Z"
 $env:HKA_ENABLE_INVOICE_COMMANDS = "true"
+$env:BEMATECH_SERIAL_PORT = "COM7"
+$env:BEMATECH_USE_DLL = "true"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 Set-Location $ProjectDir
