@@ -250,6 +250,26 @@ export default function FiscalConfigCard() {
     }
   };
 
+  // Detecta la impresora fiscal (USB/COM) y aplica el puerto automaticamente.
+  const handleDetectPort = async () => {
+    setPortStatus("saving");
+    try {
+      const res = await fiscalPrinterClient.detectAndApplyPort();
+      if (res?.serial_port) {
+        setPort(res.serial_port);
+        persistPort(res.serial_port);
+      }
+      setPortStatus("saved");
+      const iface = res?.interface === "usb" ? "USB" : "Serial";
+      chatToast.show(`Impresora fiscal detectada en ${res.serial_port} (${iface}) y configurada.`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    } catch (e) {
+      setPortStatus("error");
+      chatToast.show(`No se detectó impresora fiscal: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    }
+  };
+
   const handleReportX = async () => {
     setReportXStatus("printing");
     try {
@@ -325,7 +345,7 @@ export default function FiscalConfigCard() {
               </div>
               {availablePorts.length > 0 && (
                 <p className="text-[11px] font-bold text-slate-400 ml-1">
-                  Puertos detectados por el servicio fiscal (USB/Serial según conexión). ★ = impresora fiscal identificada.
+                  Puertos detectados por el servicio fiscal (USB/Serial según conexión). ★ = impresora fiscal identificada. Usá "Detectar impresora" para conectar automáticamente.
                 </p>
               )}
             </div>
@@ -359,6 +379,13 @@ export default function FiscalConfigCard() {
                   Descargar instalador (una sola vez)
                 </button>
               )}
+              <button
+                onClick={handleDetectPort}
+                disabled={portStatus === "saving"}
+                className="px-10 py-5 bg-[#7c3aed] text-white font-black text-[15px] rounded-xl shadow-lg shadow-purple-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {portStatus === "saving" ? "Detectando..." : "Detectar impresora"}
+              </button>
               <button
                 onClick={handleSavePort}
                 disabled={portStatus === "saving"}

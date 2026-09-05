@@ -10,6 +10,16 @@ export interface FiscalSerialPort {
   fiscal?: boolean;
 }
 
+export interface FiscalPortInfo {
+  serial_port: string;
+  interface: "usb" | "serial";
+  detected?: {
+    device: string;
+    description: string;
+    interface: "usb" | "serial";
+  } | null;
+}
+
 // Marca activa: decide si se usan las rutas raíz (hka80) o /bematech/*.
 // Se inicializa desde localStorage para que todos los consumidores del
 // singleton (store, dialogs) enruten a la misma marca sin coordinación.
@@ -134,6 +144,16 @@ const api = {
 
   async listSerialPorts(): Promise<{ ports: FiscalSerialPort[] }> {
     return api.request("GET", `${brandPrefix()}/config/serial-ports`);
+  },
+
+  // Puerto Bematech actual + deteccion automatica (USB/COM).
+  async getCurrentPort(): Promise<FiscalPortInfo> {
+    return api.request("GET", `${brandPrefix()}/config/current`);
+  },
+
+  // Detecta la impresora fiscal y la aplica automaticamente.
+  async detectAndApplyPort(): Promise<FiscalPortInfo> {
+    return api.request("POST", `${brandPrefix()}/config/detect`);
   },
 
   async getPrinterStatus() {
