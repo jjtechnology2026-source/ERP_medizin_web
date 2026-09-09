@@ -25,6 +25,7 @@ export interface MedicationData {
   discount?: number;
   basePrice?: number;
   profitPercentage?: number;
+  lote?: string;
 }
 
 export const useCreateMedication = () => {
@@ -66,11 +67,14 @@ export const useCreateMedication = () => {
           discount: baseData.discount !== undefined ? parseFloat(baseData.discount) : undefined,
           basePrice: baseData.basePrice !== undefined ? parseFloat(baseData.basePrice) : undefined,
           profitPercentage: baseData.profitPercentage !== undefined ? parseFloat(baseData.profitPercentage) : undefined,
+          lote: typeof baseData.lote === "string" && baseData.lote.trim() ? baseData.lote.trim() : undefined,
         };
 
+        // El lote es por-farmacia (inventario), no del catálogo universal: se envía solo en el increase.
+        const catalogPayload = { ...payloadData, lote: undefined };
         const { data: medResult } = await api.post(
           "/Medications/Create",
-          [payloadData]
+          [catalogPayload]
         );
 
         const uploadedImages = await Promise.all(
@@ -93,6 +97,7 @@ export const useCreateMedication = () => {
                 discount: payloadData.discount !== undefined ? Number(payloadData.discount) : null,
                 base_price: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : null,
                 profit_percentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : null,
+                ...(payloadData.lote ? { lote: payloadData.lote } : {}),
               },
             ]);
           }

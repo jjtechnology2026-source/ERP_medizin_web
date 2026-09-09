@@ -19,6 +19,7 @@ export interface Medication {
   discount?: number;
   basePrice?: number;
   profitPercentage?: number;
+  lote?: string;
 }
 
 export type StockFilter = "GENERAL" | "LOW";
@@ -50,6 +51,7 @@ export interface BulkProductRow {
   discount?: number;
   basePrice?: number;
   profitPercentage?: number;
+  lote?: string;
 }
 
 export interface BulkProductParseResult {
