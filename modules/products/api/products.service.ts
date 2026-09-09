@@ -153,7 +153,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number; base_price?: number; profit_percentage?: number }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,
