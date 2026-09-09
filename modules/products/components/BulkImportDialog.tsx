@@ -40,6 +40,7 @@ export default function BulkImportDialog({
         "Precio Base (USD)",
         "Ganancia (%)",
         "Stock",
+        "Lote",
         "Stock Mínimo",
         "IVA (%)",
         "Controlado (SI/NO)",
@@ -60,6 +61,7 @@ export default function BulkImportDialog({
           "Precio Base (USD)": "5.50",
           "Ganancia (%)": "20",
           "Stock": "100",
+          "Lote": "L-2026-001",
           "Stock Mínimo": "10",
           "IVA (%)": "16",
           "Controlado (SI/NO)": "NO",
@@ -132,6 +134,7 @@ export default function BulkImportDialog({
         const stockRaw = getCol(row, ["Stock", "Stock Inicial", "stock", "STOCK"]);
         const minRaw = getCol(row, ["Stock Mínimo", "Mínimo Stock", "Mínimo", "minimum", "MINIMO", "minimo"]);
         const vatRaw = getCol(row, ["IVA (%)", "IVA", "vat"]);
+        const loteRaw = getCol(row, ["Lote", "lote", "LOTE"]);
 
         const base = priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined;
         const profitPct = profitRaw ? parseFloat(profitRaw.replace(",", ".")) : undefined;
@@ -158,6 +161,7 @@ export default function BulkImportDialog({
           vat: vatPct,
           basePrice: base,
           profitPercentage: profitPct,
+          lote: loteRaw || undefined,
           controlled: String(getCol(row, ["Controlado (SI/NO)", "controlled", "CONTROLADO"]) || "").trim().toUpperCase() === "SI",
           antibiotic: String(getCol(row, ["Antibiótico (SI/NO)", "antibiotic", "ANTIBIOTICO"]) || "").trim().toUpperCase() === "SI",
         });
@@ -219,6 +223,7 @@ export default function BulkImportDialog({
               discount: p.discount !== undefined ? Number(p.discount) : null,
               base_price: p.basePrice !== undefined ? Number(p.basePrice) : null,
               profit_percentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : null,
+              ...(p.lote?.trim() ? { lote: p.lote.trim() } : {}),
             }))
           );
           inventoryCount = itemsWithStock.length;
