@@ -269,7 +269,8 @@ export const useProductsStore = create<ProductsStore>()(
                 ...(discountVal !== undefined ? { discount: discountVal } : {}),
                 ...(medicine.basePrice !== undefined ? { base_price: medicine.basePrice } : {}),
                 ...(medicine.profitPercentage !== undefined ? { profit_percentage: medicine.profitPercentage } : {}),
-                ...(medicine.lote?.trim() ? { lote: medicine.lote.trim() } : {}),
+                // R3-sc3: the lot belongs to a positive stock delta; a lot-only edit with q=0 must not create a phantom lot row
+                ...(medicine.lote?.trim() && stockVal > 0 ? { lote: medicine.lote.trim() } : {}),
               }]);
             }
           }
