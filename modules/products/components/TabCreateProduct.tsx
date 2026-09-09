@@ -135,7 +135,7 @@ export default function CreateProductPage({ setView }: any) {
       const headers = [
         "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
         "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
-        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Lote", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
       ];
       const dummyData = [
         {
@@ -151,6 +151,7 @@ export default function CreateProductPage({ setView }: any) {
           "Precio Base (USD)": "3.50",
           "Ganancia (%)": "20",
           "Stock Inicial": 20,
+          "Lote": "L-2026-001",
           "Mínimo Stock": 5,
           "IVA": 16,
           "Controlado (SI/NO)": "NO",
@@ -187,6 +188,7 @@ export default function CreateProductPage({ setView }: any) {
     minimum: "0",
     basePrice: "",
     profit: "",
+    lote: "",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -280,6 +282,7 @@ export default function CreateProductPage({ setView }: any) {
       antibiotic: false,
       basePrice: cost > 0 ? cost : undefined,
       profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
+      lote: formData.lote.trim() || undefined,
     };
 
     const result = await createMedication(payload, images);
@@ -583,6 +586,12 @@ export default function CreateProductPage({ setView }: any) {
                   step="1"
                   value={formData.profit}
                   onChange={(e: any) => setFormData({ ...formData, profit: e.target.value })}
+                />
+                <InputField
+                  label="Lote (opcional)"
+                  placeholder="ej: L-2026-001"
+                  value={formData.lote}
+                  onChange={(e: any) => setFormData({ ...formData, lote: e.target.value })}
                 />
               </div>
             </div>

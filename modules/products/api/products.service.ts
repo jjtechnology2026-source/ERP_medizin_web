@@ -138,6 +138,7 @@ export const productsService = {
           minimum: product.minimum ?? 0,
           basePrice: product.basePrice,
           profitPercentage: product.profitPercentage,
+          lote: product.lote,
         });
         created.push(medication);
       } catch (e: any) {
@@ -153,7 +154,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; lote?: string | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,

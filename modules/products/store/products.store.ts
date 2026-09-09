@@ -269,6 +269,7 @@ export const useProductsStore = create<ProductsStore>()(
                 ...(discountVal !== undefined ? { discount: discountVal } : {}),
                 ...(medicine.basePrice !== undefined ? { base_price: medicine.basePrice } : {}),
                 ...(medicine.profitPercentage !== undefined ? { profit_percentage: medicine.profitPercentage } : {}),
+                ...(medicine.lote?.trim() ? { lote: medicine.lote.trim() } : {}),
               }]);
             }
           }
