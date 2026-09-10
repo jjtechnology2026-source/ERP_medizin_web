@@ -23,6 +23,13 @@ export interface NoFiscalPrintResult {
   error?: string;
 }
 
+type JsPdfModule = typeof import("jspdf");
+
+// Inyeccion solo para tests: por defecto se carga el jsPDF real.
+export interface NoFiscalPrintDeps {
+  loadJsPdf?: () => Promise<JsPdfModule>;
+}
+
 // La ultima linea SIEMPRE es la leyenda (por defecto "No Fiscal").
 export function buildNoFiscalTicketLines(doc: NoFiscalTicketDoc): string[] {
   const legend = doc.legend ?? NO_FISCAL_LEGEND;
@@ -69,8 +76,11 @@ function printViaBrowser(lines: string[]): void {
   }
 }
 
-async function printViaJsPdf(lines: string[]): Promise<void> {
-  const { jsPDF } = await import("jspdf");
+async function printViaJsPdf(
+  lines: string[],
+  loadJsPdf: () => Promise<JsPdfModule>,
+): Promise<void> {
+  const { jsPDF } = await loadJsPdf();
   const lineHeight = 4;
   const height = Math.max(60, 10 + lines.length * lineHeight);
   const pdf = new jsPDF({ unit: "mm", format: [58, height] });
@@ -86,6 +96,7 @@ async function printViaJsPdf(lines: string[]): Promise<void> {
 
 export async function printNoFiscalTicket(
   doc: NoFiscalTicketDoc,
+  deps?: NoFiscalPrintDeps,
 ): Promise<NoFiscalPrintResult> {
   const lines = buildNoFiscalTicketLines(doc);
   const canUseBrowser =
@@ -103,7 +114,7 @@ export async function printNoFiscalTicket(
   }
 
   try {
-    await printViaJsPdf(lines);
+    await printViaJsPdf(lines, deps?.loadJsPdf ?? (() => import("jspdf")));
     return { printed: true, via: "jspdf" };
   } catch (error) {
     return {

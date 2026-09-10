@@ -14,10 +14,10 @@ import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-w
 import {
   NO_FISCAL_LEGEND,
   isFiscalFailure,
-  buildFallbackZReport,
   recordFallbackZ,
   type FallbackZReport,
 } from "@/modules/cash-register/lib/fiscal-fallback";
+import { runZReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
@@ -58,7 +58,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     const payload: Record<string, unknown> = {};
     if (zNumber && zNumber > 0) payload.z_number = zNumber;
     if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
-    let result = await fiscalZReportService.createZReport(pharmacyId, payload);
+    const result = await fiscalZReportService.createZReport(pharmacyId, payload);
 
     const fiscalRef =
       result.report?.fiscalSerial ||
@@ -72,37 +72,13 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     // Fallback "No Fiscal": solo en facturacion digital. Los montos salen de
     // money.ts (buildFallbackZReport); aqui no se recalcula nada.
     if (fiscalFailure && usesDigitalBilling) {
-      const fallback = buildFallbackZReport({ sessionInvoices, pharmacyId });
-      await printNoFiscalTicket({
-        title: "Reporte Z No Fiscal",
-        lines: [
-          { label: "Z", value: `#${fallback.z_number}` },
-          { label: "Serial", value: fallback.fiscal_serial },
-          { label: "Fecha", value: fallback.fiscal_date },
-          { label: "Ventas", value: `Bs ${fallback.total_sales.toFixed(2)}` },
-        ],
-      });
-
-      // Reintento unico de persistencia con los identificadores sintetizados.
-      // ponytail: se reintenta siempre en el fallback; un 5xx con escritura
-      // parcial podria duplicar el Z. Acotar a statusCode===0 si aparece.
-      try {
-        const retry = await fiscalZReportService.createZReport(pharmacyId, {
-          z_number: fallback.z_number,
-          fiscal_serial: fallback.fiscal_serial,
-          fiscal_date: fallback.fiscal_date,
-          invoices: fallback.invoices,
-        });
-        if (retry.success && retry.report) result = retry;
-      } catch {
-        // el servicio normaliza los errores HTTP; esto cubre fallos de transporte
-      }
-
-      const persisted = result.report;
-      recordFallbackZ({
+      const { fallback, report: persisted } = await runZReportFallback({
         pharmacyId,
-        fiscalDate: persisted?.fiscalDate || fallback.fiscal_date,
-        zNumber: persisted?.zNumber || fallback.z_number,
+        sessionInvoices,
+        initialResult: result,
+        createZReport: fiscalZReportService.createZReport,
+        print: printNoFiscalTicket,
+        record: recordFallbackZ,
       });
       setFallbackZ(fallback);
       setFiscalFallback(true);
