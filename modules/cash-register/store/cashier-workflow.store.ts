@@ -7,11 +7,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import fiscalPrinterClient, { getFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
-import {
-  isFiscalFailure,
-  buildFallbackInvoice,
-  applyFallbackInvoiceToOrder,
-} from "@/modules/cash-register/lib/fiscal-fallback";
+import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
+import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
@@ -233,43 +230,19 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       // Fallback "No Fiscal": los montos no se tocan; solo se sintetizan los
       // campos fiscales. Se persiste por el endpoint existente y solo se
       // reintenta cuando la llamada original fallo por transporte.
-      const invoice = buildFallbackInvoice(
-        order as { medications: Array<{ quantity: number; price: number }>; rate?: number },
-      );
-      const fallbackOrder = applyFallbackInvoiceToOrder(order, invoice);
-      await printNoFiscalTicket({
-        title: "Comprobante No Fiscal",
-        lines: [
-          { label: "Control", value: invoice.numeroControl },
-          { label: "Fecha", value: invoice.fecha },
-          { label: "Total", value: `Bs ${invoice.total.toFixed(2)}` },
-        ],
+      const outcome = await runOrderFallback({
+        order,
+        initialResult: result,
+        transportFailed,
+        saleType,
+        sessionId: activeSession.id,
+        submitOrder: cashierAccountantService.submitOrder,
+        print: printNoFiscalTicket,
       });
-
-      let ordenId = result?.ordenId ?? "";
-      if (transportFailed) {
-        try {
-          const retry = await cashierAccountantService.submitOrder(
-            fallbackOrder,
-            saleType,
-            activeSession.id,
-          );
-          ordenId = retry.ordenId;
-        } catch (error) {
-          console.error(
-            "❌ [registerSale] Reintento de persistencia No Fiscal fallo:",
-            error instanceof Error ? error.message : "Error de transporte",
-          );
-        }
-      }
 
       set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
       await get().load();
-      return {
-        facturacion: fallbackOrder.facturacion,
-        ordenId,
-        fiscalFallback: true,
-      };
+      return outcome;
     } catch (error: any) {
       const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);

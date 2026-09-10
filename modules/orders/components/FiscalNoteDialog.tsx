@@ -10,7 +10,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
-import { NO_FISCAL_LEGEND, buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
+import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
+import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
@@ -167,29 +168,13 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
       // Fallback "No Fiscal": la facturacion digital fallo. Se sintetizan los
       // identificadores no monetarios (money.ts sigue siendo el unico origen de
       // montos) y se persiste la NC real por el endpoint existente.
-      const note = buildFallbackNote();
-      await printNoFiscalTicket({
-        title: "Nota de Crédito No Fiscal",
-        lines: [
-          { label: "Control", value: note.numero_control },
-          { label: "Tracking", value: note.tracking_id },
-          { label: "Afecta", value: documentoAfectado.numero_documento },
-          { label: "Total", value: `Bs ${documentoAfectado.monto_total.toFixed(2)}` },
-        ],
+      const note = await runNoteFallback({
+        payload,
+        createNote: fiscalNotesService.createNotaCredito,
+        print: printNoFiscalTicket,
+        affectedDocument: documentoAfectado.numero_documento,
+        total: documentoAfectado.monto_total,
       });
-
-      // Reintento unico de persistencia con los identificadores sintetizados.
-      // ponytail: createNotaCredito normaliza los errores HTTP y nunca lanza, asi
-      // que no se distingue un fallo de transporte de un 4xx; se reintenta siempre.
-      try {
-        await fiscalNotesService.createNotaCredito({
-          ...payload,
-          tracking_id: note.tracking_id,
-          numero_control_interno: note.numero_control,
-        });
-      } catch {
-        // el servicio normaliza los errores; esto cubre fallos de transporte
-      }
 
       setFiscalFallback(true);
       setStep("result");

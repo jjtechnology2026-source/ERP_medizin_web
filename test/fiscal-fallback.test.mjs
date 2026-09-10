@@ -13,7 +13,15 @@ import {
   recordFallbackZ,
   isFallbackZ,
 } from "../modules/cash-register/lib/fiscal-fallback.ts";
-import { buildNoFiscalTicketLines } from "../modules/cash-register/lib/pos58-print.ts";
+import {
+  buildNoFiscalTicketLines,
+  printNoFiscalTicket,
+} from "../modules/cash-register/lib/pos58-print.ts";
+import {
+  runOrderFallback,
+  runZReportFallback,
+  runNoteFallback,
+} from "../modules/cash-register/lib/fiscal-fallback-flow.ts";
 import { fiscalItemsTotal, toBs2 } from "../modules/cash-register/lib/money.ts";
 import {
   buildFiscalPayload,
@@ -164,4 +172,207 @@ test("pos58-print: la ultima linea del ticket es la leyenda 'No Fiscal'", () => 
   });
   assert.ok(lines.length >= 3);
   assert.equal(lines[lines.length - 1], NO_FISCAL_LEGEND);
+});
+
+// --- C1: printNoFiscalTicket branch selection (browser vs jsPDF) ---
+
+test("printNoFiscalTicket: imprime via window.print cuando el navegador esta disponible", async () => {
+  let printed = 0;
+  const prevWindow = globalThis.window;
+  const prevDocument = globalThis.document;
+  globalThis.window = { print: () => { printed += 1; } };
+  globalThis.document = {
+    getElementById: () => null,
+    createElement: () => ({ id: "", className: "", textContent: "", remove() {} }),
+    body: { appendChild() {} },
+  };
+  try {
+    const result = await printNoFiscalTicket({
+      title: "Comprobante No Fiscal",
+      lines: [{ label: "Total", value: "Bs 1.00" }],
+    });
+    assert.equal(result.printed, true);
+    assert.equal(result.via, "browser");
+    assert.equal(printed, 1);
+  } finally {
+    globalThis.window = prevWindow;
+    globalThis.document = prevDocument;
+  }
+});
+
+test("printNoFiscalTicket: cae a jsPDF 58 mm cuando no hay navegador", async () => {
+  const texts = [];
+  let savedName = "";
+  let ctorOptions = null;
+  const fakePdf = {
+    setFont: () => {},
+    setFontSize: () => {},
+    text: (t, x, y) => { texts.push([t, x, y]); },
+    save: (name) => { savedName = name; },
+  };
+  const result = await printNoFiscalTicket(
+    {
+      title: "Comprobante No Fiscal",
+      lines: [
+        { label: "Control", value: "NF1" },
+        { label: "Total", value: "Bs 1.00" },
+      ],
+    },
+    {
+      loadJsPdf: async () => ({
+        jsPDF: function FakeJsPdf(options) {
+          ctorOptions = options;
+          return fakePdf;
+        },
+      }),
+    },
+  );
+  assert.equal(result.printed, true);
+  assert.equal(result.via, "jspdf");
+  // 4 lineas (titulo + 2 datos + leyenda): max(60, 10 + 4*4) = 60 mm de alto.
+  assert.deepEqual(ctorOptions, { unit: "mm", format: [58, 60] });
+  assert.equal(texts[0][0], "Comprobante No Fiscal");
+  assert.equal(texts[texts.length - 1][0], NO_FISCAL_LEGEND);
+  assert.match(savedName, /^no-fiscal-\d+\.pdf$/);
+});
+
+test("printNoFiscalTicket: reporta error si jsPDF tambien falla", async () => {
+  const result = await printNoFiscalTicket(
+    { title: "Comprobante No Fiscal", lines: [] },
+    { loadJsPdf: async () => { throw new Error("sin navegador"); } },
+  );
+  assert.equal(result.printed, false);
+  assert.equal(result.via, "jspdf");
+  assert.equal(result.error, "sin navegador");
+});
+
+// --- C2: order persistence via submitOrder on the fallback path ---
+
+test("runOrderFallback: reintenta submitOrder con los identificadores sintetizados si fallo el transporte", async () => {
+  const submitCalls = [];
+  const printDocs = [];
+  const outcome = await runOrderFallback({
+    order: { rate: RATE, medications: [{ quantity: 1, price: 5 }] },
+    initialResult: null,
+    transportFailed: true,
+    saleType: "digital",
+    sessionId: "s1",
+    submitOrder: async (order, saleType, sessionId) => {
+      submitCalls.push({ order, saleType, sessionId });
+      return { facturacion: "stored", ordenId: "o9" };
+    },
+    print: async (doc) => { printDocs.push(doc); return { printed: true, via: "browser" }; },
+  });
+  assert.equal(submitCalls.length, 1);
+  assert.equal(submitCalls[0].saleType, "digital");
+  assert.equal(submitCalls[0].sessionId, "s1");
+  assert.equal(typeof submitCalls[0].order.numeroControlInterno, "string");
+  assert.equal(submitCalls[0].order.facturacion.fallback, true);
+  assert.equal(submitCalls[0].order.facturacion.numeroControl, submitCalls[0].order.numeroControlInterno);
+  assert.equal(outcome.ordenId, "o9");
+  assert.equal(outcome.fiscalFallback, true);
+  assert.equal(printDocs.length, 1);
+  assert.equal(printDocs[0].title, "Comprobante No Fiscal");
+});
+
+test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva el ordenId inicial", async () => {
+  let submits = 0;
+  const outcome = await runOrderFallback({
+    order: { medications: [{ quantity: 1, price: 2 }] },
+    initialResult: { ordenId: "o-init" },
+    transportFailed: false,
+    saleType: "digital",
+    sessionId: "s1",
+    submitOrder: async () => { submits += 1; return { ordenId: "should-not-run" }; },
+    print: async () => ({ printed: true, via: "browser" }),
+  });
+  assert.equal(submits, 0);
+  assert.equal(outcome.ordenId, "o-init");
+  assert.equal(outcome.fiscalFallback, true);
+});
+
+// --- C3: Z persistence retry via createZReport on the fallback path ---
+
+test("runZReportFallback: reintenta createZReport con el Z sintetizado y registra el marcador persistido", async () => {
+  const calls = [];
+  const recorded = [];
+  const outcome = await runZReportFallback({
+    pharmacyId: "PH1",
+    sessionInvoices: [
+      { controlNumber: "A-1", totalVes: 100 },
+      { controlNumber: "A-2", totalVes: 50 },
+    ],
+    initialResult: { success: false, report: null },
+    createZReport: async (pharmacyId, payload) => {
+      calls.push({ pharmacyId, payload });
+      return { success: true, report: { fiscalDate: "2026-09-10", zNumber: 999 } };
+    },
+    print: async () => ({ printed: true, via: "browser" }),
+    record: (marker) => { recorded.push(marker); },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].pharmacyId, "PH1");
+  assert.equal(typeof calls[0].payload.z_number, "number");
+  assert.match(calls[0].payload.fiscal_serial, /^PH1-\d{4}-\d{2}-\d{2}-\d+$/);
+  assert.match(calls[0].payload.fiscal_date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(calls[0].payload.invoices, { count: 2, doc_from: "A-1", doc_to: "A-2" });
+  assert.equal(outcome.report.zNumber, 999);
+  assert.equal(outcome.fallback.fallback, true);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].zNumber, 999);
+  assert.equal(recorded[0].fiscalDate, "2026-09-10");
+});
+
+test("runZReportFallback: si el reintento falla, registra el marcador con los valores sintetizados", async () => {
+  const recorded = [];
+  const outcome = await runZReportFallback({
+    pharmacyId: "PH1",
+    sessionInvoices: [],
+    initialResult: { success: false, report: null },
+    createZReport: async () => { throw new Error("transporte caido"); },
+    print: async () => ({ printed: true, via: "jspdf" }),
+    record: (marker) => { recorded.push(marker); },
+  });
+  assert.equal(outcome.report, null);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].pharmacyId, "PH1");
+  assert.equal(recorded[0].zNumber, outcome.fallback.z_number);
+  assert.equal(recorded[0].fiscalDate, outcome.fallback.fiscal_date);
+});
+
+// --- C4: note persistence retry on the fallback path ---
+
+test("runNoteFallback: reintenta createNotaCredito con tracking y control sintetizados", async () => {
+  const calls = [];
+  const note = await runNoteFallback({
+    payload: {
+      id_pharmacy: "PH1",
+      tracking_id: "original",
+      numero_control_interno: "INT-1",
+    },
+    createNote: async (payload) => { calls.push(payload); return { success: true }; },
+    print: async () => ({ printed: true, via: "browser" }),
+    affectedDocument: "F-1",
+    total: 12.5,
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id_pharmacy, "PH1");
+  assert.equal(calls[0].tracking_id, note.tracking_id);
+  assert.equal(calls[0].numero_control_interno, note.numero_control);
+  assert.equal(note.url_pdf, null);
+  assert.equal(note.fiscal_success, false);
+});
+
+test("runNoteFallback: cubre el reintento TFHKA y no propaga un reintento fallido", async () => {
+  let attempts = 0;
+  const note = await runNoteFallback({
+    payload: { id_pharmacy: "PH1", factura_id: "F-1" },
+    createNote: async () => { attempts += 1; throw new Error("tfhka caido"); },
+    print: async () => ({ printed: true, via: "jspdf" }),
+    affectedDocument: "F-1",
+    total: 3,
+  });
+  assert.equal(attempts, 1);
+  assert.equal(note.fiscal_error, FALLBACK_NOTE_ERROR);
+  assert.equal(typeof note.numero_control, "string");
 });

@@ -9,7 +9,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
-import { NO_FISCAL_LEGEND, buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
+import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
+import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
@@ -181,30 +182,14 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           // Fallback "No Fiscal": la facturacion digital lanzo. Se sintetizan los
           // identificadores no monetarios (los montos ya vienen de money.ts) y se
           // persiste la NC real por el endpoint existente con esos identificadores.
-          const note = buildFallbackNote();
-          fallbackControl = note.numero_control;
-          await printNoFiscalTicket({
-            title: "Nota de Crédito No Fiscal",
-            lines: [
-              { label: "Control", value: note.numero_control },
-              { label: "Tracking", value: note.tracking_id },
-              { label: "Afecta", value: detail.numero_control },
-              { label: "Total", value: `Bs ${totalVes.toFixed(2)}` },
-            ],
+          const note = await runNoteFallback({
+            payload: tfhkaPayload,
+            createNote: facturasService.createCreditNoteTFHKA,
+            print: printNoFiscalTicket,
+            affectedDocument: detail.numero_control,
+            total: totalVes,
           });
-
-          // Reintento unico de persistencia con los identificadores sintetizados.
-          // ponytail: createCreditNoteTFHKA lanza en cualquier error; no se distingue
-          // transporte de 4xx. Acotar si se observan duplicados.
-          try {
-            await facturasService.createCreditNoteTFHKA({
-              ...tfhkaPayload,
-              tracking_id: note.tracking_id,
-              numero_control_interno: note.numero_control,
-            });
-          } catch {
-            // el reintento tambien fallo: la NC queda impresa como "No Fiscal"
-          }
+          fallbackControl = note.numero_control;
           setFiscalFallback(true);
         }
       } else {
