@@ -8,6 +8,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
+import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import type {
   PaymentMethod,
   CashPayment,
@@ -69,6 +70,7 @@ export default function PaymentDialog({
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
   const [isAwaitingControlNumber, setIsAwaitingControlNumber] = useState(false);
   const [controlNumberInput, setControlNumberInput] = useState("");
+  const [noFiscalOutcome, setNoFiscalOutcome] = useState(false);
 
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
@@ -303,6 +305,12 @@ export default function PaymentDialog({
         );
       }
       useCurrentOrderStore.getState().clearCurrentOrder();
+
+      if (result.fiscalFallback) {
+        setNoFiscalOutcome(true);
+        return;
+      }
+
       onComplete();
     } catch (error: any) {
       const mensajeBackend =
@@ -630,7 +638,29 @@ export default function PaymentDialog({
         isProcessing={isProcessing}
       />
     )}
+    {noFiscalOutcome && <NoFiscalOutcomeDialog onClose={onComplete} />}
     </>
+  );
+}
+
+function NoFiscalOutcomeDialog({ onClose }: { onClose: () => void }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 backdrop-blur-md">
+      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6 text-center">
+        <div className="text-3xl font-black text-amber-500">{NO_FISCAL_LEGEND}</div>
+        <p className="text-sm font-bold text-slate-500">
+          La venta se registró, pero la facturación digital falló. El comprobante
+          impreso no es fiscal.
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all"
+        >
+          Aceptar
+        </button>
+      </div>
+    </div>,
+    document.body
   );
 }
 

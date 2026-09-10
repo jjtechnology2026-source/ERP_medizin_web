@@ -13,6 +13,7 @@ import {
   recordFallbackZ,
   isFallbackZ,
 } from "../modules/cash-register/lib/fiscal-fallback.ts";
+import { buildNoFiscalTicketLines } from "../modules/cash-register/lib/pos58-print.ts";
 import { fiscalItemsTotal, toBs2 } from "../modules/cash-register/lib/money.ts";
 import {
   buildFiscalPayload,
@@ -151,4 +152,16 @@ test("registry: recordFallbackZ / isFallbackZ round-trip en storage inyectado", 
 
 test("on-screen outcome: leyenda literal 'No Fiscal'", () => {
   assert.equal(NO_FISCAL_LEGEND, "No Fiscal");
+});
+
+test("pos58-print: la ultima linea del ticket es la leyenda 'No Fiscal'", () => {
+  const lines = buildNoFiscalTicketLines({
+    title: "Comprobante No Fiscal",
+    lines: [
+      { label: "Control", value: "NF000000000001" },
+      { label: "Total", value: "Bs 12.34" },
+    ],
+  });
+  assert.ok(lines.length >= 3);
+  assert.equal(lines[lines.length - 1], NO_FISCAL_LEGEND);
 });
