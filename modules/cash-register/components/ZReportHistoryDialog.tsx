@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import {
   HiOutlineXCircle,
   HiOutlineDocumentReport,
@@ -8,10 +8,41 @@ import {
 } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
+import { NO_FISCAL_LEGEND, isFallbackZ } from "@/modules/cash-register/lib/fiscal-fallback";
 import type { ZReportListItem, CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 interface ZReportHistoryDialogProps {
   onClose: () => void;
+}
+
+// El registro "No Fiscal" vive en localStorage (por navegador). useSyncExternalStore
+// evita el mismatch de hidratacion: en SSR/hidratacion usa false y luego refresca.
+const subscribeNoop = () => () => {};
+
+function FallbackZBadge({
+  pharmacyId,
+  fiscalDate,
+  zNumber,
+  className = "",
+}: {
+  pharmacyId: string;
+  fiscalDate: string;
+  zNumber: number;
+  className?: string;
+}) {
+  const fallback = useSyncExternalStore(
+    subscribeNoop,
+    () => isFallbackZ({ pharmacyId, fiscalDate, zNumber }),
+    () => false,
+  );
+  if (!fallback) return null;
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wider ${className}`}
+    >
+      {NO_FISCAL_LEGEND}
+    </span>
+  );
 }
 
 function formatMoney(value: number | null | undefined): string {
@@ -130,6 +161,12 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
               <p className="text-xs font-bold text-emerald-600/80 mt-1">
                 Z #{selectedReport.zNumber} · {selectedReport.fiscalDate || "—"}
               </p>
+              <FallbackZBadge
+                pharmacyId={pharmacyId}
+                fiscalDate={selectedReport.fiscalDate}
+                zNumber={selectedReport.zNumber}
+                className="inline-block mt-2"
+              />
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
@@ -271,6 +308,14 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
                         <td className="p-4 font-bold text-slate-800">{formatDate(r.fiscalDate)}</td>
                         <td className="p-4 font-mono font-bold text-slate-700">
                           {r.zNumber != null ? `#${r.zNumber}` : "—"}
+                          {r.zNumber != null && (
+                            <FallbackZBadge
+                              pharmacyId={pharmacyId}
+                              fiscalDate={r.fiscalDate}
+                              zNumber={r.zNumber}
+                              className="ml-2"
+                            />
+                          )}
                         </td>
                         <td className="p-4 text-right font-bold text-emerald-600">{formatMoney(r.totalSales)}</td>
                         <td className="p-4 text-right font-bold text-slate-700">

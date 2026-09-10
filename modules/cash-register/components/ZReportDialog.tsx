@@ -10,6 +10,15 @@ import {
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import {
+  NO_FISCAL_LEGEND,
+  isFiscalFailure,
+  buildFallbackZReport,
+  recordFallbackZ,
+  type FallbackZReport,
+} from "@/modules/cash-register/lib/fiscal-fallback";
+import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 interface ZReportDialogProps {
@@ -29,6 +38,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
+  const sessionInvoices = useCashierWorkflowStore((s) => s.sessionInvoices);
 
   const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
   const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
@@ -37,6 +47,8 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [fiscalFallback, setFiscalFallback] = useState(false);
+  const [fallbackZ, setFallbackZ] = useState<FallbackZReport | null>(null);
 
   // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
   // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
@@ -46,7 +58,58 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     const payload: Record<string, unknown> = {};
     if (zNumber && zNumber > 0) payload.z_number = zNumber;
     if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
-    const result = await fiscalZReportService.createZReport(pharmacyId, payload);
+    let result = await fiscalZReportService.createZReport(pharmacyId, payload);
+
+    const fiscalRef =
+      result.report?.fiscalSerial ||
+      (result.report?.zNumber ? String(result.report.zNumber) : null);
+    const fiscalFailure = isFiscalFailure({
+      success: result.success,
+      numeroControl: fiscalRef,
+      error: result.details,
+    });
+
+    // Fallback "No Fiscal": solo en facturacion digital. Los montos salen de
+    // money.ts (buildFallbackZReport); aqui no se recalcula nada.
+    if (fiscalFailure && usesDigitalBilling) {
+      const fallback = buildFallbackZReport({ sessionInvoices, pharmacyId });
+      await printNoFiscalTicket({
+        title: "Reporte Z No Fiscal",
+        lines: [
+          { label: "Z", value: `#${fallback.z_number}` },
+          { label: "Serial", value: fallback.fiscal_serial },
+          { label: "Fecha", value: fallback.fiscal_date },
+          { label: "Ventas", value: `Bs ${fallback.total_sales.toFixed(2)}` },
+        ],
+      });
+
+      // Reintento unico de persistencia con los identificadores sintetizados.
+      // ponytail: se reintenta siempre en el fallback; un 5xx con escritura
+      // parcial podria duplicar el Z. Acotar a statusCode===0 si aparece.
+      try {
+        const retry = await fiscalZReportService.createZReport(pharmacyId, {
+          z_number: fallback.z_number,
+          fiscal_serial: fallback.fiscal_serial,
+          fiscal_date: fallback.fiscal_date,
+          invoices: fallback.invoices,
+        });
+        if (retry.success && retry.report) result = retry;
+      } catch {
+        // el servicio normaliza los errores HTTP; esto cubre fallos de transporte
+      }
+
+      const persisted = result.report;
+      recordFallbackZ({
+        pharmacyId,
+        fiscalDate: persisted?.fiscalDate || fallback.fiscal_date,
+        zNumber: persisted?.zNumber || fallback.z_number,
+      });
+      setFallbackZ(fallback);
+      setFiscalFallback(true);
+      if (persisted) setReport(persisted);
+      setStep("result");
+      return;
+    }
 
     if (!result.success || !result.report) {
       setStep("error");
@@ -63,7 +126,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
     setReport(result.report);
     setStep("result");
-  }, [pharmacyId]);
+  }, [pharmacyId, usesDigitalBilling, sessionInvoices]);
 
   useEffect(() => {
     if (step === "fiscal_printing") {
@@ -399,7 +462,32 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
           </div>
         )}
 
-        {step === "result" && report && (
+        {step === "result" && fiscalFallback && (
+          <div className="p-6 space-y-5">
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
+              <p className="text-sm font-black text-amber-600">{NO_FISCAL_LEGEND}</p>
+              <p className="text-xs font-bold text-amber-600/80 mt-1">
+                Z #{report?.zNumber ?? fallbackZ?.z_number ?? "—"} ·{" "}
+                {report?.fiscalDate || fallbackZ?.fiscal_date || "—"}
+              </p>
+            </div>
+            <p className="text-sm font-bold text-slate-500 text-center">
+              El reporte Z se generó, pero la facturación digital falló. El comprobante
+              impreso no es fiscal.
+            </p>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "result" && !fiscalFallback && report && (
           <div className="p-6 space-y-5">
             <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
               <p className="text-sm font-black text-emerald-700">Reporte Z registrado</p>
