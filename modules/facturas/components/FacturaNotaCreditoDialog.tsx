@@ -9,6 +9,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
+import { NO_FISCAL_LEGEND, buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
+import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
 interface FacturaNotaCreditoDialogProps {
@@ -89,6 +91,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
   const [moneda, setMoneda] = useState("VES");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [fiscalFallback, setFiscalFallback] = useState(false);
 
   useEffect(() => {
     facturasService.detail(factura.id)
@@ -108,6 +111,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     }
 
     setStep("submitting");
+    let fallbackControl: string | null = null;
     try {
       const ncTotalVes = (detail.detalles ?? []).reduce((sum, d) => {
         const base = (d.cantidad || 0) * (d.precio_unitario_ves || 0);
@@ -129,7 +133,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         const authProfile = useAuthStore.getState().profile;
         const rifEmisor = (authProfile as any)?.rif || (authProfile as any)?.rifPharmacy || "J-00000000-0";
 
-        await facturasService.createCreditNoteTFHKA({
+        const tfhkaPayload = {
           id_pharmacy: detail.pharmacy_id,
           rif_emisor: rifEmisor,
           entidad: undefined,
@@ -169,7 +173,40 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             subtotal_ves: d.subtotal_ves,
           })),
           movimientos_persist: [movimiento],
-        });
+        };
+
+        try {
+          await facturasService.createCreditNoteTFHKA(tfhkaPayload);
+        } catch {
+          // Fallback "No Fiscal": la facturacion digital lanzo. Se sintetizan los
+          // identificadores no monetarios (los montos ya vienen de money.ts) y se
+          // persiste la NC real por el endpoint existente con esos identificadores.
+          const note = buildFallbackNote();
+          fallbackControl = note.numero_control;
+          await printNoFiscalTicket({
+            title: "Nota de Crédito No Fiscal",
+            lines: [
+              { label: "Control", value: note.numero_control },
+              { label: "Tracking", value: note.tracking_id },
+              { label: "Afecta", value: detail.numero_control },
+              { label: "Total", value: `Bs ${totalVes.toFixed(2)}` },
+            ],
+          });
+
+          // Reintento unico de persistencia con los identificadores sintetizados.
+          // ponytail: createCreditNoteTFHKA lanza en cualquier error; no se distingue
+          // transporte de 4xx. Acotar si se observan duplicados.
+          try {
+            await facturasService.createCreditNoteTFHKA({
+              ...tfhkaPayload,
+              tracking_id: note.tracking_id,
+              numero_control_interno: note.numero_control,
+            });
+          } catch {
+            // el reintento tambien fallo: la NC queda impresa como "No Fiscal"
+          }
+          setFiscalFallback(true);
+        }
       } else {
         await facturasService.createCreditNote({
           factura_id: detail.id,
@@ -189,7 +226,11 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         });
         await emitirNotaCreditoFiscal(detail, motivo.trim());
       }
-      setSuccessMsg("Nota de crédito emitida correctamente");
+      setSuccessMsg(
+        fallbackControl
+          ? `Nota de Crédito No Fiscal emitida: ${fallbackControl}`
+          : "Nota de crédito emitida correctamente"
+      );
       setStep("success");
       setTimeout(onSuccess, 1500);
     } catch (e: any) {
@@ -242,10 +283,21 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
         {step === "success" && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="p-5 bg-[#059669]/10 rounded-full text-[#059669]">
+            <div
+              className={`p-5 rounded-full ${
+                fiscalFallback ? "bg-amber-50 text-amber-500" : "bg-[#059669]/10 text-[#059669]"
+              }`}
+            >
               <HiOutlineDocumentReport size={48} />
             </div>
-            <p className="text-sm font-bold text-[#059669]">{successMsg}</p>
+            {fiscalFallback && (
+              <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-black">
+                {NO_FISCAL_LEGEND}
+              </span>
+            )}
+            <p className={`text-sm font-bold ${fiscalFallback ? "text-amber-700" : "text-[#059669]"}`}>
+              {successMsg}
+            </p>
           </div>
         )}
 

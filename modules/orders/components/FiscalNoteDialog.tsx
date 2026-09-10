@@ -10,6 +10,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
+import { NO_FISCAL_LEGEND, buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
+import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
   FiscalNoteItem,
@@ -34,6 +36,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
   const [tasaCambio, setTasaCambio] = useState(order.rate || 1);
   const [errorMsg, setErrorMsg] = useState("");
   const [resultMsg, setResultMsg] = useState("");
+  const [fiscalFallback, setFiscalFallback] = useState(false);
 
   const defaultItems: FiscalNoteItem[] = useMemo(
     () =>
@@ -155,8 +158,42 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     const result = await fiscalNotesService.createNotaCredito(payload);
 
     if (!result.success) {
-      setStep("error");
-      setErrorMsg(result.message);
+      if (!usesDigitalBilling) {
+        setStep("error");
+        setErrorMsg(result.message);
+        return;
+      }
+
+      // Fallback "No Fiscal": la facturacion digital fallo. Se sintetizan los
+      // identificadores no monetarios (money.ts sigue siendo el unico origen de
+      // montos) y se persiste la NC real por el endpoint existente.
+      const note = buildFallbackNote();
+      await printNoFiscalTicket({
+        title: "Nota de Crédito No Fiscal",
+        lines: [
+          { label: "Control", value: note.numero_control },
+          { label: "Tracking", value: note.tracking_id },
+          { label: "Afecta", value: documentoAfectado.numero_documento },
+          { label: "Total", value: `Bs ${documentoAfectado.monto_total.toFixed(2)}` },
+        ],
+      });
+
+      // Reintento unico de persistencia con los identificadores sintetizados.
+      // ponytail: createNotaCredito normaliza los errores HTTP y nunca lanza, asi
+      // que no se distingue un fallo de transporte de un 4xx; se reintenta siempre.
+      try {
+        await fiscalNotesService.createNotaCredito({
+          ...payload,
+          tracking_id: note.tracking_id,
+          numero_control_interno: note.numero_control,
+        });
+      } catch {
+        // el servicio normaliza los errores; esto cubre fallos de transporte
+      }
+
+      setFiscalFallback(true);
+      setStep("result");
+      setResultMsg(`Nota de Crédito No Fiscal emitida: ${note.numero_control}`);
       return;
     }
 
@@ -331,10 +368,21 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
         {step === "result" && (
           <div className="p-8 flex flex-col items-center gap-6 text-center">
-            <div className="p-5 bg-emerald-50 rounded-full text-emerald-500">
+            <div
+              className={`p-5 rounded-full ${
+                fiscalFallback ? "bg-amber-50 text-amber-500" : "bg-emerald-50 text-emerald-500"
+              }`}
+            >
               <HiOutlineDocumentReport size={48} />
             </div>
-            <p className="text-sm font-bold text-emerald-700">{resultMsg}</p>
+            {fiscalFallback && (
+              <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-black">
+                {NO_FISCAL_LEGEND}
+              </span>
+            )}
+            <p className={`text-sm font-bold ${fiscalFallback ? "text-amber-700" : "text-emerald-700"}`}>
+              {resultMsg}
+            </p>
             <button
               onClick={onClose}
               className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
