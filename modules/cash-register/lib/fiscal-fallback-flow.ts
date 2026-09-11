@@ -3,6 +3,9 @@
 // cubrirla sin React/DOM/red. Los montos NUNCA se calculan aqui: vienen de
 // money.ts a traves de fiscal-fallback.ts. Cada call site decide cuando hay
 // fallo y solo llama a estos helpers en ese caso.
+//
+// El comprobante se imprime en la POS58 (WebUSB) con cabecera = nombre de la
+// farmacia + RIF, y desglose de pagos SIEMPRE en Bs (divisa convertida por tasa).
 
 import {
   buildFallbackInvoice,
@@ -13,12 +16,58 @@ import {
   type FallbackZMarker,
   type FallbackZReport,
 } from "./fiscal-fallback.ts";
-import type { NoFiscalTicketDoc, NoFiscalPrintResult } from "./pos58-print.ts";
+import { toBs2 } from "./money.ts";
+import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos58-print.ts";
+import type { TicketHeader, TicketMoneyLine } from "./pos58-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
 
-export type PrintFn = (doc: NoFiscalTicketDoc) => Promise<NoFiscalPrintResult>;
+export type PrintFn = (ticket: NoFiscalTicket) => Promise<NoFiscalPrintResult>;
+
+const NO_FISCAL = "NO FISCAL";
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Efectivo Bs",
+  efectivo: "Efectivo Bs",
+  dollars: "Efectivo USD",
+  dolares: "Efectivo USD",
+  card: "Tarjeta",
+  tarjeta: "Tarjeta",
+  mobile: "Pago Movil",
+  pagomovil: "Pago Movil",
+  pago_movil: "Pago Movil",
+  biopago: "Biopago",
+  transfer: "Transferencia",
+  other: "Otro",
+};
+
+export function paymentLabel(method?: string, currency?: string): string {
+  if (method === "dollars" || currency === "USD") return "Efectivo USD";
+  return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
+}
+
+/** Pagos del comprobante: todo en Bs (divisa x tasa). */
+function buildPayments(order: Record<string, unknown>, rate: number, fallbackTotal: number): TicketMoneyLine[] {
+  const raw = order.payments;
+  const pays = Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [];
+  if (pays.length === 0) return [{ label: "Efectivo Bs", amount: fallbackTotal }];
+  return pays.map((p) => {
+    const method = String(p.method ?? "");
+    const currency = String(p.currency ?? "");
+    const isUsd = method === "dollars" || currency === "USD";
+    const amountBs = toBs2((Number(p.amount) || 0) * (isUsd ? rate : 1));
+    return { label: paymentLabel(method, currency), amount: amountBs };
+  });
+}
+
+function fmtDate(input?: string | Date | null): string {
+  const d = input ? new Date(input) : new Date();
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export interface OrderFallbackInputs<TResult extends { ordenId: string }> {
+  header: TicketHeader;
   order: Record<string, unknown>;
   initialResult: TResult | null;
   transportFailed: boolean;
@@ -41,21 +90,35 @@ export interface OrderFallbackOutcome {
 export async function runOrderFallback<TResult extends { ordenId: string }>(
   inputs: OrderFallbackInputs<TResult>,
 ): Promise<OrderFallbackOutcome> {
-  const invoice = buildFallbackInvoice(
-    inputs.order as {
-      medications: Array<{ quantity: number; price: number }>;
-      rate?: number;
-    },
-  );
+  const order = inputs.order as {
+    medications: Array<{ quantity: number; price: number; name?: string; description?: string }>;
+    rate?: number;
+    client?: { name?: string; documento?: string };
+    payments?: unknown;
+  };
+  const rate = order.rate || 1;
+  const invoice = buildFallbackInvoice(order);
   const fallbackOrder = applyFallbackInvoiceToOrder(inputs.order, invoice);
 
+  const items = (order.medications || []).map((m) => ({
+    qty: m.quantity,
+    description: m.name || m.description || "",
+    amount: toBs2(m.quantity * toBs2(m.price * rate)),
+  }));
+
   await inputs.print({
-    title: "Comprobante No Fiscal",
-    lines: [
-      { label: "Control", value: invoice.numeroControl },
-      { label: "Fecha", value: invoice.fecha },
-      { label: "Total", value: `Bs ${invoice.total.toFixed(2)}` },
-    ],
+    kind: "sale",
+    header: inputs.header,
+    title: "COMPROBANTE NO FISCAL",
+    controlNumber: invoice.numeroControl,
+    date: fmtDate(invoice.fecha),
+    customerName: order.client?.name || "Cliente General",
+    customerDoc: order.client?.documento || "V-00000000",
+    items,
+    totals: [],
+    total: invoice.total,
+    payments: buildPayments(inputs.order, rate, invoice.total),
+    legend: NO_FISCAL,
   });
 
   // Solo se reintenta persistir cuando la llamada original fallo por
@@ -92,8 +155,12 @@ export interface ZFallbackResultLike<TReport> {
 export interface ZFallbackInputs<
   TReport extends { fiscalDate?: string | null; zNumber?: number | null },
 > {
+  header: TicketHeader;
   pharmacyId: string;
   sessionInvoices: Array<{ controlNumber?: string; totalVes?: number }>;
+  /** Desglose por metodo de pago, YA en Bs. */
+  paymentBreakdown?: TicketMoneyLine[];
+  rate?: number;
   initialResult: ZFallbackResultLike<TReport>;
   createZReport: (
     pharmacyId: string,
@@ -116,14 +183,33 @@ export async function runZReportFallback<
     pharmacyId: inputs.pharmacyId,
   });
 
+  const fields: { label: string; value: string }[] = [
+    { label: "Nro Z", value: `#${fallback.z_number}` },
+    { label: "Serial", value: fallback.fiscal_serial },
+    {
+      label: "Documentos",
+      value: fallback.invoices ? `${fallback.invoices.doc_from} a ${fallback.invoices.doc_to}` : "-",
+    },
+    { label: "Contribuyentes", value: String(fallback.taxpayers) },
+    { label: "No contrib.", value: String(fallback.non_taxpayers) },
+  ];
+  if (inputs.rate && inputs.rate > 0) {
+    fields.push({ label: "Tasa USD", value: inputs.rate.toFixed(4) });
+  }
+
   await inputs.print({
-    title: "Reporte Z No Fiscal",
-    lines: [
-      { label: "Z", value: `#${fallback.z_number}` },
-      { label: "Serial", value: fallback.fiscal_serial },
-      { label: "Fecha", value: fallback.fiscal_date },
-      { label: "Ventas", value: `Bs ${fallback.total_sales.toFixed(2)}` },
+    kind: "report",
+    header: inputs.header,
+    title: "REPORTE Z NO FISCAL",
+    date: fmtDate(new Date()),
+    fields,
+    totals: [
+      { label: "Ventas gravadas", amount: fallback.taxed_sales },
+      { label: "Ventas exentas", amount: fallback.exempt_sales },
     ],
+    paymentBreakdown: inputs.paymentBreakdown ?? [],
+    total: fallback.total_sales,
+    legend: NO_FISCAL,
   });
 
   // Reintento unico de persistencia con los identificadores sintetizados.
@@ -152,11 +238,15 @@ export async function runZReportFallback<
 }
 
 export interface NoteFallbackInputs<TPayload extends object> {
+  header: TicketHeader;
   payload: TPayload;
   createNote: (payload: TPayload) => Promise<unknown>;
   print: PrintFn;
   affectedDocument: string;
   total: number;
+  customerName?: string;
+  customerDoc?: string;
+  reason?: string;
 }
 
 export async function runNoteFallback<TPayload extends object>(
@@ -165,13 +255,18 @@ export async function runNoteFallback<TPayload extends object>(
   const note = buildFallbackNote();
 
   await inputs.print({
-    title: "Nota de Crédito No Fiscal",
-    lines: [
-      { label: "Control", value: note.numero_control },
-      { label: "Tracking", value: note.tracking_id },
-      { label: "Afecta", value: inputs.affectedDocument },
-      { label: "Total", value: `Bs ${inputs.total.toFixed(2)}` },
-    ],
+    kind: "credit-note",
+    header: inputs.header,
+    title: "NOTA DE CREDITO NO FISCAL",
+    controlNumber: note.numero_control,
+    trackingId: note.tracking_id,
+    date: fmtDate(note.fecha),
+    customerName: inputs.customerName || "Cliente General",
+    customerDoc: inputs.customerDoc || "V-00000000",
+    affectedDoc: inputs.affectedDocument,
+    reason: inputs.reason,
+    total: inputs.total,
+    legend: NO_FISCAL,
   });
 
   // Reintento unico de persistencia con los identificadores sintetizados.

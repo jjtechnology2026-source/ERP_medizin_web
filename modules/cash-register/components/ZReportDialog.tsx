@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect, FormEvent } from "react";
+import { useState, useCallback, useEffect, useMemo, FormEvent } from "react";
 import {
   HiOutlineXCircle,
   HiOutlineDocumentReport,
@@ -11,13 +11,14 @@ import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-repor
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import {
   NO_FISCAL_LEGEND,
   isFiscalFailure,
   recordFallbackZ,
   type FallbackZReport,
 } from "@/modules/cash-register/lib/fiscal-fallback";
-import { runZReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { runZReportFallback, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
@@ -39,6 +40,31 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const sessionInvoices = useCashierWorkflowStore((s) => s.sessionInvoices);
+  const sessionTransactions = useCashierWorkflowStore((s) => s.sessionTransactions);
+  const { getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+  const header = useMemo(
+    () => ({
+      name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+      rif: String(profile?.rif || ""),
+    }),
+    [profile],
+  );
+  // Desglose por metodo de pago, YA en Bs (amountVes viene convertido de la BD).
+  const paymentBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    const tx = (sessionTransactions || []) as Array<{
+      type?: string;
+      paymentMethod?: string;
+      amountVes?: number;
+    }>;
+    for (const t of tx) {
+      if (t.type !== "sale") continue;
+      const label = paymentLabel(t.paymentMethod);
+      map.set(label, (map.get(label) ?? 0) + (Number(t.amountVes) || 0));
+    }
+    return [...map.entries()].map(([label, amount]) => ({ label, amount }));
+  }, [sessionTransactions]);
 
   const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
   const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
@@ -49,6 +75,27 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const [printError, setPrintError] = useState<string | null>(null);
   const [fiscalFallback, setFiscalFallback] = useState(false);
   const [fallbackZ, setFallbackZ] = useState<FallbackZReport | null>(null);
+
+  const runFallback = useCallback(
+    async (initialResult: { success: boolean; report?: CreatedZReport | null }) => {
+      const { fallback, report: persisted } = await runZReportFallback({
+        header,
+        pharmacyId,
+        sessionInvoices,
+        paymentBreakdown,
+        rate,
+        initialResult,
+        createZReport: fiscalZReportService.createZReport,
+        print: printNoFiscalTicket,
+        record: recordFallbackZ,
+      });
+      setFallbackZ(fallback);
+      setFiscalFallback(true);
+      if (persisted) setReport(persisted);
+      setStep("result");
+    },
+    [header, pharmacyId, sessionInvoices, paymentBreakdown, rate],
+  );
 
   // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
   // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
@@ -69,21 +116,10 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
       error: result.details,
     });
 
-    // Fallback "No Fiscal": solo en facturacion digital. Los montos salen de
-    // money.ts (buildFallbackZReport); aqui no se recalcula nada.
-    if (fiscalFailure && usesDigitalBilling) {
-      const { fallback, report: persisted } = await runZReportFallback({
-        pharmacyId,
-        sessionInvoices,
-        initialResult: result,
-        createZReport: fiscalZReportService.createZReport,
-        print: printNoFiscalTicket,
-        record: recordFallbackZ,
-      });
-      setFallbackZ(fallback);
-      setFiscalFallback(true);
-      if (persisted) setReport(persisted);
-      setStep("result");
+    // Fallback "No Fiscal": la registracion Z fallo (canal digital o local). Se
+    // imprime el comprobante en la POS58 y se registra con identificadores sinteticos.
+    if (fiscalFailure) {
+      await runFallback(result);
       return;
     }
 
@@ -102,7 +138,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
     setReport(result.report);
     setStep("result");
-  }, [pharmacyId, usesDigitalBilling, sessionInvoices]);
+  }, [pharmacyId, runFallback]);
 
   useEffect(() => {
     if (step === "fiscal_printing") {
@@ -111,17 +147,15 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         try {
           const res = await fiscalPrinterClient.reportZ();
           if (!res.printed) {
-            setPrintError(res.print_error || "La impresora no imprimió el reporte Z.");
+            // La maquina fiscal no imprimio: fallback "No Fiscal" en la POS58.
+            await runFallback({ success: false, report: null });
             return;
           }
-          // El Z ya se imprimió en la máquina: registrar automáticamente con el Nº Z
-          // y serial reales del dispositivo (si la máquina los reporta). Si el backend
-          // lo rechaza, el usuario cae al error y puede ir al formulario manual
-          // (Reintentar) para cargar los datos del ticket físico.
           setStep("loading");
           await registrarAutomatico(res.z_number, res.fiscal_serial);
-        } catch (e: any) {
-          setPrintError(e.message || "Error al imprimir en la máquina fiscal.");
+        } catch {
+          // Error al imprimir en la maquina fiscal: fallback "No Fiscal" en la POS58.
+          await runFallback({ success: false, report: null });
         }
       })();
       return;
@@ -132,7 +166,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         await registrarAutomatico();
       })();
     }
-  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico]);
+  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico, runFallback]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");

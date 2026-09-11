@@ -159,21 +159,20 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     const result = await fiscalNotesService.createNotaCredito(payload);
 
     if (!result.success) {
-      if (!usesDigitalBilling) {
-        setStep("error");
-        setErrorMsg(result.message);
-        return;
-      }
-
-      // Fallback "No Fiscal": la facturacion digital fallo. Se sintetizan los
-      // identificadores no monetarios (money.ts sigue siendo el unico origen de
-      // montos) y se persiste la NC real por el endpoint existente.
+      // Fallback "No Fiscal" (digital o local): se sintetizan los identificadores no
+      // monetarios (money.ts sigue siendo el unico origen de montos), se imprime en la
+      // POS58 y se persiste la NC real por el endpoint existente.
       const note = await runNoteFallback({
+        header: {
+          name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+          rif: rifEmisor || String(profile?.rif || ""),
+        },
         payload,
         createNote: fiscalNotesService.createNotaCredito,
         print: printNoFiscalTicket,
         affectedDocument: documentoAfectado.numero_documento,
         total: documentoAfectado.monto_total,
+        reason: motivo,
       });
 
       setFiscalFallback(true);
