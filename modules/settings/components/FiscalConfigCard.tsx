@@ -5,6 +5,7 @@ import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
+import { pairPrinter, isWebUsbSupported } from "@/modules/cash-register/lib/pos58-print";
 
 // Implementaciones fiscales reales cableadas al servicio (service_fiscal).
 // El value es la marca que usa el cliente para enrutar a /bematech/* o a las
@@ -48,6 +49,7 @@ export default function FiscalConfigCard() {
   const [availablePorts, setAvailablePorts] = useState<FiscalSerialPort[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
+  const [pos58Status, setPos58Status] = useState<"idle" | "pairing" | "done" | "error">("idle");
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
@@ -284,6 +286,19 @@ export default function FiscalConfigCard() {
     }
   };
 
+  const handlePairPos58 = async () => {
+    setPos58Status("pairing");
+    const res = await pairPrinter();
+    if (res.printed) {
+      setPos58Status("done");
+      chatToast.show("Impresora POS58 emparejada. Los comprobantes 'No Fiscal' saldrán por acá.");
+    } else {
+      setPos58Status("error");
+      chatToast.show(`No se pudo emparejar la POS58: ${res.error || "error"}`);
+    }
+    setTimeout(() => setPos58Status("idle"), 4000);
+  };
+
   return (
     <>
     <div className="flex flex-col gap-8 w-full">
@@ -425,6 +440,20 @@ export default function FiscalConfigCard() {
                 className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
               >
                 Generar reporte Z
+              </button>
+              <button
+                onClick={handlePairPos58}
+                disabled={!isWebUsbSupported() || pos58Status === "pairing"}
+                title={isWebUsbSupported() ? "" : "Requiere Chrome/Edge"}
+                className="px-10 py-5 bg-[#0369a1] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {pos58Status === "pairing"
+                  ? "Emparejando POS58..."
+                  : pos58Status === "done"
+                    ? "POS58 emparejada"
+                    : pos58Status === "error"
+                      ? "Error al emparejar"
+                      : "Emparejar POS58"}
               </button>
               <button
                 onClick={() => setShowZHistory(true)}

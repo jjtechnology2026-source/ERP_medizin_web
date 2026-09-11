@@ -1,126 +1,44 @@
-// Impresion del comprobante "No Fiscal" en 58 mm: se monta un nodo oculto con
-// un @media print acotado y se dispara window.print(); si el navegador no
-// ofrece impresion, se cae a jsPDF (import dinamico) con format:[58,h].
-// Este modulo solo formatea texto: los montos los entrega el llamador ya
-// calculados por money.ts; aqui no se recalcula nada.
+// Punto de entrada del fallback "No Fiscal" por POS58 (WebUSB).
+// Renderiza el comprobante (factura / nota de credito / reporte Z o X) a bytes
+// ESC/POS y lo imprime en la impresora POS58. Los montos siempre llegan ya
+// calculados (money.ts en el call site); aca no se recalcula nada.
 
-import { NO_FISCAL_LEGEND } from "./fiscal-fallback.ts";
+import {
+  buildSaleTicket,
+  buildCreditNoteTicket,
+  buildReportTicket,
+  type SaleTicketData,
+  type CreditNoteTicketData,
+  type ReportTicketData,
+} from "./pos58-ticket.ts";
+import { printEscPos, isWebUsbSupported, pairPrinter } from "./pos58-usb.ts";
 
-export interface NoFiscalTicketLine {
-  label: string;
-  value: string;
-}
-
-export interface NoFiscalTicketDoc {
-  title: string;
-  lines: NoFiscalTicketLine[];
-  legend?: string;
-}
+export type NoFiscalTicket =
+  | ({ kind: "sale" } & SaleTicketData)
+  | ({ kind: "credit-note" } & CreditNoteTicketData)
+  | ({ kind: "report" } & ReportTicketData);
 
 export interface NoFiscalPrintResult {
   printed: boolean;
-  via: "browser" | "jspdf";
+  via: "usb";
   error?: string;
 }
 
-type JsPdfModule = typeof import("jspdf");
+export { isWebUsbSupported, pairPrinter };
 
-// Inyeccion solo para tests: por defecto se carga el jsPDF real.
-export interface NoFiscalPrintDeps {
-  loadJsPdf?: () => Promise<JsPdfModule>;
-}
-
-// La ultima linea SIEMPRE es la leyenda (por defecto "No Fiscal").
-export function buildNoFiscalTicketLines(doc: NoFiscalTicketDoc): string[] {
-  const legend = doc.legend ?? NO_FISCAL_LEGEND;
-  return [
-    doc.title,
-    ...doc.lines.map((l) => `${l.label}: ${l.value}`),
-    legend,
-  ];
-}
-
-const PRINT_STYLE_ID = "no-fiscal-print-style";
-const PRINT_CLASS = "no-fiscal-print";
-
-function printViaBrowser(lines: string[]): void {
-  document.getElementById(PRINT_STYLE_ID)?.remove();
-
-  const style = document.createElement("style");
-  style.id = PRINT_STYLE_ID;
-  style.textContent = `
-    .${PRINT_CLASS} { display: none; }
-    @media print {
-      body > *:not(.${PRINT_CLASS}) { display: none !important; }
-      .${PRINT_CLASS} {
-        display: block !important;
-        width: 58mm;
-        margin: 0 auto;
-        font-family: monospace;
-        font-size: 11px;
-        white-space: pre-wrap;
-      }
-    }`;
-
-  const node = document.createElement("pre");
-  node.className = PRINT_CLASS;
-  node.textContent = lines.join("\n");
-
-  document.body.appendChild(style);
-  document.body.appendChild(node);
-  try {
-    window.print();
-  } finally {
-    node.remove();
-    style.remove();
+export function renderNoFiscalTicket(ticket: NoFiscalTicket): Uint8Array {
+  switch (ticket.kind) {
+    case "sale":
+      return buildSaleTicket(ticket);
+    case "credit-note":
+      return buildCreditNoteTicket(ticket);
+    case "report":
+      return buildReportTicket(ticket);
   }
-}
-
-async function printViaJsPdf(
-  lines: string[],
-  loadJsPdf: () => Promise<JsPdfModule>,
-): Promise<void> {
-  const { jsPDF } = await loadJsPdf();
-  const lineHeight = 4;
-  const height = Math.max(60, 10 + lines.length * lineHeight);
-  const pdf = new jsPDF({ unit: "mm", format: [58, height] });
-  pdf.setFont("courier", "normal");
-  pdf.setFontSize(9);
-  let y = 8;
-  for (const line of lines) {
-    pdf.text(line, 3, y);
-    y += lineHeight;
-  }
-  pdf.save(`no-fiscal-${Date.now()}.pdf`);
 }
 
 export async function printNoFiscalTicket(
-  doc: NoFiscalTicketDoc,
-  deps?: NoFiscalPrintDeps,
+  ticket: NoFiscalTicket,
 ): Promise<NoFiscalPrintResult> {
-  const lines = buildNoFiscalTicketLines(doc);
-  const canUseBrowser =
-    typeof window !== "undefined" &&
-    typeof document !== "undefined" &&
-    typeof window.print === "function";
-
-  if (canUseBrowser) {
-    try {
-      printViaBrowser(lines);
-      return { printed: true, via: "browser" };
-    } catch {
-      // sin impresion de navegador: cae a jsPDF
-    }
-  }
-
-  try {
-    await printViaJsPdf(lines, deps?.loadJsPdf ?? (() => import("jspdf")));
-    return { printed: true, via: "jspdf" };
-  } catch (error) {
-    return {
-      printed: false,
-      via: "jspdf",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  return printEscPos(renderNoFiscalTicket(ticket));
 }

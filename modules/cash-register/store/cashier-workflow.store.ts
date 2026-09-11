@@ -4,7 +4,7 @@ import { cashierAccountantService } from "@/modules/cash-register/api/cashier-ac
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import fiscalPrinterClient, { getFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
@@ -153,6 +153,11 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       return null;
     }
 
+    const header = {
+      name: String(profile.pharmacyName || profile.name_group || profile.name || ""),
+      rif: String(profile.rif || ""),
+    };
+
     const order = useCurrentOrderStore.getState().buildModelOrder(profile);
     if (!order) {
       set({ errorMessage: "No hay productos en la orden" });
@@ -168,19 +173,11 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
         } catch (error: any) {
           const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
-          console.error("❌ [registerSale] Error fiscal:", mensaje);
-          // Bematech: ante CUALQUIER error el servicio anula el documento (ESC 14),
-          // asi que no quedo ticket impreso que transcribir. Nunca pedir el numero
-          // manual; mostrar el error y permitir reintentar la venta.
-          if (getFiscalBrand() === "bematech") {
-            set({ isSubmitting: false, errorMessage: mensaje });
-            return null;
-          }
-          // HKA80: un 503 sin respuesta puede significar que la impresora imprimio
-          // pero el servicio no pudo confirmar el cierre -> se conserva la orden
-          // pendiente para transcribir el numero del ticket. Un rechazo HTTP 4xx
-          // NO imprime, se muestra error.
+          console.error("❌ [registerSale] Error fiscal local:", mensaje);
           const httpStatus = error.response?.status ?? 0;
+          // Un 503/transporte sin respuesta puede significar que la impresora fiscal
+          // imprimio pero el servicio no pudo confirmar el cierre -> se conserva la
+          // orden pendiente para transcribir; NO se imprime "No Fiscal" para no duplicar.
           const printedButUnconfirmed =
             httpStatus === 0 ||
             (httpStatus === 503 && /no respondio|no respondió|timeout|sin respuesta/i.test(mensaje));
@@ -188,8 +185,21 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
             set({ pendingFiscalOrder: order, isSubmitting: false });
             return { pendingControlNumber: true, facturacion: null, ordenId: "" };
           }
-          set({ isSubmitting: false, errorMessage: mensaje });
-          return null;
+          // Fallback "No Fiscal": la impresora fiscal no imprimio (4xx, o Bematech
+          // que anula el documento) -> se imprime en la POS58 y se persiste la venta.
+          const outcome = await runOrderFallback({
+            header,
+            order,
+            initialResult: null,
+            transportFailed: true,
+            saleType: "local",
+            sessionId: activeSession.id,
+            submitOrder: cashierAccountantService.submitOrder,
+            print: printNoFiscalTicket,
+          });
+          set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
+          await get().load();
+          return outcome;
         }
         // Respuesta 200 sin numero de control: el ticket se imprimio (el servicio
         // confirma el cierre) pero no logro leer el COO; se pide transcribirlo.
@@ -231,6 +241,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       // campos fiscales. Se persiste por el endpoint existente y solo se
       // reintenta cuando la llamada original fallo por transporte.
       const outcome = await runOrderFallback({
+        header,
         order,
         initialResult: result,
         transportFailed,

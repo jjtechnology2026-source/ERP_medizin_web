@@ -176,6 +176,12 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           movimientos_persist: [movimiento],
         };
 
+        const profileData = useAuthStore.getState().profile;
+        const header = {
+          name: String(profileData?.pharmacyName || profileData?.name_group || profileData?.name || ""),
+          rif: String(profileData?.rif || ""),
+        };
+
         try {
           await facturasService.createCreditNoteTFHKA(tfhkaPayload);
         } catch {
@@ -183,6 +189,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           // identificadores no monetarios (los montos ya vienen de money.ts) y se
           // persiste la NC real por el endpoint existente con esos identificadores.
           const note = await runNoteFallback({
+            header,
             payload: tfhkaPayload,
             createNote: facturasService.createCreditNoteTFHKA,
             print: printNoFiscalTicket,
@@ -193,7 +200,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           setFiscalFallback(true);
         }
       } else {
-        await facturasService.createCreditNote({
+        const localPayload = {
           factura_id: detail.id,
           sesion_caja_id: detail.sesion_caja_id,
           numero_control: `NC-${Date.now()}`,
@@ -208,8 +215,28 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             iva_porcentaje: d.iva_porcentaje,
           })),
           movimientos_caja: [movimiento],
-        });
-        await emitirNotaCreditoFiscal(detail, motivo.trim());
+        };
+        const profileData = useAuthStore.getState().profile;
+        const header = {
+          name: String(profileData?.pharmacyName || profileData?.name_group || profileData?.name || ""),
+          rif: String(profileData?.rif || ""),
+        };
+        try {
+          await facturasService.createCreditNote(localPayload);
+          await emitirNotaCreditoFiscal(detail, motivo.trim());
+        } catch {
+          // Canal local (legacy) fallo: fallback "No Fiscal" en la POS58.
+          const note = await runNoteFallback({
+            header,
+            payload: localPayload,
+            createNote: facturasService.createCreditNote,
+            print: printNoFiscalTicket,
+            affectedDocument: detail.numero_control,
+            total: totalVes,
+          });
+          fallbackControl = note.numero_control;
+          setFiscalFallback(true);
+        }
       }
       setSuccessMsg(
         fallbackControl

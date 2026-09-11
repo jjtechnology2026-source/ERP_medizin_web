@@ -13,10 +13,7 @@ import {
   recordFallbackZ,
   isFallbackZ,
 } from "../modules/cash-register/lib/fiscal-fallback.ts";
-import {
-  buildNoFiscalTicketLines,
-  printNoFiscalTicket,
-} from "../modules/cash-register/lib/pos58-print.ts";
+import { renderNoFiscalTicket } from "../modules/cash-register/lib/pos58-print.ts";
 import {
   runOrderFallback,
   runZReportFallback,
@@ -162,88 +159,25 @@ test("on-screen outcome: leyenda literal 'No Fiscal'", () => {
   assert.equal(NO_FISCAL_LEGEND, "No Fiscal");
 });
 
-test("pos58-print: la ultima linea del ticket es la leyenda 'No Fiscal'", () => {
-  const lines = buildNoFiscalTicketLines({
-    title: "Comprobante No Fiscal",
-    lines: [
-      { label: "Control", value: "NF000000000001" },
-      { label: "Total", value: "Bs 12.34" },
-    ],
+test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL", () => {
+  const bytes = renderNoFiscalTicket({
+    kind: "sale",
+    header: { name: "FARMACIA DEMO", rif: "J-12345678-9" },
+    title: "COMPROBANTE NO FISCAL",
+    controlNumber: "NF000000000001",
+    date: "10/09/2026 10:00",
+    customerName: "Cliente General",
+    customerDoc: "V-00000000",
+    items: [{ qty: 1, description: "Producto", amount: 1.5 }],
+    totals: [],
+    total: 1.5,
+    payments: [{ label: "Efectivo Bs", amount: 1.5 }],
+    legend: "NO FISCAL",
   });
-  assert.ok(lines.length >= 3);
-  assert.equal(lines[lines.length - 1], NO_FISCAL_LEGEND);
-});
-
-// --- C1: printNoFiscalTicket branch selection (browser vs jsPDF) ---
-
-test("printNoFiscalTicket: imprime via window.print cuando el navegador esta disponible", async () => {
-  let printed = 0;
-  const prevWindow = globalThis.window;
-  const prevDocument = globalThis.document;
-  globalThis.window = { print: () => { printed += 1; } };
-  globalThis.document = {
-    getElementById: () => null,
-    createElement: () => ({ id: "", className: "", textContent: "", remove() {} }),
-    body: { appendChild() {} },
-  };
-  try {
-    const result = await printNoFiscalTicket({
-      title: "Comprobante No Fiscal",
-      lines: [{ label: "Total", value: "Bs 1.00" }],
-    });
-    assert.equal(result.printed, true);
-    assert.equal(result.via, "browser");
-    assert.equal(printed, 1);
-  } finally {
-    globalThis.window = prevWindow;
-    globalThis.document = prevDocument;
-  }
-});
-
-test("printNoFiscalTicket: cae a jsPDF 58 mm cuando no hay navegador", async () => {
-  const texts = [];
-  let savedName = "";
-  let ctorOptions = null;
-  const fakePdf = {
-    setFont: () => {},
-    setFontSize: () => {},
-    text: (t, x, y) => { texts.push([t, x, y]); },
-    save: (name) => { savedName = name; },
-  };
-  const result = await printNoFiscalTicket(
-    {
-      title: "Comprobante No Fiscal",
-      lines: [
-        { label: "Control", value: "NF1" },
-        { label: "Total", value: "Bs 1.00" },
-      ],
-    },
-    {
-      loadJsPdf: async () => ({
-        jsPDF: function FakeJsPdf(options) {
-          ctorOptions = options;
-          return fakePdf;
-        },
-      }),
-    },
-  );
-  assert.equal(result.printed, true);
-  assert.equal(result.via, "jspdf");
-  // 4 lineas (titulo + 2 datos + leyenda): max(60, 10 + 4*4) = 60 mm de alto.
-  assert.deepEqual(ctorOptions, { unit: "mm", format: [58, 60] });
-  assert.equal(texts[0][0], "Comprobante No Fiscal");
-  assert.equal(texts[texts.length - 1][0], NO_FISCAL_LEGEND);
-  assert.match(savedName, /^no-fiscal-\d+\.pdf$/);
-});
-
-test("printNoFiscalTicket: reporta error si jsPDF tambien falla", async () => {
-  const result = await printNoFiscalTicket(
-    { title: "Comprobante No Fiscal", lines: [] },
-    { loadJsPdf: async () => { throw new Error("sin navegador"); } },
-  );
-  assert.equal(result.printed, false);
-  assert.equal(result.via, "jspdf");
-  assert.equal(result.error, "sin navegador");
+  const text = Buffer.from(bytes).toString("latin1");
+  assert.ok(text.includes("FARMACIA DEMO"));
+  assert.ok(text.includes("J-12345678-9"));
+  assert.ok(text.includes("NO FISCAL"));
 });
 
 // --- C2: order persistence via submitOrder on the fallback path ---
@@ -252,6 +186,7 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   const submitCalls = [];
   const printDocs = [];
   const outcome = await runOrderFallback({
+    header: { name: "FARMACIA", rif: "J-1" },
     order: { rate: RATE, medications: [{ quantity: 1, price: 5 }] },
     initialResult: null,
     transportFailed: true,
@@ -261,7 +196,7 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
       submitCalls.push({ order, saleType, sessionId });
       return { facturacion: "stored", ordenId: "o9" };
     },
-    print: async (doc) => { printDocs.push(doc); return { printed: true, via: "browser" }; },
+    print: async (doc) => { printDocs.push(doc); return { printed: true, via: "usb" }; },
   });
   assert.equal(submitCalls.length, 1);
   assert.equal(submitCalls[0].saleType, "digital");
@@ -272,19 +207,23 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   assert.equal(outcome.ordenId, "o9");
   assert.equal(outcome.fiscalFallback, true);
   assert.equal(printDocs.length, 1);
-  assert.equal(printDocs[0].title, "Comprobante No Fiscal");
+  assert.equal(printDocs[0].kind, "sale");
+  assert.equal(printDocs[0].header.name, "FARMACIA");
+  assert.equal(printDocs[0].header.rif, "J-1");
+  assert.equal(printDocs[0].title, "COMPROBANTE NO FISCAL");
 });
 
 test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva el ordenId inicial", async () => {
   let submits = 0;
   const outcome = await runOrderFallback({
+    header: { name: "F", rif: "J-1" },
     order: { medications: [{ quantity: 1, price: 2 }] },
     initialResult: { ordenId: "o-init" },
     transportFailed: false,
     saleType: "digital",
     sessionId: "s1",
     submitOrder: async () => { submits += 1; return { ordenId: "should-not-run" }; },
-    print: async () => ({ printed: true, via: "browser" }),
+    print: async () => ({ printed: true, via: "usb" }),
   });
   assert.equal(submits, 0);
   assert.equal(outcome.ordenId, "o-init");
@@ -297,6 +236,7 @@ test("runZReportFallback: reintenta createZReport con el Z sintetizado y registr
   const calls = [];
   const recorded = [];
   const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
     pharmacyId: "PH1",
     sessionInvoices: [
       { controlNumber: "A-1", totalVes: 100 },
@@ -326,6 +266,7 @@ test("runZReportFallback: reintenta createZReport con el Z sintetizado y registr
 test("runZReportFallback: si el reintento falla, registra el marcador con los valores sintetizados", async () => {
   const recorded = [];
   const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
     pharmacyId: "PH1",
     sessionInvoices: [],
     initialResult: { success: false, report: null },
@@ -345,6 +286,7 @@ test("runZReportFallback: si el reintento falla, registra el marcador con los va
 test("runNoteFallback: reintenta createNotaCredito con tracking y control sintetizados", async () => {
   const calls = [];
   const note = await runNoteFallback({
+    header: { name: "F", rif: "J-1" },
     payload: {
       id_pharmacy: "PH1",
       tracking_id: "original",
@@ -366,6 +308,7 @@ test("runNoteFallback: reintenta createNotaCredito con tracking y control sintet
 test("runNoteFallback: cubre el reintento TFHKA y no propaga un reintento fallido", async () => {
   let attempts = 0;
   const note = await runNoteFallback({
+    header: { name: "F", rif: "J-1" },
     payload: { id_pharmacy: "PH1", factura_id: "F-1" },
     createNote: async () => { attempts += 1; throw new Error("tfhka caido"); },
     print: async () => ({ printed: true, via: "jspdf" }),
