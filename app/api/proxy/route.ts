@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       method: effectiveMethod,
       headers: finalHeaders,
       validateStatus: () => true,
+      timeout: 30000,
     };
 
     // Si es GET, permitimos pasar data como body (la API lo espera)
@@ -75,9 +76,15 @@ export async function POST(req: NextRequest) {
     if (error.response) {
       console.error("📩 Respuesta de error:", error.response.status, error.response.data);
     }
+    const isTimeout = error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
     return NextResponse.json(
-      { success: false, message: error.message || "Error en el proxy" },
-      { status: 500 }
+      {
+        success: false,
+        message: isTimeout
+          ? "Tiempo de espera agotado al contactar el API"
+          : error.message || "Error en el proxy",
+      },
+      { status: isTimeout ? 504 : 500 }
     );
   }
 }

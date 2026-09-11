@@ -40,25 +40,26 @@ export const authService = {
     if (isClient) {
       const { data } = await axios.post("/api/proxy", {
         url: "/login_agent",
-        method: "GET",  // ← CORRECCIÓN: la API requiere GET con body
+        method: "POST",
         data: {
           user: credentials.username,
           password: credentials.password,
           lastLogin: new Date().toISOString(),
         },
-      });
+      }, { timeout: 20000 });
       console.log(JSON.stringify(data, null, 2));
       return data;
     } else {
       const { data } = await loginApi.request({
         url: "/login_agent",
-        method: "GET",  // ← CORRECCIÓN: la API requiere GET con body
+        method: "POST",
         data: {
           user: credentials.username,
           password: credentials.password,
           lastLogin: new Date().toISOString(),
         },
         headers: { "Content-Type": "application/json" },
+        timeout: 20000,
       });
       return data;
     }

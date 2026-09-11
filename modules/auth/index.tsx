@@ -29,6 +29,14 @@ export default function LoginForm() {
   // permitimos que se vea el formulario para re-autenticar
   const hasSessionError = (session as any)?.error === "RefreshAccessTokenError";
 
+  // Si la sesión de next-auth se queda cargando demasiado, mostramos el form igualmente
+  const [sessionStuck, setSessionStuck] = React.useState(false);
+  React.useEffect(() => {
+    if (status !== "loading") return;
+    const t = setTimeout(() => setSessionStuck(true), 8000);
+    return () => clearTimeout(t);
+  }, [status]);
+
   // Redirigir al panel si ya hay sesión activa
   React.useEffect(() => {
     if (status === "authenticated" && !hasSessionError) {
@@ -49,7 +57,7 @@ export default function LoginForm() {
   return (
     <LoginWrapper>
       <div className="w-full relative">
-        {(status === "loading" || isLoading) && (
+        {((status === "loading" && !sessionStuck) || isLoading) && (
           <LoadingOverlay 
             message={isLoading ? "Verificando credenciales..." : "Cargando..."} 
           />

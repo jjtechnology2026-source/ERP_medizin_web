@@ -18,17 +18,31 @@ export const useLoginForm = () => {
     setIsLoading(true);
     setError("");
 
+    const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Tiempo de espera agotado al conectar. Reintentá.")),
+            ms,
+          ),
+        ),
+      ]);
+
     try {
-      const data = await authService.login({ username, password });
+      const data = await withTimeout(authService.login({ username, password }), 25000);
 
       if (data.success === false) {
         throw new Error(data.message || "Credenciales inválidas");
       }
 
-      await login({
-        isDirectLogin: "true",
-        userData: JSON.stringify(data),
-      });
+      await withTimeout(
+        login({
+          isDirectLogin: "true",
+          userData: JSON.stringify(data),
+        }),
+        15000,
+      );
 
       try {
         localStorage.setItem("startedSession", "true");
