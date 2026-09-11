@@ -17,3 +17,13 @@ export function costFromPrice(price: number, profitPct: number, vatPct: number):
   }
   return (price * (1 - profitPct / 100)) / (1 + vatPct / 100);
 }
+
+export function bulkSellingPrice(
+  base?: number,
+  profitPct?: number,
+  vatPct?: number,
+): number | undefined {
+  if (base === undefined || Number.isNaN(base)) return undefined;
+  return Math.round(sellingPrice(base, profitPct ?? 0, vatPct ?? 16) * 100) / 100;
+}
+

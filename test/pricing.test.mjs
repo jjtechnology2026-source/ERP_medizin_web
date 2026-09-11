@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidProfit, sellingPrice, costFromPrice } from "../modules/products/lib/pricing.ts";
+import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice } from "../modules/products/lib/pricing.ts";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -36,4 +36,16 @@ test("costFromPrice invierte sellingPrice (round-trip)", () => {
 
 test("costFromPrice devuelve el price sin tocar si la utilidad es invalida", () => {
   assert.equal(costFromPrice(14.28, 100, 16), 14.28);
+});
+
+test("bulkSellingPrice (carga masiva) usa margen + IVA y redondea a 2 decimales", () => {
+  assert.equal(bulkSellingPrice(10, 30, 16), 16.57);
+  assert.equal(bulkSellingPrice(10, 0, 16), 11.6);
+  assert.equal(bulkSellingPrice(10, 30), 16.57);
+  assert.equal(bulkSellingPrice(10, 0, 0), 10);
+});
+
+test("bulkSellingPrice devuelve undefined sin base y NaN con utilidad invalida", () => {
+  assert.equal(bulkSellingPrice(undefined, 30, 16), undefined);
+  assert.ok(Number.isNaN(bulkSellingPrice(10, 100, 16)));
 });
