@@ -4,6 +4,7 @@ import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { isValidProfit, sellingPrice as calcSellingPrice } from "@/modules/products/lib/pricing";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -265,11 +266,15 @@ export default function CreateProductPage({ setView }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Precio de venta derivado: costo (Precio Base sin IVA) + Ganancia% + IVA
+    // Precio de venta = costo / (1 - Ganancia%) + IVA (margen sobre precio de venta)
     const cost = parseFloat(formData.price) || 0;
     const profitPct = parseFloat(formData.profit) || 0;
     const vatPct = parseInt(formData.vat) || 16;
-    const sellingPrice = cost * (1 + profitPct / 100) * (1 + vatPct / 100);
+    if (formData.profit && !isValidProfit(profitPct)) {
+      alert("La utilidad debe ser ≥ 0 y < 100%.");
+      return;
+    }
+    const sellingPrice = calcSellingPrice(cost, profitPct, vatPct);
 
     const payload = {
       ...formData,

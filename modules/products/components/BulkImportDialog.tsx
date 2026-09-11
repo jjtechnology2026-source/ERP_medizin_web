@@ -4,6 +4,7 @@ import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocu
 import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
+import { isValidProfit, sellingPrice as calcSellingPrice } from "@/modules/products/lib/pricing";
 
 interface BulkImportDialogProps {
   isOpen: boolean;
@@ -139,10 +140,15 @@ export default function BulkImportDialog({
         const base = priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined;
         const profitPct = profitRaw ? parseFloat(profitRaw.replace(",", ".")) : undefined;
         const vatPct = vatRaw ? parseInt(vatRaw, 10) : undefined;
-        // Precio de venta derivado: base (sin IVA) + Ganancia% + IVA (igual que TabCreateProduct/StockFeaturesForm)
+        const effectiveProfit = profitPct ?? 0;
+        if (!isValidProfit(effectiveProfit)) {
+          errs.push(`Fila ${line} (${name}): la utilidad debe ser ≥ 0 y < 100%.`);
+          return;
+        }
+        // Precio de venta = costo / (1 - utilidad) + IVA (margen sobre precio de venta)
         const sellingPrice =
           base !== undefined
-            ? Math.round(base * (1 + (profitPct ?? 0) / 100) * (1 + (vatPct ?? 16) / 100) * 100) / 100
+            ? Math.round(calcSellingPrice(base, effectiveProfit, vatPct ?? 16) * 100) / 100
             : undefined;
 
         parsed.push({

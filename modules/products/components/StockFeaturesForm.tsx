@@ -5,6 +5,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
+import { sellingPrice, costFromPrice, isValidProfit } from "@/modules/products/lib/pricing";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
 type TabType = "PRECIO_STOCK" | "INFO_ADICIONAL";
@@ -18,6 +19,7 @@ export default function StockFeaturesForm({
   const { parseInput, format } = useFormatCurrency();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
+  const fmt = (v: number) => (Number.isFinite(v) ? format(v) : "—");
 
   const [activeTab, setActiveTab] = useState<TabType>("PRECIO_STOCK");
   const [priceWithoutVat, setPriceWithoutVat] = useState("");
@@ -43,7 +45,7 @@ export default function StockFeaturesForm({
       setPriceWithoutVat(String(storedCost));
     } else if (currentMedicine.price && currentMedicine.price > 0) {
       const profitPct = currentMedicine.profitPercentage ?? 0;
-      const estCost = currentMedicine.price / (1 + profitPct / 100) / (1 + vat / 100);
+      const estCost = costFromPrice(currentMedicine.price, profitPct, vat);
       setPriceWithoutVat(estCost.toFixed(2));
     } else {
       setPriceWithoutVat("");
@@ -56,9 +58,11 @@ export default function StockFeaturesForm({
     setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage) : "");
   }, [currentMedicine]);
 
+  const profitInvalid = profit.trim() !== "" && !isValidProfit(parseInput(profit));
+
   const priceWithVat = useMemo(() => {
     const c = parseInput(priceWithoutVat); // costo
-    return c * (1 + (parseInput(profit) || 0) / 100) * (1 + selectedVat / 100);
+    return sellingPrice(c, parseInput(profit) || 0, selectedVat);
   }, [priceWithoutVat, selectedVat, profit, parseInput]);
 
   const discountPercent = parseInput(discount);
@@ -66,9 +70,8 @@ export default function StockFeaturesForm({
 
   const discountedPrice = useMemo(() => {
     if (!hasDiscount) return priceWithVat;
-    const c = parseInput(priceWithoutVat); // costo
-    return c * (1 + (parseInput(profit) || 0) / 100) * (1 - discountPercent / 100) * (1 + selectedVat / 100);
-  }, [priceWithVat, priceWithoutVat, selectedVat, discountPercent, hasDiscount, profit, parseInput]);
+    return priceWithVat * (1 - discountPercent / 100);
+  }, [priceWithVat, discountPercent, hasDiscount]);
 
   const finalPriceUSD = discountedPrice;
   const finalPriceVES = discountedPrice * rate;
@@ -76,12 +79,17 @@ export default function StockFeaturesForm({
   const base = parseInput(priceWithoutVat);
   const profitPct = parseInput(profit);
   const discountPct = hasDiscount ? discountPercent : 0;
-  const subtotal = base * (1 + profitPct / 100) * (1 - discountPct / 100);
-  const ganancia = subtotal - base;
+  const priceWithProfit = isValidProfit(profitPct) ? base / (1 - profitPct / 100) : NaN;
+  const ganancia = priceWithProfit - base;
+  const subtotal = priceWithProfit * (1 - discountPct / 100);
   const iva = subtotal * selectedVat / 100;
 
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
+    if (profitInvalid) {
+      setFeedback({ type: "error", message: "La utilidad debe ser ≥ 0 y < 100%." });
+      return;
+    }
     setIsSaving(true);
     setFeedback(null);
 
@@ -238,14 +246,14 @@ export default function StockFeaturesForm({
                     <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Precio Final (con IVA)</span>
                     {hasDiscount ? (
                       <div>
-                        <p className="text-lg font-bold text-slate-400 line-through">{format(priceWithVat)}</p>
+                        <p className="text-lg font-bold text-slate-400 line-through">{fmt(priceWithVat)}</p>
                         <p className="text-3xl font-black text-emerald-600 mt-0.5">
-                          {format(discountedPrice)}
+                          {fmt(discountedPrice)}
                           <span className="ml-2 px-2 py-0.5 bg-emerald-100 rounded-lg text-[11px] font-black text-emerald-700">-{discountPercent}%</span>
                         </p>
                       </div>
                     ) : (
-                      <p className="text-3xl font-black text-slate-800 mt-1">{format(priceWithVat)}</p>
+                      <p className="text-3xl font-black text-slate-800 mt-1">{fmt(priceWithVat)}</p>
                     )}
                     <div className="mt-4 space-y-1.5 pt-4 border-t border-blue-100/70">
                       <div className="flex items-center justify-between text-[11px]">
@@ -254,17 +262,17 @@ export default function StockFeaturesForm({
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-500">Ganancia {profit || "0"}%</span>
-                        <span className="font-black text-blue-600">{format(ganancia)}</span>
+                        <span className="font-black text-blue-600">{fmt(ganancia)}</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-500">IVA {selectedVat}%</span>
-                        <span className="font-black text-indigo-600">{format(iva)}</span>
+                        <span className="font-black text-indigo-600">{fmt(iva)}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col text-xs font-bold text-slate-500 gap-1 border-t md:border-t-0 md:border-l border-blue-100 pt-3 md:pt-0 md:pl-6">
-                    <span>USD: <strong className="text-blue-600 font-black">${finalPriceUSD.toFixed(2)}</strong></span>
-                    <span>VES: <strong className="text-indigo-600 font-black">{finalPriceVES.toFixed(2)} Bs</strong></span>
+                    <span>USD: <strong className="text-blue-600 font-black">{Number.isFinite(finalPriceUSD) ? `$${finalPriceUSD.toFixed(2)}` : "—"}</strong></span>
+                    <span>VES: <strong className="text-indigo-600 font-black">{Number.isFinite(finalPriceVES) ? `${finalPriceVES.toFixed(2)} Bs` : "—"}</strong></span>
                   </div>
                 </div>
               </div>
@@ -305,6 +313,9 @@ export default function StockFeaturesForm({
                       placeholder="0"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
+                    {profitInvalid && (
+                      <p className="text-[10px] font-bold text-rose-600 ml-1">La utilidad debe ser ≥ 0 y &lt; 100%.</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
@@ -326,9 +337,9 @@ export default function StockFeaturesForm({
                     </div>
                     <div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor total del stock</span>
-                      <p className="text-xl font-black text-slate-800 mt-1">{format(discountedPrice * (parseInput(quantity) || 0))}</p>
+                      <p className="text-xl font-black text-slate-800 mt-1">{fmt(discountedPrice * (parseInput(quantity) || 0))}</p>
                       <p className="text-[10px] text-slate-400 font-medium">
-                        {parseInput(quantity) || 0} unidades x {format(discountedPrice)} c/u
+                        {parseInput(quantity) || 0} unidades x {fmt(discountedPrice)} c/u
                         {hasDiscount && <span className="block text-emerald-600 font-bold">(con {discountPercent}% desc.)</span>}
                       </p>
                     </div>
@@ -417,8 +428,8 @@ export default function StockFeaturesForm({
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">Precio unitario</span>
                 <div className="text-right">
-                  {hasDiscount && <span className="text-[10px] font-bold text-slate-400 line-through block">{format(priceWithVat)}</span>}
-                  <span className={`text-sm font-black ${hasDiscount ? "text-emerald-600" : "text-blue-600"}`}>{format(discountedPrice)}</span>
+                  {hasDiscount && <span className="text-[10px] font-bold text-slate-400 line-through block">{fmt(priceWithVat)}</span>}
+                  <span className={`text-sm font-black ${hasDiscount ? "text-emerald-600" : "text-blue-600"}`}>{fmt(discountedPrice)}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
