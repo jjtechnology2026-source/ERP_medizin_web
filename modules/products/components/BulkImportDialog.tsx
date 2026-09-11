@@ -4,7 +4,7 @@ import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocu
 import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
-import { isValidProfit, sellingPrice as calcSellingPrice } from "@/modules/products/lib/pricing";
+import { isValidProfit, bulkSellingPrice } from "@/modules/products/lib/pricing";
 
 interface BulkImportDialogProps {
   isOpen: boolean;
@@ -146,10 +146,7 @@ export default function BulkImportDialog({
           return;
         }
         // Precio de venta = costo / (1 - utilidad) + IVA (margen sobre precio de venta)
-        const sellingPrice =
-          base !== undefined
-            ? Math.round(calcSellingPrice(base, effectiveProfit, vatPct ?? 16) * 100) / 100
-            : undefined;
+        const sellingPrice = bulkSellingPrice(base, effectiveProfit, vatPct);
 
         parsed.push({
           name,
