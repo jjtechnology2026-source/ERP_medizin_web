@@ -16,6 +16,9 @@ export interface Medication {
   vat: number;
   antibiotic: boolean;
   minimum: number;
+  discount?: number;
+  lote?: string;
+  fecha_vencimiento_lote?: string;
 }
 
 export type StockFilter = "GENERAL" | "LOW";

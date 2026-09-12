@@ -39,6 +39,9 @@ message MedicationProto {
   double vat = 15;
   bool antibiotic = 16;
   double minimum = 17;
+  optional double discount = 18;
+  optional string lote = 19; // plain-text lot label; absent == SIN LOTE bucket
+  optional string fecha_vencimiento_lote = 20; // ISO lot expiry; absent == no expiry
 }
 
 
