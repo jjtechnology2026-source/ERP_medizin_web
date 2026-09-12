@@ -18,11 +18,9 @@ export default function InventoryManagement() {
   const [stockTab, setStockTab] = useState<StockFilter>("GENERAL");
 
   const {
-    inventory,
     isLoading,
     setCurrentMedicine,
     setEditMode,
-    setSearchQuery,
   } = useProductsStore();
 
   const handleStockAutocompleteSelect = (med: Medication) => {
@@ -61,7 +59,6 @@ export default function InventoryManagement() {
                 </div>
               ) : (
                 <StockAutocomplete
-                  inventory={inventory}
                   onSelect={handleStockAutocompleteSelect}
                 />
               )}

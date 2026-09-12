@@ -9,29 +9,28 @@ export default function ManualAddDialog({ onClose }: { onClose: () => void }) {
   const [quantity, setQuantity] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const { addMedication } = useCurrentOrderStore();
-  const { inventory } = useProductsStore();
+  const { findInventoryItem } = useProductsStore();
 
   const handleQuantityChange = (val: string) => {
     setQuantity(val);
-    const med = inventory.find((m) => m.barCode === barcode);
-    if (med && parseInt(val) > med.stock) {
-      setError(`Stock disponible: ${med.stock}`);
-    } else {
-      setError(null);
-    }
+    setError(null);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!barcode.trim()) {
       setError("Ingresa un código de barra");
       return;
     }
-    const med = inventory.find((m) => m.barCode === barcode);
+    const med = await findInventoryItem(barcode.trim());
     if (!med) {
       setError("Producto no encontrado");
       return;
     }
     const qty = parseInt(quantity) || 1;
+    if (qty > med.stock) {
+      setError(`Stock disponible: ${med.stock}`);
+      return;
+    }
     const result = addMedication(med, qty);
     if (result.success) {
       onClose();

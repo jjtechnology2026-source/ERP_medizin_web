@@ -8,13 +8,13 @@ export default function ProductSearchBar() {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { addMedication } = useCurrentOrderStore();
-  const { inventory } = useProductsStore();
+  const { findInventoryItem } = useProductsStore();
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const code = barcode.trim();
     if (!code) return;
 
-    const med = inventory.find((m) => m.barCode === code);
+    const med = await findInventoryItem(code);
     if (!med) {
       setBarcode("");
       return;

@@ -49,15 +49,29 @@ export const productsService = {
     };
   },
 
-  /** Carga inventario de una farmacia con cursor paginado */
-  async getCursorInventory(pharmacyId: string, cursor?: string, limit = 200): Promise<{
+  /** Carga inventario de una farmacia con cursor paginado + filtro server-side */
+  async getCursorInventory(
+    pharmacyId: string,
+    opts: {
+      cursor?: string;
+      limit?: number;
+      query?: string;
+      lowStock?: boolean;
+      resumen?: boolean;
+    } = {}
+  ): Promise<{
     medications: Medication[];
     next_cursor: string | null;
     has_more: boolean;
-    total: number;
+    total: number | null;
+    lowStockCount: number | null;
   }> {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (cursor) params.set("cursor", cursor);
+    const params = new URLSearchParams({ limit: String(opts.limit ?? 50) });
+    if (opts.cursor) params.set("cursor", opts.cursor);
+    const q = opts.query?.trim();
+    if (q) params.set("query", q);
+    if (opts.lowStock) params.set("low_stock", "true");
+    if (opts.resumen) params.set("resumen", "true");
     const { data } = await api.get(
       `/admin/Pharmacy/${pharmacyId}/medications/cursor?${params}`
     );
@@ -65,7 +79,11 @@ export const productsService = {
       medications: (data.medications ?? []).map(cleanImg),
       next_cursor: data.next_cursor ?? null,
       has_more: data.has_more ?? false,
-      total: data.total ?? 0,
+      total: typeof data.total === "number" ? data.total : null,
+      lowStockCount:
+        typeof data.resumen?.articulos_bajo_stock === "number"
+          ? data.resumen.articulos_bajo_stock
+          : null,
     };
   },
 

@@ -1,10 +1,13 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   HiOutlinePencil, HiOutlineTrash, HiOutlineRefresh,
   HiPlus, HiCloudUpload, HiSearch, HiViewGrid, HiExclamationCircle,
   HiOutlineCash
 } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { productsService } from "@/modules/products/api/products.service";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useInfiniteScroll } from "@/modules/products/lib/useInfiniteScroll";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
 
@@ -19,14 +22,16 @@ export default function InventoryList({
 }) {
   const {
     inventory,
+    inventoryTotal,
     isLoading,
+    isLoadingMore,
     isInitialLoad,
+    hasMore,
     error,
     fetchInventory,
+    loadNextPage,
+    searchInventory,
     setFilter,
-    searchQuery,
-    setSearchQuery,
-    getFilteredInventory,
     getLowStockCount,
     deleteMedicine,
     setEditMode,
@@ -36,32 +41,34 @@ export default function InventoryList({
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
   const [localSearch, setLocalSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [isDownloading, setIsDownloading] = useState(false);
-  const pageSize = 5;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    fetchInventory(true);
-  }, [fetchInventory]);
+  // La carga inicial la dispara MqttInventoryProvider (envuelve a esta lista).
 
+  // No buscar en el montaje (la lista ya viene de fetchInventory): solo al tipear.
+  const didMountSearch = useRef(false);
   useEffect(() => {
+    if (!didMountSearch.current) {
+      didMountSearch.current = true;
+      return;
+    }
     const timer = setTimeout(() => {
-      setSearchQuery(localSearch);
-      setPage(1);
+      void searchInventory(localSearch);
     }, 300);
     return () => clearTimeout(timer);
-  }, [localSearch, setSearchQuery]);
+  }, [localSearch, searchInventory]);
 
-  const filteredInventory = getFilteredInventory();
   const lowStockCount = getLowStockCount();
 
-  const totalPages = Math.max(1, Math.ceil(filteredInventory.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-
-  const displayedItems = useMemo(
-    () => filteredInventory.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filteredInventory, currentPage, pageSize]
-  );
+  // Prefetch progresivo (2 pantallas antes) sobre el scroll real de <main>.
+  useInfiniteScroll(sentinelRef, {
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => {
+      void loadNextPage();
+    },
+  });
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -77,11 +84,10 @@ export default function InventoryList({
   const handleStockTabChange = (tab: StockFilter) => {
     setStockTab(tab);
     setFilter(tab);
-    setPage(1);
   };
 
   const showLoadingState = inventory.length === 0 && (isLoading || isInitialLoad) && !error;
-  const showEmptyState = !isLoading && !isInitialLoad && filteredInventory.length === 0 && !error;
+  const showEmptyState = !isLoading && !isInitialLoad && inventory.length === 0 && !error;
 
   const formatReportDate = (date: Date) =>
     date.toLocaleString("es-VE", {
@@ -117,11 +123,33 @@ export default function InventoryList({
     }
   };
 
+  // El PDF necesita TODO el inventario filtrado, no solo lo paginado en pantalla:
+  // recorre las paginas del endpoint solo cuando el usuario pide el reporte.
+  const fetchAllForReport = async (): Promise<Medication[]> => {
+    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+    if (!pharmacyId) return inventory;
+    const all: Medication[] = [];
+    let cursor: string | undefined;
+    for (let i = 0; i < 500; i++) {
+      const page = await productsService.getCursorInventory(pharmacyId, {
+        cursor,
+        limit: 200,
+        query: localSearch || undefined,
+        lowStock: stockTab === "LOW",
+      });
+      all.push(...page.medications);
+      if (!page.has_more || !page.next_cursor) break;
+      cursor = page.next_cursor;
+    }
+    return all;
+  };
+
   const downloadInventoryReport = async () => {
     if (isDownloading) return;
     setIsDownloading(true);
 
     try {
+      const reportItems = await fetchAllForReport();
       const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF({ unit: "pt", format: "letter" });
       const today = new Date();
@@ -138,7 +166,7 @@ export default function InventoryList({
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "normal");
       pdf.text(`Fecha: ${formatReportDate(today)}`, 40, headerTextY + 25);
-      pdf.text(`Total de productos: ${filteredInventory.length}`, 40, headerTextY + 40);
+      pdf.text(`Total de productos: ${reportItems.length}`, 40, headerTextY + 40);
 
       const headers = ["Código", "Producto", "Stock", "Precio", "Categoría"];
       const colX = [40, 160, 370, 430, 510];
@@ -154,7 +182,7 @@ export default function InventoryList({
       currentY += rowHeight;
       pdf.setFont("helvetica", "normal");
 
-      filteredInventory.forEach((item, index) => {
+      reportItems.forEach((item, index) => {
         if (currentY + rowHeight > 750) {
           pdf.addPage();
           currentY = 40;
@@ -181,22 +209,6 @@ export default function InventoryList({
     } finally {
       setIsDownloading(false);
     }
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push("...");
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push("...");
-      pages.push(totalPages);
-    }
-    return pages;
   };
 
   return (
@@ -318,7 +330,7 @@ export default function InventoryList({
                   </td>
                 </tr>
               ) : (
-                displayedItems.map((med, i) => (
+                inventory.map((med, i) => (
                   <tr
                     key={med.barCode || i}
                     className={`hover:bg-blue-50/20 transition-colors ${
@@ -376,55 +388,26 @@ export default function InventoryList({
           </table>
         </div>
 
-        {filteredInventory.length > 0 && (
+        {/* Sentinel siempre montado: el observer se engancha al montar, antes de
+            que la tabla tenga filas. */}
+        <div ref={sentinelRef} className="h-1 w-full" />
+
+        {inventory.length > 0 && (
           <div className="p-4 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-xs font-bold text-slate-400">
-              Mostrando {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredInventory.length)} de {filteredInventory.length} productos
+              Mostrando {inventory.length}
+              {inventoryTotal != null && !localSearch && stockTab === "GENERAL"
+                ? ` de ${inventoryTotal}`
+                : ""}{" "}
+              productos
             </p>
 
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition-all cursor-pointer"
-              >
-                Anterior
-              </button>
-
-              {getPageNumbers().map((p, i) =>
-                typeof p === "string" ? (
-                  <span key={`ellipsis-${i}`} className="px-2 text-slate-300 text-xs font-bold">...</span>
-                ) : (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
-                      currentPage === p
-                        ? "bg-blue-600 text-white shadow-md"
-                        : "bg-white border border-slate-200 text-slate-500 hover:border-blue-200 hover:text-blue-600"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                )
-              )}
-
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition-all cursor-pointer"
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isLoading && inventory.length > 0 && (
-          <div className="p-2 border-t border-slate-50 text-center">
-            <span className="text-xs text-slate-400 font-bold">
-              Cargando más productos...
-            </span>
+            {isLoadingMore && (
+              <span className="text-xs text-slate-400 font-bold">Cargando más productos...</span>
+            )}
+            {!hasMore && inventory.length > 0 && (
+              <span className="text-[11px] text-slate-300 font-bold">Fin del inventario</span>
+            )}
           </div>
         )}
       </div>

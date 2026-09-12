@@ -8,14 +8,14 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState("");
   const [result, setResult] = useState<{ name: string; price: number; discount?: number; stock: number } | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const { inventory } = useProductsStore();
+  const { findInventoryItem } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
-  const handleSearch = () => {
-    const med = inventory.find(
-      (m) => m.barCode === code.trim() || m.name.toLowerCase().includes(code.trim().toLowerCase())
-    );
+  const handleSearch = async () => {
+    const q = code.trim();
+    if (!q) return;
+    const med = await findInventoryItem(q);
     if (med) {
       setResult({ name: med.name, price: med.price, discount: med.discount, stock: med.stock });
       setNotFound(false);

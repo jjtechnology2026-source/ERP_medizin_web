@@ -1,17 +1,16 @@
 "use client";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Medication } from "@/modules/products/types/products.types";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { productsService } from "@/modules/products/api/products.service";
 
 const REMOTE_DEBOUNCE_MS = 600;
 const MIN_REMOTE_CHARS = 2;
 
 export default function StockAutocomplete({
-  inventory,
   onSelect,
 }: {
-  inventory: Medication[];
   onSelect: (med: Medication) => void;
 }) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
@@ -29,36 +28,58 @@ export default function StockAutocomplete({
     return () => clearTimeout(timer);
   }, [query]);
 
-  const { suggestions, totalMatches } = useMemo(() => {
-    if (!debouncedQuery.trim()) return { suggestions: [], totalMatches: 0 };
-    const q = debouncedQuery.toLowerCase();
-    const allMatches = inventory.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.barCode.toLowerCase().includes(q) ||
-        m.activeIngredient.toLowerCase().includes(q)
-    );
-    return {
-      suggestions: allMatches.slice(0, 10),
-      totalMatches: allMatches.length,
+  // Sugerencias locales: búsqueda server-side del inventario de la farmacia.
+  const [suggestions, setSuggestions] = useState<Medication[]>([]);
+  const [totalMatches, setTotalMatches] = useState(0);
+  const [isLocalSearching, setIsLocalSearching] = useState(false);
+
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (!q) {
+        setSuggestions([]);
+        setTotalMatches(0);
+        return;
+      }
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) return;
+      setIsLocalSearching(true);
+      try {
+        const page = await productsService.getCursorInventory(pharmacyId, { query: q, limit: 10 });
+        if (cancelled) return;
+        setSuggestions(page.medications);
+        setTotalMatches(page.medications.length);
+      } catch {
+        if (!cancelled) {
+          setSuggestions([]);
+          setTotalMatches(0);
+        }
+      } finally {
+        if (!cancelled) setIsLocalSearching(false);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
-  }, [inventory, debouncedQuery]);
+  }, [debouncedQuery]);
 
   const [remoteResults, setRemoteResults] = useState<Medication[]>([]);
   const [isRemoteSearching, setIsRemoteSearching] = useState(false);
 
   useEffect(() => {
     const q = debouncedQuery.trim();
-    if (q.length < MIN_REMOTE_CHARS || totalMatches > 0) {
-      setRemoteResults([]);
-      setIsRemoteSearching(false);
-      return;
-    }
-
     let cancelled = false;
-    const localBarCodes = new Set(inventory.map((m) => m.barCode));
-
     const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (q.length < MIN_REMOTE_CHARS || totalMatches > 0) {
+        setRemoteResults([]);
+        setIsRemoteSearching(false);
+        return;
+      }
+      const localBarCodes = new Set(suggestions.map((m) => m.barCode));
       setIsRemoteSearching(true);
       try {
         const res = await productsService.searchProducts(q, 20);
@@ -74,12 +95,11 @@ export default function StockAutocomplete({
         if (!cancelled) setIsRemoteSearching(false);
       }
     }, REMOTE_DEBOUNCE_MS);
-
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [debouncedQuery, totalMatches, inventory]);
+  }, [debouncedQuery, totalMatches, suggestions]);
 
   useEffect(() => {
     setFocusedIndex(-1);
@@ -119,6 +139,7 @@ export default function StockAutocomplete({
     debouncedQuery.trim().length > 0 &&
     (suggestions.length > 0 ||
       remoteResults.length > 0 ||
+      isLocalSearching ||
       isRemoteSearching ||
       totalMatches === 0);
 
@@ -216,17 +237,18 @@ export default function StockAutocomplete({
               Catálogo nacional
             </div>
           )}
-          {isRemoteSearching && suggestions.length === 0 && (
+          {(isLocalSearching || isRemoteSearching) && suggestions.length === 0 && remoteResults.length === 0 && (
             <div className="px-4 py-3 text-xs font-bold text-slate-400 text-center">
-              Buscando en catálogo nacional…
+              Buscando en el inventario y catálogo…
             </div>
           )}
           {remoteResults.map((med, i) => remoteRow(med, i))}
-          {!isRemoteSearching &&
+          {!isLocalSearching &&
+            !isRemoteSearching &&
             suggestions.length === 0 &&
             remoteResults.length === 0 && (
               <div className="px-4 py-3 text-xs font-bold text-slate-400 text-center">
-                Sin resultados en el catálogo nacional
+                Sin resultados en el inventario ni en el catálogo
               </div>
             )}
         </div>

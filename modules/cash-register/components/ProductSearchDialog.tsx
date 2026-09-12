@@ -1,34 +1,52 @@
 "use client";
-import { useEffect } from "react";
-import { useProductSearch } from "@/modules/products/hooks/useProductSearch";
+import { useEffect, useRef, useState } from "react";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { useInfiniteScroll } from "@/modules/products/lib/useInfiniteScroll";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import type { Medication } from "@/modules/products/types/products.types";
 
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
-  const { inventory, fetchInventory } = useProductsStore();
-
-  useEffect(() => {
-    if (inventory.length === 0) {
-      fetchInventory(true);
-    }
-  }, [inventory.length, fetchInventory]);
-  const { addMedication } = useCurrentOrderStore();
-  const { query, setQuery, results, hasMore, loadMore } = useProductSearch({
+  const {
     inventory,
-    pageSize: 15,
-    onlyInStock: true,
-  });
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    searchInventory,
+    loadNextPage,
+  } = useProductsStore();
+
+  const { addMedication } = useCurrentOrderStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
+
+  const [query, setQuery] = useState("");
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Busqueda server-side con debounce (dispara tambien la primera pagina al abrir).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void searchInventory(query);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, searchInventory]);
+
+  // Prefetch progresivo sobre el scroll propio del dialogo.
+  useInfiniteScroll(sentinelRef, {
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => {
+      void loadNextPage();
+    },
+  });
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  const handleSelect = (med: any) => {
+  const handleSelect = (med: Medication) => {
     addMedication(med, 1);
     onClose();
   };
@@ -57,9 +75,13 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {results.length === 0 ? (
+          {inventory.length === 0 && (isLoading || query.trim().length > 0) ? (
             <div className="py-12 text-center text-sm font-bold text-slate-300">
-              {query ? "Sin resultados" : "Escribe para buscar productos"}
+              {isLoading ? "Buscando..." : "Sin resultados"}
+            </div>
+          ) : inventory.length === 0 ? (
+            <div className="py-12 text-center text-sm font-bold text-slate-300">
+              Escribe para buscar productos
             </div>
           ) : (
             <table className="w-full text-left">
@@ -72,7 +94,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {results.map((med, i) => (
+                {inventory.map((med, i) => (
                   <tr
                     key={med.barCode || i}
                     onClick={() => handleSelect(med)}
@@ -105,16 +127,12 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               </tbody>
             </table>
           )}
+          <div ref={sentinelRef} className="h-1 w-full" />
         </div>
 
-        {hasMore && (
+        {isLoadingMore && (
           <div className="p-4 border-t border-slate-100 text-center">
-            <button
-              onClick={loadMore}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              Cargar mas resultados ({results.length} mostrados)
-            </button>
+            <span className="text-xs font-bold text-slate-400">Cargando más...</span>
           </div>
         )}
       </div>

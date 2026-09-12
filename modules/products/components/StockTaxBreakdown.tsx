@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { HiArrowLeft, HiOutlineCash } from "react-icons/hi";
-import { useProductsStore } from "@/modules/products/store/products.store";
+import { productsService } from "@/modules/products/api/products.service";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
 
@@ -111,18 +112,48 @@ export default function StockTaxBreakdown({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { inventory, isLoading, fetchInventory } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
+  // Reporte: recorre todas las paginas del endpoint (no usa el store, que ahora
+  // esta paginado) solo al abrir esta vista.
+  const [items, setItems] = useState<Medication[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
-    if (inventory.length === 0) fetchInventory();
-  }, [fetchInventory, inventory.length]);
+    let cancelled = false;
+    (async () => {
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) {
+        setIsLoading(false);
+        return;
+      }
+      const all: Medication[] = [];
+      let cursor: string | undefined;
+      try {
+        for (let i = 0; i < 500; i++) {
+          const page = await productsService.getCursorInventory(pharmacyId, { cursor, limit: 200 });
+          all.push(...page.medications);
+          if (!page.has_more || !page.next_cursor) break;
+          cursor = page.next_cursor;
+        }
+      } catch {
+        // devuelve lo cargado hasta el momento
+      }
+      if (!cancelled) {
+        setItems(all);
+        setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const groups = useMemo(() => {
     const map = new Map<number, { vat: number; items: Medication[]; totalStock: number; totalValue: number }>();
 
-    for (const med of inventory) {
+    for (const med of items) {
       const vat = med.vat ?? 0;
       const existing = map.get(vat) || { vat, items: [], totalStock: 0, totalValue: 0 };
       existing.items.push(med);
@@ -132,7 +163,7 @@ export default function StockTaxBreakdown({
     }
 
     return Array.from(map.values()).sort((a, b) => b.vat - a.vat);
-  }, [inventory]);
+  }, [items]);
 
   const globalTotal = useMemo(
     () => groups.reduce((s, g) => s + g.totalValue, 0),
@@ -144,7 +175,7 @@ export default function StockTaxBreakdown({
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  if (isLoading && inventory.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
@@ -188,7 +219,7 @@ export default function StockTaxBreakdown({
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Productos</span>
-                <span className="text-2xl font-black text-slate-800">{inventory.length}</span>
+                <span className="text-2xl font-black text-slate-800">{items.length}</span>
               </div>
             </div>
             <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
@@ -198,7 +229,7 @@ export default function StockTaxBreakdown({
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unidades en stock</span>
                 <span className="text-2xl font-black text-slate-800">
-                  {inventory.reduce((acc, med) => acc + med.stock, 0)}
+                  {items.reduce((acc, med) => acc + med.stock, 0)}
                 </span>
               </div>
             </div>

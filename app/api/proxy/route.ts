@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import axios from "axios";
+import https from "node:https";
+
+// Reusa conexiones TLS contra el API: evita handshake por request.
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64 });
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log("📥 [Proxy] Body recibido:", body);
 
     const { url, method = "GET", data, params, headers = {} } = body;
 
@@ -17,7 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let effectiveMethod = method;
+    const effectiveMethod = method;
 
     const token = await getToken({
       req,
@@ -40,16 +43,11 @@ export async function POST(req: NextRequest) {
 
     if (bearerFromSession) {
       finalHeaders["Authorization"] = bearerFromSession;
-      console.log("🔐 Token agregado desde sesión JWT");
     } else if (bearerFromRequest) {
       finalHeaders["Authorization"] = bearerFromRequest;
-      console.log("🔐 Token agregado desde header del cliente");
-    } else {
-      console.log("⚠️ No se encontró accessToken en la sesión ni Authorization en el request");
     }
 
     const targetUrl = `${process.env.NEXT_PUBLIC_API_URL}${url}`;
-    console.log(`🚀 [Proxy] ${effectiveMethod} ${targetUrl}`);
 
     const config: any = {
       url: targetUrl,
@@ -57,6 +55,7 @@ export async function POST(req: NextRequest) {
       headers: finalHeaders,
       validateStatus: () => true,
       timeout: 30000,
+      httpsAgent,
     };
 
     // Si es GET, permitimos pasar data como body (la API lo espera)
@@ -69,7 +68,6 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await axios(config);
-    console.log(`📩 [Proxy] Respuesta: ${response.status}`, response.data);
     return NextResponse.json(response.data, { status: response.status });
   } catch (error: any) {
     console.error("❌ [Proxy] Error:", error.message);
