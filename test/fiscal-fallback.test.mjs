@@ -230,6 +230,20 @@ test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva
   assert.equal(outcome.fiscalFallback, true);
 });
 
+test("runOrderFallback: expone printError cuando la POS58 no imprime", async () => {
+  const outcome = await runOrderFallback({
+    header: { name: "F", rif: "J-1" },
+    order: { medications: [{ quantity: 1, price: 2 }] },
+    initialResult: { ordenId: "o-init" },
+    transportFailed: false,
+    saleType: "digital",
+    sessionId: "s1",
+    submitOrder: async () => ({ ordenId: "nope" }),
+    print: async () => ({ printed: false, via: "usb", error: "sin gesto de usuario" }),
+  });
+  assert.equal(outcome.printError, "sin gesto de usuario");
+});
+
 // --- C3: Z persistence retry via createZReport on the fallback path ---
 
 test("runZReportFallback: reintenta createZReport con el Z sintetizado y registra el marcador persistido", async () => {

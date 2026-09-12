@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { HiX } from "react-icons/hi";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
@@ -9,6 +9,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
+import { prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type {
   PaymentMethod,
   CashPayment,
@@ -62,15 +63,20 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, confirmFiscalControlNumber, activeSession, errorMessage, setError } = useCashierWorkflowStore();
+  const { registerSale, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
-  const [isAwaitingControlNumber, setIsAwaitingControlNumber] = useState(false);
-  const [controlNumberInput, setControlNumberInput] = useState("");
   const [noFiscalOutcome, setNoFiscalOutcome] = useState(false);
+  const [noFiscalPrintError, setNoFiscalPrintError] = useState<string | null>(null);
+
+  // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
+  // vivo, la venta va directo al fallback POS58 sin intentar la fiscal.
+  useEffect(() => {
+    checkFiscalHealth();
+  }, [checkFiscalHealth]);
 
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
@@ -259,6 +265,9 @@ export default function PaymentDialog({
 
     setIsProcessing(true);
     try {
+      // En el mismo gesto del click: WebUSB exige activacion transitoria para
+      // pedir la impresora, y se pierde tras los awaits del flujo fiscal.
+      await prepairPrinter();
       const order = useCurrentOrderStore.getState().getCurrentOrder();
       const clientData = order?.client;
       const isFound = (clientData as any)?.found === "true";
@@ -287,13 +296,6 @@ export default function PaymentDialog({
         throw new Error(errorMessage || "No se pudo procesar la venta");
       }
 
-      if (result.pendingControlNumber) {
-        setIsAwaitingControlNumber(true);
-        setControlNumberInput("");
-        setIsProcessing(false);
-        return;
-      }
-
       if (result.facturacion?.success) {
         console.log("✅ Factura fiscal:", result.facturacion.numeroControl);
       }
@@ -307,6 +309,7 @@ export default function PaymentDialog({
       useCurrentOrderStore.getState().clearCurrentOrder();
 
       if (result.fiscalFallback) {
+        setNoFiscalPrintError(result.printError ?? null);
         setNoFiscalOutcome(true);
         return;
       }
@@ -321,27 +324,6 @@ export default function PaymentDialog({
 
       setLocalError(mensajeBackend);
       setError(mensajeBackend);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleControlNumberConfirm = async () => {
-    if (!controlNumberInput.trim()) return;
-    setIsProcessing(true);
-    try {
-      await confirmFiscalControlNumber(controlNumberInput.trim());
-      const order = useCurrentOrderStore.getState().getCurrentOrder();
-      const soldMeds = order?.medications ?? [];
-      if (soldMeds.length > 0) {
-        useProductsStore.getState().decrementStock(
-          soldMeds.map((med) => ({ barCode: med.barCode, quantity: med.quantity }))
-        );
-      }
-      useCurrentOrderStore.getState().clearCurrentOrder();
-      onComplete();
-    } catch (err: any) {
-      setLocalError(err.message || "Error al registrar la orden");
     } finally {
       setIsProcessing(false);
     }
@@ -625,25 +607,12 @@ export default function PaymentDialog({
     </div>,
     document.body
     )}
-    {isAwaitingControlNumber && (
-      <ControlNumberDialog
-        controlNumber={controlNumberInput}
-        onChange={setControlNumberInput}
-        onConfirm={handleControlNumberConfirm}
-        onCancel={() => {
-          setIsAwaitingControlNumber(false);
-          setControlNumberInput("");
-          setLocalError("Venta cancelada — la factura fiscal ya fue impresa pero no se registró en el sistema.");
-        }}
-        isProcessing={isProcessing}
-      />
-    )}
-    {noFiscalOutcome && <NoFiscalOutcomeDialog onClose={onComplete} />}
+    {noFiscalOutcome && <NoFiscalOutcomeDialog onClose={onComplete} error={noFiscalPrintError} />}
     </>
   );
 }
 
-function NoFiscalOutcomeDialog({ onClose }: { onClose: () => void }) {
+function NoFiscalOutcomeDialog({ onClose, error }: { onClose: () => void; error?: string | null }) {
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6 text-center">
@@ -652,73 +621,17 @@ function NoFiscalOutcomeDialog({ onClose }: { onClose: () => void }) {
           La venta se registró, pero la facturación digital falló. El comprobante
           impreso no es fiscal.
         </p>
+        {error && (
+          <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-2xl p-3">
+            No se imprimió en la POS58: {error}
+          </p>
+        )}
         <button
           onClick={onClose}
           className="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all"
         >
           Aceptar
         </button>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function ControlNumberDialog({
-  controlNumber,
-  onChange,
-  onConfirm,
-  onCancel,
-  isProcessing,
-}: {
-  controlNumber: string;
-  onChange: (v: string) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-  isProcessing: boolean;
-}) {
-  return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 backdrop-blur-md">
-      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
-        <div className="text-center">
-          <h2 className="text-xl font-black text-slate-800">Número de control interno</h2>
-          <p className="text-sm font-bold text-slate-400 mt-1">
-            Ingresá el número de control que aparece en el ticket fiscal impreso
-          </p>
-        </div>
-
-        <input
-          type="text"
-          value={controlNumber}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Ej: 00000123"
-          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 text-center text-lg tracking-widest"
-          autoFocus
-        />
-
-        {isProcessing && (
-          <div className="flex items-center justify-center gap-2 text-sm font-bold text-blue-600">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
-            Registrando venta...
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isProcessing}
-            className="flex-1 py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!controlNumber.trim() || isProcessing}
-            className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Confirmar
-          </button>
-        </div>
       </div>
     </div>,
     document.body

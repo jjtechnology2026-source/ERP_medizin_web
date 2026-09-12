@@ -11,7 +11,7 @@ import {
   type CreditNoteTicketData,
   type ReportTicketData,
 } from "./pos58-ticket.ts";
-import { printEscPos, isWebUsbSupported, pairPrinter } from "./pos58-usb.ts";
+import { printEscPos, isWebUsbSupported, pairPrinter, prepairPrinter } from "./pos58-usb.ts";
 
 export type NoFiscalTicket =
   | ({ kind: "sale" } & SaleTicketData)
@@ -24,7 +24,7 @@ export interface NoFiscalPrintResult {
   error?: string;
 }
 
-export { isWebUsbSupported, pairPrinter };
+export { isWebUsbSupported, pairPrinter, prepairPrinter };
 
 export function renderNoFiscalTicket(ticket: NoFiscalTicket): Uint8Array {
   switch (ticket.kind) {

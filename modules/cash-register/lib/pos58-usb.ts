@@ -124,6 +124,20 @@ async function disconnect(): Promise<void> {
   }
 }
 
+// requestDevice SOLO abre el selector dentro de un gesto del usuario, y ese
+// gesto expira tras los awaits del flujo fiscal. Por eso hay que enganchar la
+// impresora en el mismo click del cobro, antes de la llamada HTTP.
+// ponytail: si no esta emparejada, pide permiso AHORA; una vez emparejada queda
+// silencioso. Si molesta el selector en cada venta, mover a agotar Permissions API.
+export async function prepairPrinter(): Promise<void> {
+  if (!isWebUsbSupported()) return;
+  try {
+    await connect(true);
+  } catch {
+    // Sin impresora disponible: el flujo fiscal continua; el fallback reporta el error.
+  }
+}
+
 /** Empareja (gesto del usuario) y deja la impresora lista. */
 export async function pairPrinter(): Promise<UsbPrintOutcome> {
   if (!isWebUsbSupported()) {

@@ -12,7 +12,7 @@ import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-clie
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
-import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
   FiscalNoteItem,
@@ -104,6 +104,8 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
       return;
     }
 
+    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS58.
+    await prepairPrinter();
     setStep("loading");
 
     if (mode === "fiscal") {

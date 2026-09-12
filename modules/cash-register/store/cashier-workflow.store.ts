@@ -17,8 +17,8 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   load: (pharmacyId?: string) => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
-  registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; pendingControlNumber?: boolean; fiscalFallback?: boolean } | null>;
-  confirmFiscalControlNumber: (controlNumber: string) => Promise<{ facturacion: any; ordenId: string }>;
+  registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; fiscalFallback?: boolean; printError?: string } | null>;
+  checkFiscalHealth: () => Promise<void>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
     options?: { observations?: string; openNewTurn?: boolean; nextCashierId?: string }
@@ -41,7 +41,7 @@ const initialState: CashierWorkflowState & { currentRate: number } = {
   errorMessage: null,
   infoMessage: null,
   currentRate: 0,
-  pendingFiscalOrder: null,
+  fiscalAvailable: null,
 };
 
 export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) => ({
@@ -166,7 +166,31 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({ isSubmitting: true, errorMessage: null });
     try {
+      // Fallback "No Fiscal": imprime en la POS58 y persiste la venta. Es el
+      // unico camino cuando la fiscal no puede emitir el comprobante.
+      const runFallback = async () => {
+        const outcome = await runOrderFallback({
+          header,
+          order,
+          initialResult: null,
+          transportFailed: true,
+          saleType,
+          sessionId: activeSession.id,
+          submitOrder: cashierAccountantService.submitOrder,
+          print: printNoFiscalTicket,
+        });
+        set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
+        await get().load();
+        return outcome;
+      };
+
       if (saleType === "local") {
+        // /health verificado como caido al abrir el pago: la fiscal no puede
+        // emitir, directo a No Fiscal sin intentar (sin falsos positivos).
+        // ponytail: si el servicio esta vivo pero la fiscal imprime y no confirma,
+        // ya no hay guard anti-duplicado; agregarlo si aparecen duplicados.
+        if (get().fiscalAvailable === false) return await runFallback();
+
         const fiscalPayload = buildFiscalPayload(order);
         let fiscalResult: Awaited<ReturnType<typeof fiscalPrinterClient.createInvoice>> | null = null;
         try {
@@ -174,39 +198,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         } catch (error: any) {
           const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
           console.error("❌ [registerSale] Error fiscal local:", mensaje);
-          const httpStatus = error.response?.status ?? 0;
-          // Un 503/transporte sin respuesta puede significar que la impresora fiscal
-          // imprimio pero el servicio no pudo confirmar el cierre -> se conserva la
-          // orden pendiente para transcribir; NO se imprime "No Fiscal" para no duplicar.
-          const printedButUnconfirmed =
-            httpStatus === 0 ||
-            (httpStatus === 503 && /no respondio|no respondió|timeout|sin respuesta/i.test(mensaje));
-          if (printedButUnconfirmed) {
-            set({ pendingFiscalOrder: order, isSubmitting: false });
-            return { pendingControlNumber: true, facturacion: null, ordenId: "" };
-          }
-          // Fallback "No Fiscal": la impresora fiscal no imprimio (4xx, o Bematech
-          // que anula el documento) -> se imprime en la POS58 y se persiste la venta.
-          const outcome = await runOrderFallback({
-            header,
-            order,
-            initialResult: null,
-            transportFailed: true,
-            saleType: "local",
-            sessionId: activeSession.id,
-            submitOrder: cashierAccountantService.submitOrder,
-            print: printNoFiscalTicket,
-          });
-          set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
-          await get().load();
-          return outcome;
+          // La fiscal fallo (rechazo/void, o servicio caido a mitad de venta): No Fiscal.
+          return await runFallback();
         }
-        // Respuesta 200 sin numero de control: el ticket se imprimio (el servicio
-        // confirma el cierre) pero no logro leer el COO; se pide transcribirlo.
-        if (!fiscalResult?.fiscal_number) {
-          set({ pendingFiscalOrder: order, isSubmitting: false });
-          return { pendingControlNumber: true, facturacion: null, ordenId: "" };
-        }
+        // 200 sin numero de control: la fiscal no emitio COO -> No Fiscal.
+        if (!fiscalResult?.fiscal_number) return await runFallback();
+
         const recon = reconcileFiscalTotal(fiscalResult.total, fiscalPayload.items);
         if (recon) {
           order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
@@ -262,24 +259,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     }
   },
 
-  confirmFiscalControlNumber: async (controlNumber: string) => {
-    const { pendingFiscalOrder, activeSession } = get();
-    if (!pendingFiscalOrder || !activeSession?.id) {
-      throw new Error("No hay orden fiscal pendiente");
-    }
-
-    pendingFiscalOrder.numeroControlInterno = controlNumber;
-
-    set({ isSubmitting: true, errorMessage: null });
+  checkFiscalHealth: async () => {
     try {
-      const result = await cashierAccountantService.submitOrder(pendingFiscalOrder, "local", activeSession.id);
-      set({ isSubmitting: false, pendingFiscalOrder: null, infoMessage: "Venta procesada exitosamente" });
-      await get().load();
-      return result;
-    } catch (error: any) {
-      const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
-      set({ isSubmitting: false, errorMessage: mensaje, pendingFiscalOrder: null });
-      throw new Error(mensaje);
+      const health = await fiscalPrinterClient.getHealth();
+      set({ fiscalAvailable: health?.status === "ok" });
+    } catch {
+      set({ fiscalAvailable: false });
     }
   },
 

@@ -161,7 +161,8 @@ export interface CashierWorkflowState {
   selectedCashBoxId: string | null;
   errorMessage: string | null;
   infoMessage: string | null;
-  pendingFiscalOrder: Record<string, any> | null;
+  /** null = sin verificar; true/false = resultado del ultimo chequeo de /health fiscal. */
+  fiscalAvailable: boolean | null;
 }
 
 export interface MovimientoCajaPayload {

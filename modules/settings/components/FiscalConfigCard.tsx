@@ -5,7 +5,7 @@ import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
-import { pairPrinter, isWebUsbSupported } from "@/modules/cash-register/lib/pos58-print";
+import { pairPrinter, isWebUsbSupported, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 
 // Implementaciones fiscales reales cableadas al servicio (service_fiscal).
 // El value es la marca que usa el cliente para enrutar a /bematech/* o a las
@@ -436,7 +436,7 @@ export default function FiscalConfigCard() {
                       : "Generar reporte X"}
               </button>
               <button
-                onClick={() => setShowZReport(true)}
+                onClick={async () => { await prepairPrinter(); setShowZReport(true); }}
                 className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
               >
                 Generar reporte Z

@@ -19,7 +19,7 @@ import {
   type FallbackZReport,
 } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runZReportFallback, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
-import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 interface ZReportDialogProps {
@@ -283,7 +283,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep("fiscal_printing")}
+                onClick={async () => { await prepairPrinter(); setStep("fiscal_printing"); }}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
                 Reintentar
@@ -456,7 +456,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep(usesDigitalBilling ? "loading" : "form")}
+                onClick={async () => { await prepairPrinter(); setStep(usesDigitalBilling ? "loading" : "form"); }}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
                 Reintentar

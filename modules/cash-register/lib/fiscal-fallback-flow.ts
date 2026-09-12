@@ -85,6 +85,7 @@ export interface OrderFallbackOutcome {
   facturacion: unknown;
   ordenId: string;
   fiscalFallback: true;
+  printError?: string;
 }
 
 export async function runOrderFallback<TResult extends { ordenId: string }>(
@@ -106,7 +107,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     amount: toBs2(m.quantity * toBs2(m.price * rate)),
   }));
 
-  await inputs.print({
+  const printOutcome = await inputs.print({
     kind: "sale",
     header: inputs.header,
     title: "COMPROBANTE NO FISCAL",
@@ -144,6 +145,9 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     facturacion: fallbackOrder.facturacion,
     ordenId,
     fiscalFallback: true,
+    printError: printOutcome.printed
+      ? undefined
+      : printOutcome.error || "No se pudo imprimir el comprobante en la POS58",
   };
 }
 
