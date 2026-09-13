@@ -384,11 +384,9 @@ export default function InventoryList({
         {inventory.length > 0 && (
           <div className="p-4 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-xs font-bold text-slate-400">
-              Página {page}
-              {totalPages != null ? ` de ${totalPages}` : ""} ·{" "}
-              {inventoryTotal != null
-                ? `${inventoryTotal} productos`
-                : `${inventory.length} en esta página`}
+              {totalPages != null
+                ? `Página ${page} de ${totalPages} · ${inventoryTotal} productos`
+                : `Página ${page} · ${inventory.length} en esta página`}
             </p>
 
             <div className="flex items-center gap-1.5">
