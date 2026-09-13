@@ -7,7 +7,6 @@ import {
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { productsService } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { useInfiniteScroll } from "@/modules/products/lib/useInfiniteScroll";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
 
@@ -24,12 +23,12 @@ export default function InventoryList({
     inventory,
     inventoryTotal,
     isLoading,
-    isLoadingMore,
     isInitialLoad,
     hasMore,
+    page,
     error,
     fetchInventory,
-    loadNextPage,
+    setPage,
     searchInventory,
     setFilter,
     getLowStockCount,
@@ -42,7 +41,6 @@ export default function InventoryList({
   const rate = getEffectiveRate();
   const [localSearch, setLocalSearch] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // La carga inicial la dispara MqttInventoryProvider (envuelve a esta lista).
 
@@ -60,15 +58,10 @@ export default function InventoryList({
   }, [localSearch, searchInventory]);
 
   const lowStockCount = getLowStockCount();
-
-  // Prefetch progresivo (2 pantallas antes) sobre el scroll real de <main>.
-  useInfiniteScroll(sentinelRef, {
-    hasMore,
-    isLoading: isLoadingMore,
-    onLoadMore: () => {
-      void loadNextPage();
-    },
-  });
+  const totalPages =
+    inventoryTotal != null && !localSearch && stockTab === "GENERAL"
+      ? Math.ceil(inventoryTotal / 10)
+      : null;
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -388,26 +381,33 @@ export default function InventoryList({
           </table>
         </div>
 
-        {/* Sentinel siempre montado: el observer se engancha al montar, antes de
-            que la tabla tenga filas. */}
-        <div ref={sentinelRef} className="h-1 w-full" />
-
         {inventory.length > 0 && (
           <div className="p-4 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-xs font-bold text-slate-400">
-              Mostrando {inventory.length}
-              {inventoryTotal != null && !localSearch && stockTab === "GENERAL"
-                ? ` de ${inventoryTotal}`
-                : ""}{" "}
-              productos
+              Página {page}
+              {totalPages != null ? ` de ${totalPages}` : ""} ·{" "}
+              {inventoryTotal != null
+                ? `${inventoryTotal} productos`
+                : `${inventory.length} en esta página`}
             </p>
 
-            {isLoadingMore && (
-              <span className="text-xs text-slate-400 font-bold">Cargando más productos...</span>
-            )}
-            {!hasMore && inventory.length > 0 && (
-              <span className="text-[11px] text-slate-300 font-bold">Fin del inventario</span>
-            )}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1 || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer"
+              >
+                Anterior
+              </button>
+              <span className="px-3 text-xs font-black text-slate-600">{page}</span>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={!hasMore || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer"
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </div>

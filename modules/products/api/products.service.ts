@@ -58,6 +58,7 @@ export const productsService = {
       query?: string;
       lowStock?: boolean;
       resumen?: boolean;
+      offset?: number;
     } = {}
   ): Promise<{
     medications: Medication[];
@@ -68,6 +69,7 @@ export const productsService = {
   }> {
     const params = new URLSearchParams({ limit: String(opts.limit ?? 50) });
     if (opts.cursor) params.set("cursor", opts.cursor);
+    if (opts.offset && opts.offset > 0) params.set("offset", String(opts.offset));
     const q = opts.query?.trim();
     if (q) params.set("query", q);
     if (opts.lowStock) params.set("low_stock", "true");

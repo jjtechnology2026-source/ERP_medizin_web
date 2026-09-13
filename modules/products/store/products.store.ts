@@ -6,19 +6,18 @@ import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
 import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 
-// Tamaño de página del inventario. La carga es progresiva (scroll/prefetch),
-// no se precarga todo el inventario en memoria ni en localStorage.
-export const INVENTORY_PAGE_SIZE = 50;
+// Tamaño de página del inventario. Paginación clásica (page-based): se pide una
+// página a la vez con offset; NO se precarga todo el inventario.
+export const INVENTORY_PAGE_SIZE = 10;
 
 interface ProductsState {
-  /** Páginas ya cargadas (acumuladas), no el inventario completo. */
+  /** Solo la página actual del inventario. */
   inventory: Medication[];
   catalog: Medication[];
   isLoading: boolean;
-  isLoadingMore: boolean;
   isInitialLoad: boolean;
   hasMore: boolean;
-  nextCursor: string | null;
+  page: number;
   inventoryTotal: number | null;
   lowStockCount: number | null;
   error: string | null;
@@ -34,7 +33,7 @@ interface ProductsState {
 
 interface ProductsActions {
   fetchInventory: (force?: boolean) => Promise<void>;
-  loadNextPage: () => Promise<void>;
+  setPage: (page: number) => Promise<void>;
   searchInventory: (text: string) => Promise<void>;
   refreshCounts: (force?: boolean) => Promise<void>;
   findInventoryItem: (barCode: string) => Promise<Medication | null>;
@@ -62,91 +61,58 @@ const initialFilters = {
 };
 
 export const useProductsStore = create<ProductsStore>()((set, get) => {
-  /** Carga una página (reset = primera/búsqueda; si no, siguiente). */
-  // Dedup de la PRIMERA pagina (o busqueda/filtro) por clave: si dos componentes
-  // disparan la misma carga a la vez, comparten una sola peticion.
-  let firstPageInflight: { key: string; promise: Promise<void> } | null = null;
+  // Dedup de la carga de una pagina por clave: si dos componentes piden la misma
+  // pagina a la vez, comparten una sola peticion.
+  let pageInflight: { key: string; promise: Promise<void> } | null = null;
 
-  const loadPage = async (reset: boolean) => {
-    const { lastPharmacyId, nextCursor, searchQuery, filter, inventory, hasMore } = get();
+  /** Carga una pagina concreta (page-based, offset). */
+  const loadPage = async (page: number) => {
     const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
     if (!pharmacyId) {
-      set({ isLoading: false, isLoadingMore: false });
+      set({ isLoading: false });
       return;
     }
+    const { searchQuery, filter } = get();
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * INVENTORY_PAGE_SIZE;
 
-    const pharmacyChanged = lastPharmacyId !== pharmacyId;
-    const startFresh = reset || pharmacyChanged;
+    const key = `${pharmacyId}|${searchQuery}|${filter}|${safePage}`;
+    if (pageInflight && pageInflight.key === key) return pageInflight.promise;
 
-    if (startFresh) {
-      const key = `${pharmacyId}|${searchQuery}|${filter}`;
-      if (firstPageInflight && firstPageInflight.key === key) {
-        return firstPageInflight.promise;
-      }
-
-      const promise = (async () => {
-        set({ isLoading: true, isLoadingMore: false, error: null });
-        try {
-          const page = await productsService.getCursorInventory(pharmacyId, {
-            limit: INVENTORY_PAGE_SIZE,
-            query: searchQuery || undefined,
-            lowStock: filter === "LOW",
-          });
-          set({
-            inventory: page.medications,
-            nextCursor: page.next_cursor,
-            hasMore: page.has_more && !!page.next_cursor,
-            isLoading: false,
-            isLoadingMore: false,
-            isInitialLoad: false,
-            lastPharmacyId: pharmacyId,
-            error: null,
-          });
-        } catch {
-          set({
-            isLoading: false,
-            isLoadingMore: false,
-            isInitialLoad: false,
-            error: "Error al cargar inventario",
-          });
-        }
-      })();
-
-      firstPageInflight = { key, promise };
+    const promise = (async () => {
+      set({ isLoading: true, error: null });
       try {
-        await promise;
-      } finally {
-        if (firstPageInflight?.promise === promise) firstPageInflight = null;
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          offset,
+          limit: INVENTORY_PAGE_SIZE,
+          query: searchQuery || undefined,
+          lowStock: filter === "LOW",
+        });
+        set({
+          inventory: res.medications,
+          hasMore: res.has_more,
+          page: safePage,
+          isLoading: false,
+          isInitialLoad: false,
+          lastPharmacyId: pharmacyId,
+          error: null,
+        });
+      } catch {
+        set({
+          inventory: [],
+          hasMore: false,
+          isLoading: false,
+          isInitialLoad: false,
+          error: "Error al cargar inventario",
+        });
       }
-      return;
-    }
+    })();
 
-    if (!hasMore || get().isLoadingMore) return;
-    set({ isLoadingMore: true, error: null });
+    pageInflight = { key, promise };
     try {
-      const page = await productsService.getCursorInventory(pharmacyId, {
-        cursor: nextCursor ?? undefined,
-        limit: INVENTORY_PAGE_SIZE,
-        query: searchQuery || undefined,
-        lowStock: filter === "LOW",
-      });
-      const seen = new Set(inventory.map((m) => m.barCode));
-      const merged = [
-        ...inventory,
-        ...page.medications.filter((m) => m.barCode && !seen.has(m.barCode)),
-      ];
-      set({
-        inventory: merged,
-        nextCursor: page.next_cursor,
-        hasMore: page.has_more && !!page.next_cursor,
-        isLoading: false,
-        isLoadingMore: false,
-        isInitialLoad: false,
-        lastPharmacyId: pharmacyId,
-        error: null,
-      });
-    } catch {
-      set({ isLoading: false, isLoadingMore: false, error: "Error al cargar inventario" });
+      await promise;
+    } finally {
+      if (pageInflight?.promise === promise) pageInflight = null;
     }
   };
 
@@ -154,10 +120,9 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     inventory: [],
     catalog: [],
     isLoading: true,
-    isLoadingMore: false,
     isInitialLoad: true,
     hasMore: false,
-    nextCursor: null,
+    page: 1,
     inventoryTotal: null,
     lowStockCount: null,
     error: null,
@@ -172,10 +137,9 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         inventory: [],
         catalog: [],
         isLoading: false,
-        isLoadingMore: false,
         isInitialLoad: true,
         hasMore: false,
-        nextCursor: null,
+        page: 1,
         inventoryTotal: null,
         lowStockCount: null,
         error: null,
@@ -192,19 +156,11 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         if (inventory.length === 0) set({ isLoading: true });
         return;
       }
-      // Ya cargado para esta farmacia: no re-pedir (salvo force). Si hay una
-      // carga en curso, devolver esa misma promesa (dedup entre componentes).
-      if (!force && inventory.length > 0 && lastPharmacyId === pharmacyId) return;
+      if (!force && inventory.length > 0 && lastPharmacyId === pharmacyId && get().page === 1) return;
       if (_fetchPromise) return _fetchPromise;
 
       const promise = (async () => {
-        const pharmacyChanged = lastPharmacyId !== pharmacyId;
-        set({
-          inventory: force || pharmacyChanged ? [] : inventory,
-          nextCursor: null,
-          hasMore: true,
-        });
-        await loadPage(true);
+        await loadPage(1);
         void get().refreshCounts();
       })();
 
@@ -216,14 +172,13 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       }
     },
 
-    loadNextPage: async () => {
-      await loadPage(false);
+    setPage: async (page) => {
+      await loadPage(page);
     },
 
     searchInventory: async (text) => {
       set({ searchQuery: text });
-      set({ inventory: [], nextCursor: null, hasMore: true });
-      await loadPage(true);
+      await loadPage(1);
     },
 
     refreshCounts: async (force = false) => {
@@ -232,13 +187,13 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       // Los conteos son caros (scan agregado): se calculan una vez por farmacia.
       if (!force && get()._countsPharmacyId === pharmacyId) return;
       try {
-        const page = await productsService.getCursorInventory(pharmacyId, {
+        const res = await productsService.getCursorInventory(pharmacyId, {
           limit: 1,
           resumen: true,
         });
         set({
-          inventoryTotal: page.total ?? null,
-          lowStockCount: page.lowStockCount ?? null,
+          inventoryTotal: res.total ?? null,
+          lowStockCount: res.lowStockCount ?? null,
           _countsPharmacyId: pharmacyId,
         });
       } catch {
@@ -289,13 +244,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
           set({ catalog: [...allCatalog], isLoading: true });
           if (!cursor || page.medications.length === 0) break;
         }
-        console.log(
-          "[fetchCatalog] Loaded",
-          allCatalog.length,
-          "medications in",
-          pageCount,
-          "page(s)",
-        );
+        console.log("[fetchCatalog] Loaded", allCatalog.length, "medications in", pageCount, "page(s)");
         set({ catalog: allCatalog, isLoading: false });
       } catch (e) {
         console.error("[fetchCatalog] Failed:", e);
@@ -305,8 +254,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
 
     setFilter: (filter) => {
       set({ filter });
-      set({ inventory: [], nextCursor: null, hasMore: true });
-      void loadPage(true);
+      void loadPage(1);
     },
 
     setSearchQuery: (searchQuery) => set({ searchQuery }),

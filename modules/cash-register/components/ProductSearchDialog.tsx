@@ -1,7 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useProductsStore } from "@/modules/products/store/products.store";
-import { useInfiniteScroll } from "@/modules/products/lib/useInfiniteScroll";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
@@ -11,10 +10,10 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
   const {
     inventory,
     isLoading,
-    isLoadingMore,
     hasMore,
+    page,
     searchInventory,
-    loadNextPage,
+    setPage,
   } = useProductsStore();
 
   const { addMedication } = useCurrentOrderStore();
@@ -22,7 +21,6 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
   const rate = getEffectiveRate();
 
   const [query, setQuery] = useState("");
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Busqueda server-side con debounce (dispara tambien la primera pagina al abrir).
   useEffect(() => {
@@ -31,15 +29,6 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
     }, 300);
     return () => clearTimeout(t);
   }, [query, searchInventory]);
-
-  // Prefetch progresivo sobre el scroll propio del dialogo.
-  useInfiniteScroll(sentinelRef, {
-    hasMore,
-    isLoading: isLoadingMore,
-    onLoadMore: () => {
-      void loadNextPage();
-    },
-  });
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -75,13 +64,9 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {inventory.length === 0 && (isLoading || query.trim().length > 0) ? (
+          {inventory.length === 0 ? (
             <div className="py-12 text-center text-sm font-bold text-slate-300">
-              {isLoading ? "Buscando..." : "Sin resultados"}
-            </div>
-          ) : inventory.length === 0 ? (
-            <div className="py-12 text-center text-sm font-bold text-slate-300">
-              Escribe para buscar productos
+              {isLoading ? "Buscando..." : query ? "Sin resultados" : "Escribe para buscar productos"}
             </div>
           ) : (
             <table className="w-full text-left">
@@ -127,12 +112,27 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               </tbody>
             </table>
           )}
-          <div ref={sentinelRef} className="h-1 w-full" />
         </div>
 
-        {isLoadingMore && (
-          <div className="p-4 border-t border-slate-100 text-center">
-            <span className="text-xs font-bold text-slate-400">Cargando más...</span>
+        {inventory.length > 0 && (
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">Página {page}</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1 || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={!hasMore || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </div>
