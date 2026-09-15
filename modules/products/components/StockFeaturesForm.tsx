@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { HiArrowLeft, HiOutlineCash, HiOutlineAdjustments, HiOutlineInformationCircle, HiOutlineCube, HiOutlineTag, HiOutlineShieldCheck, HiCheckCircle } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
@@ -35,8 +35,12 @@ export default function StockFeaturesForm({
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
+  const lastBarCodeRef = useRef<string | null | undefined>(null);
+
   useEffect(() => {
     if (!currentMedicine) return;
+    if (lastBarCodeRef.current === currentMedicine.barCode) return;
+    lastBarCodeRef.current = currentMedicine.barCode;
     setNameDraft(currentMedicine.name ?? "");
     const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
       ? (currentMedicine.vat as number)
@@ -103,6 +107,7 @@ export default function StockFeaturesForm({
 
     const medicine: Medication = {
       ...(currentMedicine as Medication),
+      name: nameDraft.trim() || (currentMedicine as Medication).name,
       price: hasDiscount ? discountedPrice : priceWithVat,
       stock: q,
       vat: selectedVat,
@@ -130,6 +135,7 @@ export default function StockFeaturesForm({
     setFeedback(null);
     const ok = await updateMedicineName(currentMedicine.barCode, trimmed);
     if (ok) {
+      setNameDraft(trimmed);
       setFeedback({ type: "success", message: "Nombre actualizado correctamente." });
     } else {
       setFeedback({ type: "error", message: "Error al actualizar el nombre" });

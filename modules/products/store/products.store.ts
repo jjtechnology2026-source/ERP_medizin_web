@@ -346,14 +346,12 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         return false;
       }
       const { inventory, catalog, currentMedicine } = get();
-      if (currentMedicine?.barCode === barCode) {
-        set({ currentMedicine: { ...currentMedicine, name: trimmed } });
-      }
       set({
+        currentMedicine: currentMedicine?.barCode === barCode ? { ...currentMedicine, name: trimmed } : currentMedicine,
         inventory: inventory.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
         catalog: catalog.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
       });
-      void get().fetchInventory(true);
+      void get().setPage(get().page);
       return true;
     },
 
