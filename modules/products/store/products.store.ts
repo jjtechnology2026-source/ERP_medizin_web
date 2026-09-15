@@ -43,6 +43,7 @@ interface ProductsActions {
   setEditMode: (mode: boolean) => void;
   setCurrentMedicine: (med: Partial<Medication> | null) => void;
   saveMedicine: (medicine: Medication) => Promise<boolean>;
+  updateMedicineName: (barCode: string, name: string) => Promise<boolean>;
   addToInventory: (medications: Medication[]) => void;
   deleteMedicine: (barCode: string) => Promise<void>;
   decrementStock: (items: { barCode: string; quantity: number }[]) => void;
@@ -332,6 +333,27 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       }
 
       void get().refreshCounts(true);
+      return true;
+    },
+
+    updateMedicineName: async (barCode, name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return false;
+      try {
+        await productsService.updateName(barCode, trimmed);
+      } catch (e) {
+        console.error("[updateMedicineName] API error:", e);
+        return false;
+      }
+      const { inventory, catalog, currentMedicine } = get();
+      if (currentMedicine?.barCode === barCode) {
+        set({ currentMedicine: { ...currentMedicine, name: trimmed } });
+      }
+      set({
+        inventory: inventory.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
+        catalog: catalog.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
+      });
+      void get().fetchInventory(true);
       return true;
     },
 
