@@ -221,7 +221,9 @@ export default function BulkImportDialog({
             itemsWithStock.map((p) => ({
               bar_code: p.barCode,
               stock: p.stock ?? 0,
-              price: p.price ?? 0,
+              // Sin precio en el Excel se OMITE (no se manda 0) para no borrar el
+              // precio ya guardado del producto.
+              ...(p.price !== undefined ? { price: p.price } : {}),
               minimum: p.minimum ?? 0,
               discount: p.discount !== undefined ? Number(p.discount) : null,
               base_price: p.basePrice !== undefined ? Number(p.basePrice) : null,

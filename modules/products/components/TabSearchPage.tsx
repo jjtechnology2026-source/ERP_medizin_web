@@ -3,6 +3,8 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { HiSearch, HiX, HiPlus, HiOutlineRefresh } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { productsService } from "@/modules/products/api/products.service";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
 
 export default function CatalogSearchPage({
@@ -124,12 +126,26 @@ export default function CatalogSearchPage({
     setShowSuggestions(false);
   };
 
-  const handleAccept = () => {
-    if (selectedMed) {
-      setCurrentMedicine(selectedMed);
-      setEditMode(false);
-      setView("STOCK_FEATURES");
+  const handleAccept = async () => {
+    if (!selectedMed) return;
+    // El catálogo nacional no trae precio (siempre 0): si el producto YA está en el
+    // inventario de la farmacia, usamos SU precio real para no arrancar el form en 0.
+    let med = selectedMed;
+    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+    if (pharmacyId && selectedMed.barCode) {
+      try {
+        const page = await productsService.getCursorInventory(pharmacyId, {
+          query: selectedMed.barCode,
+          limit: 10,
+        });
+        med = page.medications.find((m) => m.barCode === selectedMed.barCode) ?? selectedMed;
+      } catch {
+        // búsqueda best-effort: si falla, seguimos con el catálogo
+      }
     }
+    setCurrentMedicine(med);
+    setEditMode(false);
+    setView("STOCK_FEATURES");
   };
 
   const formatPrice = (price: number) => {
