@@ -17,6 +17,10 @@ export default function ProductSearchBar() {
   const [results, setResults] = useState<Medication[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const searchSeqRef = useRef(0);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -29,6 +33,7 @@ export default function ProductSearchBar() {
   // Búsqueda server-side con debounce en el texto del input.
   useEffect(() => {
     const text = barcode.trim();
+    setError(null);
     if (!text) {
       setResults([]);
       setShowDropdown(false);
@@ -38,15 +43,19 @@ export default function ProductSearchBar() {
     if (text.length < 2) {
       setResults([]);
       setShowDropdown(false);
+      setIsSearching(false);
       return;
     }
     setShowDropdown(true);
     setIsSearching(true);
     const timer = setTimeout(async () => {
+      const seq = ++searchSeqRef.current;
       const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
       if (!pharmacyId) {
-        setResults([]);
-        setIsSearching(false);
+        if (seq === searchSeqRef.current) {
+          setResults([]);
+          setIsSearching(false);
+        }
         return;
       }
       try {
@@ -54,11 +63,17 @@ export default function ProductSearchBar() {
           query: text,
           limit: 10,
         });
-        setResults(res.medications);
+        if (seq === searchSeqRef.current) {
+          setResults(res.medications);
+        }
       } catch {
-        setResults([]);
+        if (seq === searchSeqRef.current) {
+          setResults([]);
+        }
       } finally {
-        setIsSearching(false);
+        if (seq === searchSeqRef.current) {
+          setIsSearching(false);
+        }
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -76,8 +91,11 @@ export default function ProductSearchBar() {
 
     const result = addMedication(med, 1);
     if (!result.success) {
-      console.warn(result.error);
+      setError(result.error || "No se pudo agregar el producto");
+      inputRef.current?.focus();
+      return;
     }
+    setError(null);
     setBarcode("");
     setShowDropdown(false);
     inputRef.current?.focus();
@@ -93,8 +111,11 @@ export default function ProductSearchBar() {
   const handleSelect = (med: Medication) => {
     const result = addMedication(med, 1);
     if (!result.success) {
-      console.warn(result.error);
+      setError(result.error || "No se pudo agregar el producto");
+      inputRef.current?.focus();
+      return;
     }
+    setError(null);
     setBarcode("");
     setShowDropdown(false);
     inputRef.current?.focus();
@@ -112,9 +133,23 @@ export default function ProductSearchBar() {
             ref={inputRef}
             type="text"
             value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
+            onChange={(e) => {
+              setBarcode(e.target.value);
+              setError(null);
+            }}
             onKeyDown={handleKeyDown}
-            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+            onFocus={() => {
+              if (blurTimerRef.current) {
+                clearTimeout(blurTimerRef.current);
+                blurTimerRef.current = null;
+              }
+            }}
+            onBlur={() => {
+              blurTimerRef.current = setTimeout(() => {
+                blurTimerRef.current = null;
+                setShowDropdown(false);
+              }, 150);
+            }}
             placeholder="Código del producto o nombre del producto"
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-400"
             autoFocus
@@ -131,9 +166,9 @@ export default function ProductSearchBar() {
                 </div>
               )}
               {!isSearching &&
-                results.map((med) => (
+                results.map((med, index) => (
                   <button
-                    key={med.barCode || med.name}
+                    key={med.barCode || index}
                     type="button"
                     onClick={() => handleSelect(med)}
                     className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors cursor-pointer border-b border-slate-100 last:border-b-0"
@@ -151,6 +186,10 @@ export default function ProductSearchBar() {
                   </button>
                 ))}
             </div>
+          )}
+
+          {error && (
+            <p className="mt-1 text-[10px] font-bold text-red-500">{error}</p>
           )}
         </div>
         <button
