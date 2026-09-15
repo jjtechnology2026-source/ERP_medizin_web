@@ -15,7 +15,7 @@ export default function StockFeaturesForm({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine } = useProductsStore();
+  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine, updateMedicineName } = useProductsStore();
   const { parseInput, format } = useFormatCurrency();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -30,11 +30,14 @@ export default function StockFeaturesForm({
   const [profit, setProfit] = useState("");
   const [lote, setLote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
   useEffect(() => {
     if (!currentMedicine) return;
+    setNameDraft(currentMedicine.name ?? "");
     const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
       ? (currentMedicine.vat as number)
       : 16;
@@ -117,6 +120,21 @@ export default function StockFeaturesForm({
       setFeedback({ type: "error", message: "Error al guardar el producto" });
     }
     setIsSaving(false);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!currentMedicine?.barCode || !trimmed) return;
+    if (trimmed === currentMedicine.name) return;
+    setIsSavingName(true);
+    setFeedback(null);
+    const ok = await updateMedicineName(currentMedicine.barCode, trimmed);
+    if (ok) {
+      setFeedback({ type: "success", message: "Nombre actualizado correctamente." });
+    } else {
+      setFeedback({ type: "error", message: "Error al actualizar el nombre" });
+    }
+    setIsSavingName(false);
   };
 
   const handleCancel = () => {
@@ -359,9 +377,23 @@ export default function StockFeaturesForm({
               {currentMedicine ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nombre comercial</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.name}</p>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          value={nameDraft}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-200/60 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        />
+                        <button
+                          onClick={handleSaveName}
+                          disabled={isSavingName || !nameDraft.trim() || nameDraft.trim() === currentMedicine.name}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isSavingName ? "Guardando..." : "Guardar nombre"}
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Código de barras</span>
