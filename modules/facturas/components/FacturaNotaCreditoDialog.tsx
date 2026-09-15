@@ -111,7 +111,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
       return;
     }
 
-    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS58.
+    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
     await prepairPrinter();
     setStep("submitting");
     let fallbackControl: string | null = null;
@@ -227,7 +227,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           await facturasService.createCreditNote(localPayload);
           await emitirNotaCreditoFiscal(detail, motivo.trim());
         } catch {
-          // Canal local (legacy) fallo: fallback "No Fiscal" en la POS58.
+          // Canal local (legacy) fallo: fallback "No Fiscal" en la POS80.
           const note = await runNoteFallback({
             header,
             payload: localPayload,

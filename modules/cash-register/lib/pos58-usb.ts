@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- WebUSB no esta tipado en el proyecto (evitamos sumar @types/w3c-web-usb) */
 type USBDevice = any;
 type USBOutTransferResult = { status: string; bytesWritten: number };
-// Transporte WebUSB para la impresora POS58 "No Fiscal" (clase 7 / printer).
+// Transporte WebUSB para la impresora POS80 "No Fiscal" (clase 7 / printer).
 // Guiado por el modulo del proyecto restaurante (thermal-printer.ts):
 // pairing silencioso, watchdog de transferencia, chunks con drenaje, manejo de
 // partial write/stall, reopen silencioso y cola de impresion (una a la vez).
@@ -98,7 +98,7 @@ async function connect(prompt = true): Promise<void> {
       if (!prompt) throw e;
     }
   } else if (!prompt) {
-    throw new Error("La impresora POS58 no esta conectada");
+    throw new Error("La impresora POS80 no esta conectada");
   }
 
   try {
@@ -186,7 +186,7 @@ async function sendChunks(dev: USBDevice, ep: number, data: Uint8Array): Promise
 }
 
 async function write(data: Uint8Array): Promise<void> {
-  if (!device || endpointOut === null) throw new Error("La impresora POS58 no esta conectada");
+  if (!device || endpointOut === null) throw new Error("La impresora POS80 no esta conectada");
   try {
     await sendChunks(device, endpointOut, data);
   } catch (e) {

@@ -291,10 +291,10 @@ export default function FiscalConfigCard() {
     const res = await pairPrinter();
     if (res.printed) {
       setPos58Status("done");
-      chatToast.show("Impresora POS58 emparejada. Los comprobantes 'No Fiscal' saldrán por acá.");
+      chatToast.show("Impresora POS80 emparejada. Los comprobantes 'No Fiscal' saldrán por acá.");
     } else {
       setPos58Status("error");
-      chatToast.show(`No se pudo emparejar la POS58: ${res.error || "error"}`);
+      chatToast.show(`No se pudo emparejar la POS80: ${res.error || "error"}`);
     }
     setTimeout(() => setPos58Status("idle"), 4000);
   };
@@ -448,12 +448,12 @@ export default function FiscalConfigCard() {
                 className="px-10 py-5 bg-[#0369a1] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
               >
                 {pos58Status === "pairing"
-                  ? "Emparejando POS58..."
+                  ? "Emparejando POS80..."
                   : pos58Status === "done"
-                    ? "POS58 emparejada"
+                    ? "POS80 emparejada"
                     : pos58Status === "error"
                       ? "Error al emparejar"
-                      : "Emparejar POS58"}
+                      : "Emparejar POS80"}
               </button>
               <button
                 onClick={() => setShowZHistory(true)}

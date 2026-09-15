@@ -73,7 +73,7 @@ export default function PaymentDialog({
   const [noFiscalPrintError, setNoFiscalPrintError] = useState<string | null>(null);
 
   // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
-  // vivo, la venta va directo al fallback POS58 sin intentar la fiscal.
+  // vivo, la venta va directo al fallback POS80 sin intentar la fiscal.
   useEffect(() => {
     checkFiscalHealth();
   }, [checkFiscalHealth]);
@@ -623,7 +623,7 @@ function NoFiscalOutcomeDialog({ onClose, error }: { onClose: () => void; error?
         </p>
         {error && (
           <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-2xl p-3">
-            No se imprimió en la POS58: {error}
+            No se imprimió en la POS80: {error}
           </p>
         )}
         <button

@@ -1,4 +1,4 @@
-// Builder ESC/POS de comprobantes "No Fiscal" (58 mm / 32 columnas).
+// Builder ESC/POS de comprobantes "No Fiscal" (80 mm / 48 columnas).
 // Funcion PURA: recibe datos ya calculados (montos vienen de money.ts en el call
 // site) y devuelve bytes ESC/POS. Sin I/O, sin React, sin red. Texto normalizado
 // a ASCII (sin acentos) y sin logo/QR (solo texto).
@@ -21,7 +21,7 @@ export interface TicketMoneyLine {
   amount: number;
 }
 
-export const WIDTH = 32;
+export const WIDTH = 48;
 
 const INIT = [0x1b, 0x40];
 

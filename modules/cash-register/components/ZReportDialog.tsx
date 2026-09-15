@@ -117,7 +117,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     });
 
     // Fallback "No Fiscal": la registracion Z fallo (canal digital o local). Se
-    // imprime el comprobante en la POS58 y se registra con identificadores sinteticos.
+    // imprime el comprobante en la POS80 y se registra con identificadores sinteticos.
     if (fiscalFailure) {
       await runFallback(result);
       return;
@@ -147,14 +147,14 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         try {
           const res = await fiscalPrinterClient.reportZ();
           if (!res.printed) {
-            // La maquina fiscal no imprimio: fallback "No Fiscal" en la POS58.
+            // La maquina fiscal no imprimio: fallback "No Fiscal" en la POS80.
             await runFallback({ success: false, report: null });
             return;
           }
           setStep("loading");
           await registrarAutomatico(res.z_number, res.fiscal_serial);
         } catch {
-          // Error al imprimir en la maquina fiscal: fallback "No Fiscal" en la POS58.
+          // Error al imprimir en la maquina fiscal: fallback "No Fiscal" en la POS80.
           await runFallback({ success: false, report: null });
         }
       })();

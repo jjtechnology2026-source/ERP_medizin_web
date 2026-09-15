@@ -104,7 +104,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
       return;
     }
 
-    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS58.
+    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
     await prepairPrinter();
     setStep("loading");
 
@@ -163,7 +163,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     if (!result.success) {
       // Fallback "No Fiscal" (digital o local): se sintetizan los identificadores no
       // monetarios (money.ts sigue siendo el unico origen de montos), se imprime en la
-      // POS58 y se persiste la NC real por el endpoint existente.
+      // POS80 y se persiste la NC real por el endpoint existente.
       const note = await runNoteFallback({
         header: {
           name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),

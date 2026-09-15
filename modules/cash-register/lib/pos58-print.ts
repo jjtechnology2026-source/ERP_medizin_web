@@ -1,6 +1,6 @@
-// Punto de entrada del fallback "No Fiscal" por POS58 (WebUSB).
+// Punto de entrada del fallback "No Fiscal" por POS80 (WebUSB).
 // Renderiza el comprobante (factura / nota de credito / reporte Z o X) a bytes
-// ESC/POS y lo imprime en la impresora POS58. Los montos siempre llegan ya
+// ESC/POS y lo imprime en la impresora POS80. Los montos siempre llegan ya
 // calculados (money.ts en el call site); aca no se recalcula nada.
 
 import {

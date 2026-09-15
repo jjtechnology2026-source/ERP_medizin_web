@@ -166,7 +166,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({ isSubmitting: true, errorMessage: null });
     try {
-      // Fallback "No Fiscal": imprime en la POS58 y persiste la venta. Es el
+      // Fallback "No Fiscal": imprime en la POS80 y persiste la venta. Es el
       // unico camino cuando la fiscal no puede emitir el comprobante.
       const runFallback = async () => {
         const outcome = await runOrderFallback({

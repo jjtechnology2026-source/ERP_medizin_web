@@ -4,7 +4,7 @@
 // money.ts a traves de fiscal-fallback.ts. Cada call site decide cuando hay
 // fallo y solo llama a estos helpers en ese caso.
 //
-// El comprobante se imprime en la POS58 (WebUSB) con cabecera = nombre de la
+// El comprobante se imprime en la POS80 (WebUSB) con cabecera = nombre de la
 // farmacia + RIF, y desglose de pagos SIEMPRE en Bs (divisa convertida por tasa).
 
 import {
@@ -92,7 +92,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
   inputs: OrderFallbackInputs<TResult>,
 ): Promise<OrderFallbackOutcome> {
   const order = inputs.order as {
-    medications: Array<{ quantity: number; price: number; name?: string; description?: string }>;
+    medications: Array<{ quantity: number; price: number; name?: string; description?: string; barCode?: string }>;
     rate?: number;
     client?: { name?: string; documento?: string };
     payments?: unknown;
@@ -101,11 +101,14 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
   const invoice = buildFallbackInvoice(order);
   const fallbackOrder = applyFallbackInvoiceToOrder(inputs.order, invoice);
 
-  const items = (order.medications || []).map((m) => ({
-    qty: m.quantity,
-    description: m.name || m.description || "",
-    amount: toBs2(m.quantity * toBs2(m.price * rate)),
-  }));
+  const items = (order.medications || []).map((m) => {
+    const base = m.name || m.description || "";
+    return {
+      qty: m.quantity,
+      description: m.barCode ? `${base} [${m.barCode}]` : base,
+      amount: toBs2(m.quantity * toBs2(m.price * rate)),
+    };
+  });
 
   const printOutcome = await inputs.print({
     kind: "sale",
@@ -147,7 +150,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     fiscalFallback: true,
     printError: printOutcome.printed
       ? undefined
-      : printOutcome.error || "No se pudo imprimir el comprobante en la POS58",
+      : printOutcome.error || "No se pudo imprimir el comprobante en la POS80",
   };
 }
 

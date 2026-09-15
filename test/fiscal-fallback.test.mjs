@@ -14,6 +14,7 @@ import {
   isFallbackZ,
 } from "../modules/cash-register/lib/fiscal-fallback.ts";
 import { renderNoFiscalTicket } from "../modules/cash-register/lib/pos58-print.ts";
+import { WIDTH } from "../modules/cash-register/lib/pos58-ticket.ts";
 import {
   runOrderFallback,
   runZReportFallback,
@@ -178,6 +179,9 @@ test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL
   assert.ok(text.includes("FARMACIA DEMO"));
   assert.ok(text.includes("J-12345678-9"));
   assert.ok(text.includes("NO FISCAL"));
+  // Formato POS80: separadores de 48 columnas (80 mm, Font A).
+  assert.equal(WIDTH, 48);
+  assert.ok(text.includes("-".repeat(48)));
 });
 
 // --- C2: order persistence via submitOrder on the fallback path ---
@@ -187,7 +191,13 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   const printDocs = [];
   const outcome = await runOrderFallback({
     header: { name: "FARMACIA", rif: "J-1" },
-    order: { rate: RATE, medications: [{ quantity: 1, price: 5 }] },
+    order: {
+      rate: RATE,
+      medications: [
+        { quantity: 1, price: 5, name: "PARACETAMOL 500MG", barCode: "7591234567890" },
+        { quantity: 2, price: 1, name: "SIN CODIGO" },
+      ],
+    },
     initialResult: null,
     transportFailed: true,
     saleType: "digital",
@@ -211,6 +221,9 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   assert.equal(printDocs[0].header.name, "FARMACIA");
   assert.equal(printDocs[0].header.rif, "J-1");
   assert.equal(printDocs[0].title, "COMPROBANTE NO FISCAL");
+  // El codigo de barra se agrega al nombre del producto; sin codigo queda igual.
+  assert.equal(printDocs[0].items[0].description, "PARACETAMOL 500MG [7591234567890]");
+  assert.equal(printDocs[0].items[1].description, "SIN CODIGO");
 });
 
 test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva el ordenId inicial", async () => {
