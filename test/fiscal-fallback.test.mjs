@@ -163,7 +163,7 @@ test("on-screen outcome: leyenda literal 'No Fiscal'", () => {
 test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL", () => {
   const bytes = renderNoFiscalTicket({
     kind: "sale",
-    header: { name: "FARMACIA DEMO", rif: "J-12345678-9" },
+    header: { name: "FARMACIA DEMO", rif: "J-12345678-9", address: "AV RAUL LEONI CC BOYACA LOCAL 7", phone: "+584161688296" },
     title: "COMPROBANTE NO FISCAL",
     controlNumber: "NF000000000001",
     date: "10/09/2026 10:00",
@@ -178,6 +178,8 @@ test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL
   const text = Buffer.from(bytes).toString("latin1");
   assert.ok(text.includes("FARMACIA DEMO"));
   assert.ok(text.includes("J-12345678-9"));
+  assert.ok(text.includes("AV RAUL LEONI CC BOYACA LOCAL 7"));
+  assert.ok(text.includes("Tlf: +584161688296"));
   assert.ok(text.includes("NO FISCAL"));
   // Formato POS80: separadores de 48 columnas (80 mm, Font A).
   assert.equal(WIDTH, 48);

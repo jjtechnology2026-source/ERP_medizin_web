@@ -156,6 +156,8 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     const header = {
       name: String(profile.pharmacyName || profile.name_group || profile.name || ""),
       rif: String(profile.rif || ""),
+      address: String(profile.pharmacyAddress || ""),
+      phone: String(profile.pharmacyPhone || ""),
     };
 
     const order = useCurrentOrderStore.getState().buildModelOrder(profile);

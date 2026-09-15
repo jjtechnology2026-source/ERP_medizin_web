@@ -182,6 +182,8 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         const header = {
           name: String(profileData?.pharmacyName || profileData?.name_group || profileData?.name || ""),
           rif: String(profileData?.rif || ""),
+          address: String(profileData?.pharmacyAddress || ""),
+          phone: String(profileData?.pharmacyPhone || ""),
         };
 
         try {
@@ -222,6 +224,8 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         const header = {
           name: String(profileData?.pharmacyName || profileData?.name_group || profileData?.name || ""),
           rif: String(profileData?.rif || ""),
+          address: String(profileData?.pharmacyAddress || ""),
+          phone: String(profileData?.pharmacyPhone || ""),
         };
         try {
           await facturasService.createCreditNote(localPayload);

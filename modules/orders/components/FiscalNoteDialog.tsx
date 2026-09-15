@@ -168,6 +168,8 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         header: {
           name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
           rif: rifEmisor || String(profile?.rif || ""),
+          address: String(profile?.pharmacyAddress || ""),
+          phone: String(profile?.pharmacyPhone || ""),
         },
         payload,
         createNote: fiscalNotesService.createNotaCredito,

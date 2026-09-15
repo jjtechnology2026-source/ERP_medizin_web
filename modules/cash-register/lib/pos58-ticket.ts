@@ -8,6 +8,8 @@
 export interface TicketHeader {
   name: string;
   rif: string;
+  address?: string;
+  phone?: string;
 }
 
 export interface TicketItem {
@@ -109,14 +111,21 @@ export function fmtMoney(n: number): string {
 // --- Secciones compartidas ---
 
 function headerBlock(h: TicketHeader, title: string): number[][] {
-  return [
+  const parts: number[][] = [
     [...ESC.init()],
     [...ESC.align(1), ...ESC.style(0x10), ...line(h.name), ...ESC.style(0)],
     line(`RIF: ${h.rif}`),
+  ];
+  if (h.address) {
+    for (const l of wrapText(h.address, WIDTH)) parts.push(line(l));
+  }
+  if (h.phone) parts.push(line(`Tlf: ${h.phone}`));
+  parts.push(
     line(""),
     [...ESC.style(0x08), ...line(title), ...ESC.style(0)],
     [...ESC.align(0), ...line(separator())],
-  ];
+  );
+  return parts;
 }
 
 function footerBlock(legend: string): number[][] {

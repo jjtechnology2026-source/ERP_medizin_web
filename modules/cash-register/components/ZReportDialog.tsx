@@ -47,6 +47,8 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     () => ({
       name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
       rif: String(profile?.rif || ""),
+      address: String(profile?.pharmacyAddress || ""),
+      phone: String(profile?.pharmacyPhone || ""),
     }),
     [profile],
   );

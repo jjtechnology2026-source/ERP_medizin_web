@@ -120,6 +120,8 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
     pharmacyId: String(agent.pharmacyId || agent.pharmacy_id || agent.idPharmacy || ""),
     pharmacyName: String(agent.pharmacyName || agent.pharmacy_name || agent.namePharmacy || ""),
     rif: getSafeString(agent.rif || agent.rifPharmacy),
+    pharmacyAddress: getSafeString(agent.pharmacyAddress || agent.addressPharmacy),
+    pharmacyPhone: getSafeString(agent.pharmacyPhone || agent.phonePharmacy),
     permits: Array.isArray(agent.permitsArray)
       ? agent.permitsArray
       : Array.isArray(agent.permits)
