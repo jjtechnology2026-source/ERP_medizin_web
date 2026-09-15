@@ -173,6 +173,11 @@ export const productsService = {
     await api.delete("/Medications/Delete", { data: { bar_code: barCode } });
   },
 
+  /** Cambia solo el nombre del producto por barCode (regenera search_document/embedding en el backend) */
+  async updateName(barCode: string, name: string): Promise<void> {
+    await api.put("/admin/products/update-name", { barCode, name });
+  },
+
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
   async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; lote?: string | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
