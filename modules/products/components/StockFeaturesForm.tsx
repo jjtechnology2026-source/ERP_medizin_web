@@ -105,10 +105,13 @@ export default function StockFeaturesForm({
     const min = parseInput(minStock);
     const disc = parseInput(discount);
 
+    // Si el form no tiene costo, el precio derivado queda en 0: en ese caso se
+    // conserva el precio ya guardado en vez de mandar 0 (que lo borraría).
+    const computedPrice = hasDiscount ? discountedPrice : priceWithVat;
     const medicine: Medication = {
       ...(currentMedicine as Medication),
       name: nameDraft.trim() || (currentMedicine as Medication).name,
-      price: hasDiscount ? discountedPrice : priceWithVat,
+      price: computedPrice > 0 ? computedPrice : currentMedicine.price ?? 0,
       stock: q,
       vat: selectedVat,
       minimum: min,
