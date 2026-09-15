@@ -22,6 +22,8 @@ interface ProductsState {
   lowStockCount: number | null;
   error: string | null;
   filter: StockFilter;
+  /** Filtro de existencia del inventario: null = todos, "in" = con stock, "out" = sin stock. */
+  stockFilter: "in" | "out" | null;
   searchQuery: string;
   editMode: boolean;
   currentMedicine: Partial<Medication> | null;
@@ -39,6 +41,7 @@ interface ProductsActions {
   findInventoryItem: (barCode: string) => Promise<Medication | null>;
   fetchCatalog: (force?: boolean) => Promise<void>;
   setFilter: (filter: StockFilter) => void;
+  setStockFilter: (stockFilter: "in" | "out" | null) => void;
   setSearchQuery: (query: string) => void;
   setEditMode: (mode: boolean) => void;
   setCurrentMedicine: (med: Partial<Medication> | null) => void;
@@ -56,6 +59,7 @@ type ProductsStore = ProductsState & ProductsActions;
 
 const initialFilters = {
   filter: "GENERAL" as StockFilter,
+  stockFilter: null as "in" | "out" | null,
   searchQuery: "",
   editMode: false,
   currentMedicine: null,
@@ -73,11 +77,11 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       set({ isLoading: false });
       return;
     }
-    const { searchQuery, filter } = get();
+    const { searchQuery, filter, stockFilter } = get();
     const safePage = Math.max(1, page);
     const offset = (safePage - 1) * INVENTORY_PAGE_SIZE;
 
-    const key = `${pharmacyId}|${searchQuery}|${filter}|${safePage}`;
+    const key = `${pharmacyId}|${searchQuery}|${filter}|${stockFilter ?? "all"}|${safePage}`;
     if (pageInflight && pageInflight.key === key) return pageInflight.promise;
 
     const promise = (async () => {
@@ -88,6 +92,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
           limit: INVENTORY_PAGE_SIZE,
           query: searchQuery || undefined,
           lowStock: filter === "LOW",
+          stockFilter: stockFilter ?? undefined,
         });
         set({
           inventory: res.medications,
@@ -255,6 +260,11 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
 
     setFilter: (filter) => {
       set({ filter });
+      void loadPage(1);
+    },
+
+    setStockFilter: (stockFilter) => {
+      set({ stockFilter });
       void loadPage(1);
     },
 

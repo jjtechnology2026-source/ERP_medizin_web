@@ -6,6 +6,12 @@ import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication } from "@/modules/products/types/products.types";
 
+const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
+  { label: "Todos", value: null },
+  { label: "Con stock", value: "in" },
+  { label: "Sin stock", value: "out" },
+];
+
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
   const {
     inventory,
@@ -14,6 +20,8 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
     page,
     searchInventory,
     setPage,
+    stockFilter,
+    setStockFilter,
   } = useProductsStore();
 
   const { addMedication } = useCurrentOrderStore();
@@ -29,6 +37,13 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
     }, 300);
     return () => clearTimeout(t);
   }, [query, searchInventory]);
+
+  // Al cerrar se limpia el filtro para no filtrar el inventario de Productos.
+  useEffect(() => {
+    return () => {
+      setStockFilter(null);
+    };
+  }, [setStockFilter]);
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -60,6 +75,22 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               className="w-full pl-11 pr-4 py-3 bg-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
               autoFocus
             />
+          </div>
+
+          <div className="flex items-center gap-1.5 mt-3">
+            {STOCK_FILTERS.map((opt) => (
+              <button
+                key={opt.label}
+                onClick={() => setStockFilter(opt.value)}
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all ${
+                  stockFilter === opt.value
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 

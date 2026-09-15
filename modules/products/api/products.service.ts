@@ -57,6 +57,7 @@ export const productsService = {
       limit?: number;
       query?: string;
       lowStock?: boolean;
+      stockFilter?: "in" | "out";
       resumen?: boolean;
       offset?: number;
     } = {}
@@ -73,6 +74,7 @@ export const productsService = {
     const q = opts.query?.trim();
     if (q) params.set("query", q);
     if (opts.lowStock) params.set("low_stock", "true");
+    if (opts.stockFilter) params.set("stock_filter", opts.stockFilter);
     if (opts.resumen) params.set("resumen", "true");
     const { data } = await api.get(
       `/admin/Pharmacy/${pharmacyId}/medications/cursor?${params}`
