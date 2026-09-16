@@ -335,6 +335,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
               ...(medicine.basePrice !== undefined ? { base_price: medicine.basePrice } : {}),
               ...(medicine.profitPercentage !== undefined ? { profit_percentage: medicine.profitPercentage } : {}),
               ...(medicine.lote?.trim() && stockVal > 0 ? { lote: medicine.lote.trim() } : {}),
+              ...(medicine.fechaVencimiento?.trim() && stockVal > 0 ? { fecha_vencimiento_lote: medicine.fechaVencimiento.trim() } : {}),
             }]);
           }
         }

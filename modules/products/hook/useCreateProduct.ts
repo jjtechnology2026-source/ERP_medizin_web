@@ -26,6 +26,7 @@ export interface MedicationData {
   basePrice?: number;
   profitPercentage?: number;
   lote?: string;
+  fechaVencimiento?: string;
 }
 
 export const useCreateMedication = () => {
@@ -68,10 +69,11 @@ export const useCreateMedication = () => {
           basePrice: baseData.basePrice !== undefined ? parseFloat(baseData.basePrice) : undefined,
           profitPercentage: baseData.profitPercentage !== undefined ? parseFloat(baseData.profitPercentage) : undefined,
           lote: typeof baseData.lote === "string" && baseData.lote.trim() ? baseData.lote.trim() : undefined,
+          fechaVencimiento: typeof baseData.fechaVencimiento === "string" && baseData.fechaVencimiento.trim() ? baseData.fechaVencimiento.trim() : undefined,
         };
 
-        // El lote es por-farmacia (inventario), no del catálogo universal: se envía solo en el increase.
-        const catalogPayload = { ...payloadData, lote: undefined };
+        // El lote y el vencimiento son por-farmacia (inventario), no del catálogo universal: se envían solo en el increase.
+        const catalogPayload = { ...payloadData, lote: undefined, fechaVencimiento: undefined };
         const { data: medResult } = await api.post(
           "/Medications/Create",
           [catalogPayload]
@@ -98,6 +100,7 @@ export const useCreateMedication = () => {
                 base_price: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : null,
                 profit_percentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : null,
                 ...(payloadData.lote ? { lote: payloadData.lote } : {}),
+                ...(payloadData.fechaVencimiento ? { fecha_vencimiento_lote: payloadData.fechaVencimiento } : {}),
               },
             ]);
           }

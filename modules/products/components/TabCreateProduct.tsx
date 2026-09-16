@@ -136,7 +136,7 @@ export default function CreateProductPage({ setView }: any) {
       const headers = [
         "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
         "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
-        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Lote", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Lote", "Vencimiento (AAAA-MM-DD)", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
       ];
       const dummyData = [
         {
@@ -153,6 +153,7 @@ export default function CreateProductPage({ setView }: any) {
           "Ganancia (%)": "20",
           "Stock Inicial": 20,
           "Lote": "L-2026-001",
+          "Vencimiento (AAAA-MM-DD)": "2027-12-31",
           "Mínimo Stock": 5,
           "IVA": 16,
           "Controlado (SI/NO)": "NO",
@@ -190,6 +191,7 @@ export default function CreateProductPage({ setView }: any) {
     basePrice: "",
     profit: "",
     lote: "",
+    fechaVencimiento: "",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,6 +290,7 @@ export default function CreateProductPage({ setView }: any) {
       basePrice: cost > 0 ? cost : undefined,
       profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
       lote: formData.lote.trim() || undefined,
+      fechaVencimiento: formData.fechaVencimiento || undefined,
     };
 
     const result = await createMedication(payload, images);
@@ -597,6 +600,12 @@ export default function CreateProductPage({ setView }: any) {
                   placeholder="ej: L-2026-001"
                   value={formData.lote}
                   onChange={(e: any) => setFormData({ ...formData, lote: e.target.value })}
+                />
+                <InputField
+                  label="Vencimiento (opcional)"
+                  type="date"
+                  value={formData.fechaVencimiento}
+                  onChange={(e: any) => setFormData({ ...formData, fechaVencimiento: e.target.value })}
                 />
               </div>
             </div>

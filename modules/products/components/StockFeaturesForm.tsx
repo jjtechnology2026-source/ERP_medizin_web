@@ -29,6 +29,7 @@ export default function StockFeaturesForm({
   const [discount, setDiscount] = useState("");
   const [profit, setProfit] = useState("");
   const [lote, setLote] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
@@ -60,6 +61,7 @@ export default function StockFeaturesForm({
     setSelectedVat(vat);
     setQuantity(""); // ponytail: start empty — stock is added, not replaced
     setLote("");
+    setFechaVencimiento("");
     setMinStock(String(currentMedicine.minimum ?? 0));
     setDiscount(currentMedicine.discount !== undefined ? String(currentMedicine.discount) : "");
     setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage) : "");
@@ -119,6 +121,7 @@ export default function StockFeaturesForm({
       basePrice: c || undefined,
       profitPercentage: profit ? parseInput(profit) : undefined,
       lote: lote.trim() || undefined,
+      fechaVencimiento: fechaVencimiento.trim() || undefined,
     };
 
     const success = await saveMedicine(medicine);
@@ -352,6 +355,16 @@ export default function StockFeaturesForm({
                     <input type="text" value={lote}
                       onChange={(e) => setLote(e.target.value)}
                       placeholder="ej: L-2026-001"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
+                      Vencimiento
+                      <span className="ml-2 font-normal text-[10px] text-slate-400">(opcional)</span>
+                    </label>
+                    <input type="date" value={fechaVencimiento}
+                      onChange={(e) => setFechaVencimiento(e.target.value)}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
                   </div>

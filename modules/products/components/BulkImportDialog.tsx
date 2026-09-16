@@ -5,6 +5,7 @@ import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
 import { isValidProfit, bulkSellingPrice } from "@/modules/products/lib/pricing";
+import { toIsoDate } from "@/modules/products/lib/date";
 
 interface BulkImportDialogProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export default function BulkImportDialog({
         "Ganancia (%)",
         "Stock",
         "Lote",
+        "Vencimiento (AAAA-MM-DD)",
         "Stock Mínimo",
         "IVA (%)",
         "Controlado (SI/NO)",
@@ -63,6 +65,7 @@ export default function BulkImportDialog({
           "Ganancia (%)": "20",
           "Stock": "100",
           "Lote": "L-2026-001",
+          "Vencimiento (AAAA-MM-DD)": "2027-12-31",
           "Stock Mínimo": "10",
           "IVA (%)": "16",
           "Controlado (SI/NO)": "NO",
@@ -88,11 +91,11 @@ export default function BulkImportDialog({
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
+      const workbook = XLSX.read(data, { type: "array", cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
-      function getCol(row: Record<string, string>, keys: string[]): string {
+      function findColKey(row: Record<string, unknown>, keys: string[]): string | undefined {
         const rowKeys = Object.keys(row);
         for (const key of keys) {
           const normalizedKey = key.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim();
@@ -106,9 +109,19 @@ export default function BulkImportDialog({
               rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim().includes(normalizedKey)
             );
           }
-          if (match) return String(row[match] || "").trim();
+          if (match) return match;
         }
-        return "";
+        return undefined;
+      }
+
+      function getCol(row: Record<string, unknown>, keys: string[]): string {
+        const match = findColKey(row, keys);
+        return match ? String(row[match] || "").trim() : "";
+      }
+
+      function getRawCol(row: Record<string, unknown>, keys: string[]): unknown {
+        const match = findColKey(row, keys);
+        return match ? row[match] : undefined;
       }
 
       const parsed: BulkProductRow[] = [];
@@ -136,6 +149,7 @@ export default function BulkImportDialog({
         const minRaw = getCol(row, ["Stock Mínimo", "Mínimo Stock", "Mínimo", "minimum", "MINIMO", "minimo"]);
         const vatRaw = getCol(row, ["IVA (%)", "IVA", "vat"]);
         const loteRaw = getCol(row, ["Lote", "lote", "LOTE"]);
+        const fechaVencimiento = toIsoDate(getRawCol(row, ["Vencimiento"]));
 
         const base = priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined;
         const profitPct = profitRaw ? parseFloat(profitRaw.replace(",", ".")) : undefined;
@@ -165,6 +179,7 @@ export default function BulkImportDialog({
           basePrice: base,
           profitPercentage: profitPct,
           lote: loteRaw || undefined,
+          fechaVencimiento,
           controlled: String(getCol(row, ["Controlado (SI/NO)", "controlled", "CONTROLADO"]) || "").trim().toUpperCase() === "SI",
           antibiotic: String(getCol(row, ["Antibiótico (SI/NO)", "antibiotic", "ANTIBIOTICO"]) || "").trim().toUpperCase() === "SI",
         });
@@ -229,6 +244,7 @@ export default function BulkImportDialog({
               base_price: p.basePrice !== undefined ? Number(p.basePrice) : null,
               profit_percentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : null,
               ...(p.lote?.trim() ? { lote: p.lote.trim() } : {}),
+              ...(p.fechaVencimiento?.trim() ? { fecha_vencimiento_lote: p.fechaVencimiento.trim() } : {}),
             }))
           );
           inventoryCount = itemsWithStock.length;
