@@ -195,6 +195,16 @@ export interface ZFallbackOutcome<TReport> {
   report: TReport | null;
 }
 
+/** Totales del reporte (Z y X comparten el mismo desglose). */
+function reportTotals(f: FallbackZReport): TicketMoneyLine[] {
+  return [
+    { label: "Ventas base", amount: f.taxed_sales },
+    { label: "IVA", amount: f.iva_monto },
+    { label: "Ventas exentas", amount: f.exempt_sales },
+    { label: "IGTF", amount: f.igtf_monto },
+  ];
+}
+
 export async function runZReportFallback<
   TReport extends { fiscalDate?: string | null; zNumber?: number | null },
 >(inputs: ZFallbackInputs<TReport>): Promise<ZFallbackOutcome<TReport>> {
@@ -223,12 +233,7 @@ export async function runZReportFallback<
     title: "REPORTE Z NO FISCAL",
     date: fmtDate(new Date()),
     fields,
-    totals: [
-      { label: "Ventas base", amount: fallback.taxed_sales },
-      { label: "IVA", amount: fallback.iva_monto },
-      { label: "Ventas exentas", amount: fallback.exempt_sales },
-      { label: "IGTF", amount: fallback.igtf_monto },
-    ],
+    totals: reportTotals(fallback),
     deviations: inputs.deviations ?? [],
     paymentBreakdown: inputs.paymentBreakdown ?? [],
     total: inputs.netTotal ?? fallback.total_sales,
@@ -259,6 +264,71 @@ export async function runZReportFallback<
   });
 
   return { fallback, report };
+}
+
+// --- Reporte X (No Fiscal) ---
+
+export interface XReportFallbackInputs {
+  header: TicketHeader;
+  pharmacyId: string;
+  sessionInvoices: FallbackZInvoice[];
+  /** Desglose NETO por metodo de pago, YA en Bs. */
+  paymentBreakdown?: TicketMoneyLine[];
+  /** Devoluciones / notas de credito, YA en Bs. */
+  deviations?: TicketMoneyLine[];
+  /** Lineas de cuadre; deben dar 0. */
+  reconciliation?: TicketMoneyLine[];
+  /** Total NETO (ventas − devoluciones). Si falta, se usa el bruto. */
+  netTotal?: number;
+  rate?: number;
+  print: PrintFn;
+}
+
+export interface XReportFallbackOutcome {
+  printed: boolean;
+  error?: string;
+}
+
+/**
+ * Reporte X "No Fiscal" en la POS80: corte PARCIAL del turno. Mismo cuadre que
+ * el Z, pero no cierra la sesion, no lleva Nro Z y no persiste nada.
+ */
+export async function runXReportFallback(
+  inputs: XReportFallbackInputs,
+): Promise<XReportFallbackOutcome> {
+  const fallback = buildFallbackZReport({
+    sessionInvoices: inputs.sessionInvoices,
+    pharmacyId: inputs.pharmacyId,
+  });
+
+  const fields: { label: string; value: string }[] = [
+    {
+      label: "Documentos",
+      value: fallback.invoices ? `${fallback.invoices.doc_from} a ${fallback.invoices.doc_to}` : "-",
+    },
+    { label: "Facturas", value: String(fallback.invoices?.count ?? 0) },
+    { label: "Contribuyentes", value: String(fallback.taxpayers) },
+    { label: "No contrib.", value: String(fallback.non_taxpayers) },
+  ];
+  if (inputs.rate && inputs.rate > 0) {
+    fields.push({ label: "Tasa USD", value: inputs.rate.toFixed(4) });
+  }
+
+  const outcome = await inputs.print({
+    kind: "report",
+    header: inputs.header,
+    title: "REPORTE X NO FISCAL",
+    date: fmtDate(new Date()),
+    fields,
+    totals: reportTotals(fallback),
+    deviations: inputs.deviations ?? [],
+    paymentBreakdown: inputs.paymentBreakdown ?? [],
+    total: inputs.netTotal ?? fallback.total_sales,
+    reconciliation: inputs.reconciliation ?? [],
+    legend: NO_FISCAL,
+  });
+
+  return { printed: outcome.printed, error: outcome.error };
 }
 
 export interface NoteFallbackInputs<TPayload extends object> {

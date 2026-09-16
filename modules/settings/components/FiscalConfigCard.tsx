@@ -5,7 +5,12 @@ import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
-import { pairPrinter, isWebUsbSupported, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { pairPrinter, isWebUsbSupported, prepairPrinter, printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { buildSessionSummary } from "@/modules/cash-register/lib/z-report";
+import { runXReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 
 // Implementaciones fiscales reales cableadas al servicio (service_fiscal).
 // El value es la marca que usa el cliente para enrutar a /bematech/* o a las
@@ -274,16 +279,59 @@ export default function FiscalConfigCard() {
 
   const handleReportX = async () => {
     setReportXStatus("printing");
+    const done = () => setReportXStatus("done");
+    const fail = () => setReportXStatus("error");
     try {
+      // 1) Maquina fiscal: el X es un corte parcial, no cierra el turno.
       await fiscalPrinterClient.reportX();
-      setReportXStatus("done");
-      chatToast.show("Reporte X generado correctamente.");
-      setTimeout(() => setReportXStatus("idle"), 4000);
-    } catch (e) {
-      setReportXStatus("error");
-      chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
-      setTimeout(() => setReportXStatus("idle"), 4000);
+      done();
+      chatToast.show("Reporte X generado en la máquina fiscal (no cierra el turno).");
+    } catch {
+      // 2) Sin maquina fiscal: se imprime el X en la POS80 (No Fiscal), con el
+      // mismo cuadre que el Z pero sin registrar nada.
+      try {
+        await prepairPrinter();
+        const profile = useAuthStore.getState().profile;
+        const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+        await useCashierWorkflowStore.getState().load(pharmacyId || undefined);
+        const { sessionInvoices, sessionTransactions } = useCashierWorkflowStore.getState();
+        const { paymentBreakdown, deviationsByMethod, summary } = buildSessionSummary({
+          sessionInvoices: sessionInvoices as Array<{ totalVes?: number }>,
+          sessionTransactions: sessionTransactions as Array<{
+            type?: string;
+            paymentMethod?: string;
+            amountVes?: number;
+          }>,
+        });
+        const res = await runXReportFallback({
+          header: {
+            name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+            rif: String(profile?.rif || ""),
+            address: String(profile?.pharmacyAddress || ""),
+            phone: String(profile?.pharmacyPhone || ""),
+          },
+          pharmacyId,
+          sessionInvoices: sessionInvoices as Array<{ controlNumber?: string; totalVes?: number }>,
+          paymentBreakdown: paymentBreakdown,
+          deviations: deviationsByMethod,
+          reconciliation: summary.reconciliation,
+          netTotal: summary.netTotal,
+          rate: useCurrencyStore.getState().getEffectiveRate(),
+          print: printNoFiscalTicket,
+        });
+        if (res.printed) {
+          done();
+          chatToast.show("Reporte X impreso en la POS80 (No Fiscal). El turno sigue abierto.");
+        } else {
+          fail();
+          chatToast.show(`No se pudo imprimir el reporte X en la POS80: ${res.error || "error"}`);
+        }
+      } catch (e) {
+        fail();
+        chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      }
     }
+    setTimeout(() => setReportXStatus("idle"), 4000);
   };
 
   const handlePairPos58 = async () => {

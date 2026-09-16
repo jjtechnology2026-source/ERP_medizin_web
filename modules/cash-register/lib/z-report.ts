@@ -6,6 +6,7 @@
 // imprima si no cuadra ("exacto lo que se vendio").
 
 import { toBs2 } from "./money.ts";
+import { paymentLabel } from "./fiscal-fallback-flow.ts";
 
 export interface ZMethodLine {
   label: string;
@@ -82,5 +83,64 @@ export function buildZSummary(input: ZSummaryInput): ZSummary {
       { label: "Cuadre ventas", amount: salesDiff },
       { label: "Cuadre neto", amount: netDiff },
     ],
+  };
+}
+
+// --- Resumen de la sesion (Z y X comparten la misma matematica) ---
+
+export interface SessionSummaryTransaction {
+  type?: string;
+  paymentMethod?: string;
+  amountVes?: number;
+}
+
+export interface SessionSummaryInvoice {
+  totalVes?: number;
+}
+
+export interface SessionSummary {
+  /** Cobros por metodo (transacciones tipo venta), en Bs. */
+  paymentBreakdown: ZMethodLine[];
+  /** Devoluciones / notas de credito por metodo, en Bs. */
+  deviationsByMethod: ZMethodLine[];
+  summary: ZSummary;
+}
+
+/**
+ * Arma el cuadre de la sesion desde las transacciones y facturas cargadas.
+ * Lo usan el reporte Z y el X "No Fiscal": un solo lugar para que no se separen.
+ */
+export function buildSessionSummary(input: {
+  sessionInvoices?: SessionSummaryInvoice[];
+  sessionTransactions?: SessionSummaryTransaction[];
+}): SessionSummary {
+  const transactions = input.sessionTransactions ?? [];
+
+  const salesMap = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.type !== "sale") continue;
+    const label = paymentLabel(t.paymentMethod);
+    salesMap.set(label, (salesMap.get(label) ?? 0) + (Number(t.amountVes) || 0));
+  }
+
+  const devMap = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.type !== "devolucion" && t.type !== "refund") continue;
+    const label = paymentLabel(t.paymentMethod);
+    devMap.set(label, (devMap.get(label) ?? 0) + (Number(t.amountVes) || 0));
+  }
+
+  const invoicedTotalVes = (input.sessionInvoices ?? []).reduce(
+    (sum, inv) => sum + (Number(inv.totalVes) || 0),
+    0,
+  );
+
+  const paymentBreakdown = [...salesMap.entries()].map(([label, amount]) => ({ label, amount }));
+  const deviationsByMethod = [...devMap.entries()].map(([label, amount]) => ({ label, amount }));
+
+  return {
+    paymentBreakdown,
+    deviationsByMethod,
+    summary: buildZSummary({ invoicedTotalVes, salesByMethod: paymentBreakdown, deviationsByMethod }),
   };
 }
