@@ -89,6 +89,19 @@ export function applyFallbackInvoiceToOrder<
   } as T;
 }
 
+export interface FallbackZInvoiceLine {
+  quantity?: number;
+  unitPriceVes?: number;
+  vatPercentage?: number;
+  subtotalVes?: number;
+}
+
+export interface FallbackZInvoice {
+  controlNumber?: string;
+  totalVes?: number;
+  lines?: FallbackZInvoiceLine[];
+}
+
 export interface FallbackZReport {
   z_number: number;
   fiscal_serial: string;
@@ -100,13 +113,18 @@ export interface FallbackZReport {
   non_taxpayers: number;
   tax_withholdings_count: number;
   total_sales: number;
+  /** Base imponible de lineas gravadas (sin IVA). */
   taxed_sales: number;
+  /** IVA de las lineas gravadas. */
+  iva_monto: number;
   exempt_sales: number;
+  /** IGTF = total − (base + IVA + exento). */
+  igtf_monto: number;
   fallback: true;
 }
 
 export function buildFallbackZReport(input?: {
-  sessionInvoices?: Array<{ controlNumber?: string; totalVes?: number }>;
+  sessionInvoices?: FallbackZInvoice[];
   pharmacyId?: string;
   now?: Date;
 }): FallbackZReport {
@@ -122,6 +140,32 @@ export function buildFallbackZReport(input?: {
   const total_sales = fiscalItemsTotal(
     invoices.map((i) => ({ quantity: 1, unit_price: toBs2(i.totalVes || 0) })),
   );
+
+  // Base/IVA/exento reales por linea (si vienen); si no, todo gravado.
+  let base = 0;
+  let iva = 0;
+  let exento = 0;
+  for (const inv of invoices) {
+    for (const l of inv.lines ?? []) {
+      const sub = toBs2(l.subtotalVes ?? (Number(l.quantity) || 0) * (Number(l.unitPriceVes) || 0));
+      const pct = Number(l.vatPercentage) || 0;
+      if (pct > 0) {
+        base += sub;
+        iva += toBs2(sub * (pct / 100));
+      } else {
+        exento += sub;
+      }
+    }
+  }
+  base = toBs2(base);
+  iva = toBs2(iva);
+  exento = toBs2(exento);
+  if (toBs2(base + iva + exento) === 0) {
+    base = total_sales;
+    iva = 0;
+    exento = 0;
+  }
+  const igtf = Math.max(0, toBs2(total_sales - toBs2(base + iva + exento)));
 
   return {
     z_number,
@@ -140,8 +184,10 @@ export function buildFallbackZReport(input?: {
     non_taxpayers: 0,
     tax_withholdings_count: 0,
     total_sales,
-    taxed_sales: total_sales,
-    exempt_sales: 0,
+    taxed_sales: base,
+    iva_monto: iva,
+    exempt_sales: exento,
+    igtf_monto: igtf,
     fallback: true,
   };
 }

@@ -225,9 +225,14 @@ export interface ReportTicketData {
   date: string;
   fields: { label: string; value: string }[];
   totals: TicketMoneyLine[];
-  /** Desglose por metodo de pago (efectivo Bs, dolares, tarjeta, pago movil, biopago). */
+  /** Devoluciones / notas de credito (se restan del total). */
+  deviations?: TicketMoneyLine[];
+  /** Desglose NETO por metodo de pago (efectivo Bs, dolares, tarjeta, pago movil, biopago). */
   paymentBreakdown?: TicketMoneyLine[];
+  /** Total NETO (ventas − devoluciones). */
   total?: number;
+  /** Lineas de cuadre; deben dar 0. */
+  reconciliation?: TicketMoneyLine[];
   legend: string;
 }
 
@@ -238,12 +243,21 @@ export function buildReportTicket(d: ReportTicketData): Uint8Array {
     parts.push(line(separator()));
     for (const t of d.totals) parts.push(line(row(t.label, fmtMoney(t.amount))));
   }
-  if (d.paymentBreakdown && d.paymentBreakdown.length > 0) {
-    parts.push(line(separator()), line("Por metodo de pago:"));
-    for (const p of d.paymentBreakdown) parts.push(line(row(`  ${p.label}`, fmtMoney(p.amount))));
+  if (d.deviations && d.deviations.length > 0) {
+    parts.push(line("Devoluciones (NC):"));
+    for (const dev of d.deviations) parts.push(line(row(`  ${dev.label}`, fmtMoney(dev.amount))));
   }
   if (typeof d.total === "number") {
+    parts.push(line(separator()));
     parts.push([...ESC.align(1), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.align(0)]);
+  }
+  if (d.paymentBreakdown && d.paymentBreakdown.length > 0) {
+    parts.push(line(separator()), line("Por metodo de pago (neto):"));
+    for (const p of d.paymentBreakdown) parts.push(line(row(`  ${p.label}`, fmtMoney(p.amount))));
+  }
+  if (d.reconciliation && d.reconciliation.length > 0) {
+    parts.push(line(separator()), line("Cuadre:"));
+    for (const r of d.reconciliation) parts.push(line(row(`  ${r.label}`, fmtMoney(r.amount))));
   }
   parts.push(...footerBlock(d.legend));
   return concat(parts);

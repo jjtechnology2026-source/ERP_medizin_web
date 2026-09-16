@@ -120,6 +120,38 @@ test("buildFallbackZReport: sin sessionInvoices igual queda poblado", () => {
   assert.equal(z.fallback, true);
 });
 
+test("buildFallbackZReport: base/IVA/exento/IGTF exactos por linea", () => {
+  const z = buildFallbackZReport({
+    sessionInvoices: [
+      {
+        controlNumber: "A-1",
+        totalVes: 116,
+        lines: [
+          { quantity: 1, unitPriceVes: 100, vatPercentage: 16 }, // base 100 + IVA 16
+          { quantity: 2, unitPriceVes: 50, vatPercentage: 0 },   // exento 100
+        ],
+      },
+    ],
+    pharmacyId: "PH1",
+  });
+  assert.equal(z.taxed_sales, 100);
+  assert.equal(z.iva_monto, 16);
+  assert.equal(z.exempt_sales, 100);
+  assert.equal(z.total_sales, 116);
+  assert.equal(z.igtf_monto, 0);
+});
+
+test("buildFallbackZReport: sin lineas cae a todo gravado (no rompe el total)", () => {
+  const z = buildFallbackZReport({
+    sessionInvoices: [{ controlNumber: "A-1", totalVes: 150.75 }],
+    pharmacyId: "PH1",
+  });
+  assert.equal(z.total_sales, 150.75);
+  assert.equal(z.taxed_sales, 150.75);
+  assert.equal(z.iva_monto, 0);
+  assert.equal(z.exempt_sales, 0);
+});
+
 test("buildFallbackNote: banderas y error de fallback", () => {
   const note = buildFallbackNote();
   assert.equal(note.url_pdf, null);
@@ -224,7 +256,7 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   assert.equal(printDocs[0].header.rif, "J-1");
   assert.equal(printDocs[0].title, "COMPROBANTE NO FISCAL");
   // El codigo de barra se agrega al nombre del producto; sin codigo queda igual.
-  assert.equal(printDocs[0].items[0].description, "PARACETAMOL 500MG [7591234567890]");
+  assert.equal(printDocs[0].items[0].description, "[7591234567890] PARACETAMOL 500MG");
   assert.equal(printDocs[0].items[1].description, "SIN CODIGO");
 });
 

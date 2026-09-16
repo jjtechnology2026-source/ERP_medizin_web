@@ -19,6 +19,7 @@ import {
   type FallbackZReport,
 } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runZReportFallback, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { buildZSummary } from "@/modules/cash-register/lib/z-report";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
@@ -68,6 +69,31 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     return [...map.entries()].map(([label, amount]) => ({ label, amount }));
   }, [sessionTransactions]);
 
+  // Devoluciones (notas de credito) por metodo, en Bs.
+  const deviationsByMethod = useMemo(() => {
+    const map = new Map<string, number>();
+    const tx = (sessionTransactions || []) as Array<{
+      type?: string;
+      paymentMethod?: string;
+      amountVes?: number;
+    }>;
+    for (const t of tx) {
+      if (t.type !== "devolucion" && t.type !== "refund") continue;
+      const label = paymentLabel(t.paymentMethod);
+      map.set(label, (map.get(label) ?? 0) + (Number(t.amountVes) || 0));
+    }
+    return [...map.entries()].map(([label, amount]) => ({ label, amount }));
+  }, [sessionTransactions]);
+
+  // Cuadre del Z: bruto (facturas) vs cobros por metodo − devoluciones.
+  const zSummary = useMemo(() => {
+    const invoicedTotalVes = (sessionInvoices || []).reduce(
+      (sum, inv) => sum + (Number((inv as { totalVes?: number }).totalVes) || 0),
+      0,
+    );
+    return buildZSummary({ invoicedTotalVes, salesByMethod: paymentBreakdown, deviationsByMethod });
+  }, [sessionInvoices, paymentBreakdown, deviationsByMethod]);
+
   const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
   const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
   const [report, setReport] = useState<CreatedZReport | null>(null);
@@ -77,6 +103,24 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   const [printError, setPrintError] = useState<string | null>(null);
   const [fiscalFallback, setFiscalFallback] = useState(false);
   const [fallbackZ, setFallbackZ] = useState<FallbackZReport | null>(null);
+  // El Z lee del store de la sesion: hay que cargarla aca mismo, porque este
+  // dialogo tambien se abre desde Configuracion (sin pasar por la caja).
+  const loadSession = useCashierWorkflowStore((s) => s.load);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadSession(pharmacyId || undefined);
+      } finally {
+        if (!cancelled) setDataLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSession, pharmacyId]);
 
   const runFallback = useCallback(
     async (initialResult: { success: boolean; report?: CreatedZReport | null }) => {
@@ -84,7 +128,10 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         header,
         pharmacyId,
         sessionInvoices,
-        paymentBreakdown,
+        paymentBreakdown: zSummary.payments,
+        deviations: deviationsByMethod,
+        netTotal: zSummary.netTotal,
+        reconciliation: zSummary.reconciliation,
         rate,
         initialResult,
         createZReport: fiscalZReportService.createZReport,
@@ -96,7 +143,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
       if (persisted) setReport(persisted);
       setStep("result");
     },
-    [header, pharmacyId, sessionInvoices, paymentBreakdown, rate],
+    [header, pharmacyId, sessionInvoices, zSummary, deviationsByMethod, rate],
   );
 
   // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
@@ -143,9 +190,10 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
   }, [pharmacyId, runFallback]);
 
   useEffect(() => {
+    if (!dataLoaded) return;
     if (step === "fiscal_printing") {
-      setPrintError(null);
       (async () => {
+        setPrintError(null);
         try {
           const res = await fiscalPrinterClient.reportZ();
           if (!res.printed) {
@@ -168,7 +216,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         await registrarAutomatico();
       })();
     }
-  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico, runFallback]);
+  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico, runFallback, dataLoaded]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");
@@ -476,6 +524,21 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
         {step === "result" && fiscalFallback && (
           <div className="p-6 space-y-5">
+            {!zSummary.ok && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wider">
+                  Diferencia en el cuadre
+                </p>
+                <p className="text-sm font-bold text-red-700 mt-1">
+                  Cobrado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
+                </p>
+                <p className="text-[11px] text-red-500/80 mt-1">
+                  Se imprimió en el Z como “Cuadre ventas”.
+                </p>
+              </div>
+            )}
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
               <p className="text-sm font-black text-amber-600">{NO_FISCAL_LEGEND}</p>
               <p className="text-xs font-bold text-amber-600/80 mt-1">
@@ -501,6 +564,18 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
         {step === "result" && !fiscalFallback && report && (
           <div className="p-6 space-y-5">
+            {!zSummary.ok && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wider">
+                  Diferencia en el cuadre
+                </p>
+                <p className="text-sm font-bold text-red-700 mt-1">
+                  Cobrado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
+                </p>
+              </div>
+            )}
             <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
               <p className="text-sm font-black text-emerald-700">Reporte Z registrado</p>
               <p className="text-xs font-bold text-emerald-600/80 mt-1">

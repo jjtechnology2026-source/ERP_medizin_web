@@ -15,6 +15,7 @@ import {
   type FallbackNote,
   type FallbackZMarker,
   type FallbackZReport,
+  type FallbackZInvoice,
 } from "./fiscal-fallback.ts";
 import { toBs2 } from "./money.ts";
 import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos58-print.ts";
@@ -32,11 +33,17 @@ const PAYMENT_LABELS: Record<string, string> = {
   dolares: "Efectivo USD",
   card: "Tarjeta",
   tarjeta: "Tarjeta",
+  tarjetadebito: "Tarjeta Debito",
+  tarjeta_debito: "Tarjeta Debito",
+  tarjetacredito: "Tarjeta Credito",
+  tarjeta_credito: "Tarjeta Credito",
   mobile: "Pago Movil",
   pagomovil: "Pago Movil",
   pago_movil: "Pago Movil",
   biopago: "Biopago",
   transfer: "Transferencia",
+  transferencia: "Transferencia",
+  cheque: "Cheque",
   other: "Otro",
 };
 
@@ -105,7 +112,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     const base = m.name || m.description || "";
     return {
       qty: m.quantity,
-      description: m.barCode ? `${base} [${m.barCode}]` : base,
+      description: m.barCode ? `[${m.barCode}] ${base}` : base,
       amount: toBs2(m.quantity * toBs2(m.price * rate)),
     };
   });
@@ -164,9 +171,15 @@ export interface ZFallbackInputs<
 > {
   header: TicketHeader;
   pharmacyId: string;
-  sessionInvoices: Array<{ controlNumber?: string; totalVes?: number }>;
-  /** Desglose por metodo de pago, YA en Bs. */
+  sessionInvoices: FallbackZInvoice[];
+  /** Desglose NETO por metodo de pago, YA en Bs. */
   paymentBreakdown?: TicketMoneyLine[];
+  /** Devoluciones / notas de credito, YA en Bs. */
+  deviations?: TicketMoneyLine[];
+  /** Lineas de cuadre; deben dar 0. */
+  reconciliation?: TicketMoneyLine[];
+  /** Total NETO (ventas − devoluciones). Si falta, se usa el bruto del fallback. */
+  netTotal?: number;
   rate?: number;
   initialResult: ZFallbackResultLike<TReport>;
   createZReport: (
@@ -211,11 +224,15 @@ export async function runZReportFallback<
     date: fmtDate(new Date()),
     fields,
     totals: [
-      { label: "Ventas gravadas", amount: fallback.taxed_sales },
+      { label: "Ventas base", amount: fallback.taxed_sales },
+      { label: "IVA", amount: fallback.iva_monto },
       { label: "Ventas exentas", amount: fallback.exempt_sales },
+      { label: "IGTF", amount: fallback.igtf_monto },
     ],
+    deviations: inputs.deviations ?? [],
     paymentBreakdown: inputs.paymentBreakdown ?? [],
-    total: fallback.total_sales,
+    total: inputs.netTotal ?? fallback.total_sales,
+    reconciliation: inputs.reconciliation ?? [],
     legend: NO_FISCAL,
   });
 
