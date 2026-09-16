@@ -8,6 +8,12 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication } from "@/modules/products/types/products.types";
 
+const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
+  { label: "Todos", value: null },
+  { label: "Con stock", value: "in" },
+  { label: "Sin stock", value: "out" },
+];
+
 export default function ProductSearchBar() {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -18,6 +24,8 @@ export default function ProductSearchBar() {
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Por defecto solo productos con existencia (no sirve mostrar Stock: 0).
+  const [stockFilter, setStockFilter] = useState<"in" | "out" | null>("in");
 
   const searchSeqRef = useRef(0);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,9 +70,12 @@ export default function ProductSearchBar() {
         const res = await productsService.getCursorInventory(pharmacyId, {
           query: text,
           limit: 10,
+          stockFilter: stockFilter ?? undefined,
         });
         if (seq === searchSeqRef.current) {
-          setResults(res.medications);
+          setResults(
+            [...res.medications].sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0)),
+          );
         }
       } catch {
         if (seq === searchSeqRef.current) {
@@ -77,7 +88,7 @@ export default function ProductSearchBar() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [barcode]);
+  }, [barcode, stockFilter]);
 
   const handleAdd = async () => {
     const code = barcode.trim();
@@ -157,34 +168,53 @@ export default function ProductSearchBar() {
 
           {showDropdown && (
             <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-              {isSearching && (
-                <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
-              )}
-              {!isSearching && results.length === 0 && (
-                <div className="px-4 py-3 text-xs font-bold text-slate-400">
-                  Sin resultados para «{barcode.trim()}»
-                </div>
-              )}
-              {!isSearching &&
-                results.map((med, index) => (
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 bg-slate-50/70">
+                {STOCK_FILTERS.map((opt) => (
                   <button
-                    key={med.barCode || index}
+                    key={opt.label}
                     type="button"
-                    onClick={() => handleSelect(med)}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors cursor-pointer border-b border-slate-100 last:border-b-0"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setStockFilter(opt.value)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
+                      stockFilter === opt.value
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-100"
+                    }`}
                   >
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-700 truncate">{med.name}</p>
-                      <p className="text-[10px] font-semibold text-slate-400 truncate">
-                        {[med.brand, med.activeIngredient, med.barCode].filter(Boolean).join(" • ")}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs font-black text-blue-600">{formatPrice(med.price ?? 0)}</p>
-                      <p className="text-[10px] font-semibold text-slate-400">Stock: {med.stock ?? 0}</p>
-                    </div>
+                    {opt.label}
                   </button>
                 ))}
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto">
+                {isSearching && (
+                  <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
+                )}
+                {!isSearching && results.length === 0 && (
+                  <div className="px-4 py-3 text-xs font-bold text-slate-400">
+                    Sin resultados para «{barcode.trim()}»
+                  </div>
+                )}
+                {!isSearching &&
+                  results.map((med, index) => (
+                    <button
+                      key={med.barCode || index}
+                      type="button"
+                      onClick={() => handleSelect(med)}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors cursor-pointer border-b border-slate-100 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-700 truncate">{med.name}</p>
+                        <p className="text-[10px] font-semibold text-slate-400 truncate">
+                          {[med.brand, med.activeIngredient, med.barCode].filter(Boolean).join(" • ")}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-black text-blue-600">{formatPrice(med.price ?? 0)}</p>
+                        <p className="text-[10px] font-semibold text-slate-400">Stock: {med.stock ?? 0}</p>
+                      </div>
+                    </button>
+                  ))}
+              </div>
             </div>
           )}
 
