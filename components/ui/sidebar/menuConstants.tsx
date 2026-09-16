@@ -105,7 +105,6 @@ export const MENU_ITEMS: MenuItem[] = [
     name: "Configuración",
     icon: <HiOutlineCog size={iconSize} />,
     href: "/configuraciones",
-    permit: "Configuración",
   },
   {
     name: "Auditoría",
