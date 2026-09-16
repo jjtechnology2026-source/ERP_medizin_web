@@ -113,7 +113,7 @@ export function fmtMoney(n: number): string {
 function headerBlock(h: TicketHeader, title: string): number[][] {
   const parts: number[][] = [
     [...ESC.init()],
-    [...ESC.align(1), ...ESC.style(0x10), ...line(h.name), ...ESC.style(0)],
+    [...ESC.align(1), ...line(h.name)],
     line(`RIF: ${h.rif}`),
   ];
   if (h.address) {
@@ -122,7 +122,7 @@ function headerBlock(h: TicketHeader, title: string): number[][] {
   if (h.phone) parts.push(line(`Tlf: ${h.phone}`));
   parts.push(
     line(""),
-    [...ESC.style(0x08), ...line(title), ...ESC.style(0)],
+    [...ESC.align(1), ...line(title)],
     [...ESC.align(0), ...line(separator())],
   );
   return parts;
@@ -131,7 +131,7 @@ function headerBlock(h: TicketHeader, title: string): number[][] {
 function footerBlock(legend: string): number[][] {
   return [
     line(separator()),
-    [...ESC.align(1), ...ESC.style(0x08), ...line(`** ${legend} **`), ...ESC.style(0)],
+    [...ESC.align(1), ...line(`** ${legend} **`)],
     line("Documento sin validez fiscal"),
     line(""),
     [...ESC.feed(4)],
@@ -169,7 +169,7 @@ export function buildSaleTicket(d: SaleTicketData): Uint8Array {
   }
   parts.push(line(separator()));
   for (const t of d.totals) parts.push(line(row(t.label, fmtMoney(t.amount))));
-  parts.push([...ESC.align(1), ...ESC.style(0x18), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.style(0), ...ESC.align(0)]);
+  parts.push([...ESC.align(1), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.align(0)]);
   parts.push(line(separator()), line("Formas de pago:"));
   for (const p of d.payments) parts.push(line(row(`  ${p.label}`, fmtMoney(p.amount))));
   if (d.change && d.change > 0) parts.push(line(row("  Vuelto", fmtMoney(d.change))));
@@ -212,7 +212,7 @@ export function buildCreditNoteTicket(d: CreditNoteTicketData): Uint8Array {
     parts.push(line(separator()));
   }
   if (d.reason) parts.push(line(`Motivo: ${d.reason}`));
-  parts.push([...ESC.align(1), ...ESC.style(0x18), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.style(0), ...ESC.align(0)]);
+  parts.push([...ESC.align(1), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.align(0)]);
   parts.push(...footerBlock(d.legend));
   return concat(parts);
 }
@@ -243,7 +243,7 @@ export function buildReportTicket(d: ReportTicketData): Uint8Array {
     for (const p of d.paymentBreakdown) parts.push(line(row(`  ${p.label}`, fmtMoney(p.amount))));
   }
   if (typeof d.total === "number") {
-    parts.push([...ESC.align(1), ...ESC.style(0x18), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.style(0), ...ESC.align(0)]);
+    parts.push([...ESC.align(1), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.align(0)]);
   }
   parts.push(...footerBlock(d.legend));
   return concat(parts);
