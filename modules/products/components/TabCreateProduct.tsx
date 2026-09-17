@@ -16,7 +16,7 @@ export interface LocalImage {
 
 const CATEGORY_MAP: Record<string, string[]> = {
   "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
-  "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Medicamentos": ["Analgesicos", "Ampollas", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
   "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
   "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
   "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"]
@@ -485,7 +485,7 @@ export default function CreateProductPage({ setView }: any) {
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Presentación: *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque"].map((opt) => (
+                  {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque", "Ampollas"].map((opt) => (
                     <div
                       key={opt}
                       onClick={() => setFormData({ ...formData, presentation: opt })}
