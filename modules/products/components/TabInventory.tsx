@@ -8,6 +8,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { productsService } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { taxBreakdown } from "@/modules/products/lib/pricing";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
 
 export default function InventoryList({
@@ -66,6 +67,15 @@ export default function InventoryList({
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
     return `Bs ${(price * rate).toFixed(2)}`;
+  };
+
+  const breakdownLine = (med: Medication) => {
+    const b = taxBreakdown(med.price, med.vat, med.basePrice);
+    return (
+      <span className="block text-[9px] text-slate-400 font-medium mt-0.5">
+        Base {formatPrice(b.saleNoVat)} · IVA {formatPrice(b.iva)}
+      </span>
+    );
   };
 
   const handleEdit = (med: Medication) => {
@@ -161,8 +171,8 @@ export default function InventoryList({
       pdf.text(`Fecha: ${formatReportDate(today)}`, 40, headerTextY + 25);
       pdf.text(`Total de productos: ${reportItems.length}`, 40, headerTextY + 40);
 
-      const headers = ["Código", "Producto", "Stock", "Precio", "Categoría"];
-      const colX = [40, 160, 370, 430, 510];
+      const headers = ["Código", "Producto", "Stock", "Precio", "Base", "IVA", "Categoría"];
+      const colX = [30, 115, 300, 345, 395, 445, 500];
       let currentY = headerTextY + 70;
       const rowHeight = 18;
 
@@ -186,11 +196,14 @@ export default function InventoryList({
           pdf.setFont("helvetica", "normal");
         }
 
+        const breakdown = taxBreakdown(item.price, item.vat, item.basePrice);
         pdf.text(item.barCode || "-", colX[0], currentY);
-        pdf.text(item.name ? item.name.slice(0, 32) : "-", colX[1], currentY);
+        pdf.text(item.name ? item.name.slice(0, 26) : "-", colX[1], currentY);
         pdf.text(String(item.stock ?? 0), colX[2], currentY);
         pdf.text(formatPrice(item.price), colX[3], currentY);
-        pdf.text(item.category || "-", colX[4], currentY);
+        pdf.text(formatPrice(breakdown.saleNoVat), colX[4], currentY);
+        pdf.text(formatPrice(breakdown.iva), colX[5], currentY);
+        pdf.text(item.category || "-", colX[6], currentY);
         currentY += rowHeight;
       });
 
@@ -344,7 +357,10 @@ export default function InventoryList({
                       <p className="text-[10px] text-slate-400 font-medium">{med.barCode}</p>
                     </td>
                     <td className="px-8 py-4 text-slate-500 text-xs">{med.category || "-"}</td>
-                    <td className="px-8 py-4 font-black text-slate-800 text-xs">{formatPrice(med.price)}</td>
+                    <td className="px-8 py-4">
+                      <span className="font-black text-slate-800 text-xs">{formatPrice(med.price)}</span>
+                      {breakdownLine(med)}
+                    </td>
                     <td className="px-8 py-4 text-xs font-bold text-slate-500">{med.discount ? `${med.discount}%` : "-"}</td>
                     <td className="px-8 py-4">
                       <span className={`font-bold text-xs ${med.stock <= med.minimum ? "text-red-600" : "text-slate-600"}`}>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice } from "../modules/products/lib/pricing.ts";
+import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown } from "../modules/products/lib/pricing.ts";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -48,4 +48,33 @@ test("bulkSellingPrice (carga masiva) usa margen + IVA y redondea a 2 decimales"
 test("bulkSellingPrice devuelve undefined sin base y NaN con utilidad invalida", () => {
   assert.equal(bulkSellingPrice(undefined, 30, 16), undefined);
   assert.ok(Number.isNaN(bulkSellingPrice(10, 100, 16)));
+});
+
+test("taxBreakdown extrae el IVA del precio final (no lo suma por encima)", () => {
+  const b = taxBreakdown(5.48, 16, 4.72);
+  assert.ok(close(b.saleNoVat, 5.48 / 1.16));
+  assert.ok(close(b.iva, 5.48 - 5.48 / 1.16));
+  assert.ok(close(b.iva, 0.7558620689655171));
+  assert.ok(close(b.cost, 4.72));
+  assert.ok(close(b.profit, 5.48 / 1.16 - 4.72));
+  assert.equal(b.final, 5.48);
+});
+
+test("taxBreakdown cuadra con el caso costo 3.29 + 40% + IVA 16% (6.36)", () => {
+  const final = sellingPrice(3.29, 40, 16);
+  const b = taxBreakdown(final, 16, 3.29);
+  assert.ok(close(b.saleNoVat, 3.29 / (1 - 0.4)));
+  assert.ok(close(b.profit, 2.1933333333333334));
+  assert.ok(close(b.iva, b.saleNoVat * 0.16));
+  assert.ok(close(b.cost + b.profit + b.iva, b.final));
+});
+
+test("taxBreakdown sin costo asume ganancia 0 y sin IVA el neto es el final", () => {
+  const sinCosto = taxBreakdown(10, 16);
+  assert.ok(close(sinCosto.cost, 10 / 1.16));
+  assert.ok(close(sinCosto.profit, 0));
+  const sinIva = taxBreakdown(10, 0, 4);
+  assert.equal(sinIva.saleNoVat, 10);
+  assert.equal(sinIva.iva, 0);
+  assert.equal(sinIva.profit, 6);
 });

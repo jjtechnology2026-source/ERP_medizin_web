@@ -46,7 +46,7 @@ export default function StockFeaturesForm({
     const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
       ? (currentMedicine.vat as number)
       : 16;
-    // "Precio Base (sin IVA)" es el costo (base_price); el precio de venta se deriva (costo + Ganancia% + IVA).
+    // "Costo (sin IVA)" es el costo (base_price); el precio de venta se deriva (costo + Ganancia% + IVA).
     // Fallback para productos viejos sin base_price: estimar el costo desde el precio guardado (quitando IVA y Ganancia).
     const storedCost = currentMedicine.basePrice;
     if (storedCost !== undefined) {
@@ -243,7 +243,7 @@ export default function StockFeaturesForm({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Precio Base (sin IVA)</label>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Costo (sin IVA)</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                     <input
@@ -287,12 +287,16 @@ export default function StockFeaturesForm({
                     )}
                     <div className="mt-4 space-y-1.5 pt-4 border-t border-blue-100/70">
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-500">Precio base (sin IVA)</span>
+                        <span className="font-bold text-slate-500">Costo (sin IVA)</span>
                         <span className="font-black text-slate-700">{format(base)}</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-500">Ganancia {profit || "0"}%</span>
                         <span className="font-black text-blue-600">{fmt(ganancia)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Precio de venta (sin IVA)</span>
+                        <span className="font-black text-slate-700">{fmt(priceWithProfit)}</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-500">IVA {selectedVat}%</span>

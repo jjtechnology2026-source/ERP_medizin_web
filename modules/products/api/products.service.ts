@@ -10,6 +10,18 @@ const cleanImg = (item: any) => ({
   vat: Math.round(Number(item.vat)) || 0,
   minimum: Math.round(Number(item.minimum)) || 0,
   discount: item.discount !== undefined ? Number(item.discount) : undefined,
+  basePrice:
+    item.base_price !== undefined && item.base_price !== null
+      ? Number(item.base_price)
+      : item.basePrice !== undefined && item.basePrice !== null
+        ? Number(item.basePrice)
+        : undefined,
+  profitPercentage:
+    item.profit_percentage !== undefined && item.profit_percentage !== null
+      ? Number(item.profit_percentage)
+      : item.profitPercentage !== undefined && item.profitPercentage !== null
+        ? Number(item.profitPercentage)
+        : undefined,
 });
 
 export const productsService = {

@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:fiscal": "node --experimental-strip-types --test test/fiscal-concordance.test.mjs test/fiscal-fallback.test.mjs test/z-report.test.mjs",
-    "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs"
+    "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs",
+    "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

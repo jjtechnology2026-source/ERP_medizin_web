@@ -557,7 +557,7 @@ export default function CreateProductPage({ setView }: any) {
               <h3 className="text-lg font-black text-slate-800 mb-4">Precio y Stock</h3>
               <div className="grid grid-cols-2 gap-4">
                 <InputField
-                  label="Precio Base (sin IVA)"
+                  label="Costo (sin IVA)"
                   placeholder="ej: 3.00"
                   type="number"
                   step="0.01"
