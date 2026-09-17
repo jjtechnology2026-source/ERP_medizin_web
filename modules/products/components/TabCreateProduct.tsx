@@ -16,7 +16,8 @@ export interface LocalImage {
 
 const CATEGORY_MAP: Record<string, string[]> = {
   "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
-  "Medicamentos": ["Analgesicos", "Ampollas", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Ampollas": ["Otros"],
   "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
   "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
   "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"]
