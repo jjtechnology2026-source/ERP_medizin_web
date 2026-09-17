@@ -135,6 +135,7 @@ function footerBlock(legend: string): number[][] {
     line("Documento sin validez fiscal"),
     line(""),
     [...ESC.feed(4)],
+    [...ESC.cut()],
   ];
 }
 
