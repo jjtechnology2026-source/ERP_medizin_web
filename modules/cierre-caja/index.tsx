@@ -26,7 +26,8 @@ interface PhysicalCount {
   efectivo_ves: number;
   efectivo_usd: number;
   tarjeta_ves: number;
-  otros_ves: number;
+  pagomovil_ves: number;
+  biopago_ves: number;
 }
 
 const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
@@ -80,7 +81,8 @@ export default function CashClosurePage() {
     efectivo_ves: 0,
     efectivo_usd: 0,
     tarjeta_ves: 0,
-    otros_ves: 0,
+    pagomovil_ves: 0,
+    biopago_ves: 0,
   });
 
   const totalsByMethod = sessionTransactions.reduce(
@@ -103,7 +105,7 @@ export default function CashClosurePage() {
   const theoreticalBalanceVes = (activeSession?.openingAmountVes ?? 0) + theoreticalTotalVes;
   const theoreticalBalanceUsd = (activeSession?.openingAmountUsd ?? 0) + theoreticalTotalUsd;
 
-  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.otros_ves;
+  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves;
   const physicalTotalUsd = physicalCount.efectivo_usd;
 
   const differenceVes = physicalTotalVes - theoreticalBalanceVes;
@@ -124,7 +126,9 @@ export default function CashClosurePage() {
       {
         efectivo_ves: physicalCount.efectivo_ves,
         tarjeta_ves: physicalCount.tarjeta_ves,
-        otros_ves: physicalCount.otros_ves,
+        otros_ves: 0,
+        pago_movil_ves: physicalCount.pagomovil_ves,
+        biopago_ves: physicalCount.biopago_ves,
         efectivo_usd: physicalCount.efectivo_usd,
         tarjeta_usd: 0,
         otros_usd: 0,
@@ -330,11 +334,21 @@ export default function CashClosurePage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Otros Bs (Pago móvil, biopago)</label>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Pago Móvil Bs</label>
                   <input
                     type="number"
-                    value={physicalCount.otros_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("otros_ves", e.target.value)}
+                    value={physicalCount.pagomovil_ves || ""}
+                    onChange={(e) => handlePhysicalCountChange("pagomovil_ves", e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Biopago Bs</label>
+                  <input
+                    type="number"
+                    value={physicalCount.biopago_ves || ""}
+                    onChange={(e) => handlePhysicalCountChange("biopago_ves", e.target.value)}
                     placeholder="0.00"
                     className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />

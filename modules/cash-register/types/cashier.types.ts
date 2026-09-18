@@ -109,6 +109,8 @@ export interface CashierClosePhysicalCount {
   efectivo_ves: number;
   tarjeta_ves: number;
   otros_ves: number;
+  pago_movil_ves: number;
+  biopago_ves: number;
   efectivo_usd: number;
   tarjeta_usd: number;
   otros_usd: number;
