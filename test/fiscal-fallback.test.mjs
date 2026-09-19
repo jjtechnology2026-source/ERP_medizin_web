@@ -19,6 +19,7 @@ import {
   runOrderFallback,
   runZReportFallback,
   runNoteFallback,
+  buildSaleReprintTicket,
 } from "../modules/cash-register/lib/fiscal-fallback-flow.ts";
 import { fiscalItemsTotal, toBs2 } from "../modules/cash-register/lib/money.ts";
 import {
@@ -289,6 +290,64 @@ test("runOrderFallback: expone printError cuando la POS58 no imprime", async () 
     print: async () => ({ printed: false, via: "usb", error: "sin gesto de usuario" }),
   });
   assert.equal(outcome.printError, "sin gesto de usuario");
+});
+
+// --- Reimpresion de factura (POS80) ---
+
+test("buildSaleReprintTicket: reusa numero de control, fecha y total del comprobante original", () => {
+  const order = {
+    id: "o1",
+    date: "2026-09-10T15:30:45.000Z",
+    rate: RATE,
+    medications: [
+      { quantity: 1, price: 10.44, name: "A", barCode: "7591234567890" },
+      { quantity: 2, price: 3.33, name: "B" },
+    ],
+    payments: [{ method: "cash", amount: 100, currency: "VES" }],
+    facturacion: {
+      numero_control: "NF000000000123",
+      resp: { numerocontrol: "00009876", fecha: "2026-09-10T15:30:45.000Z" },
+    },
+  };
+  const ticket = buildSaleReprintTicket({ name: "FARMACIA", rif: "J-1" }, order);
+  assert.equal(ticket.kind, "sale");
+  assert.equal(ticket.title, "COMPROBANTE NO FISCAL");
+  assert.equal(ticket.controlNumber, "NF000000000123");
+  // Mismo formato de fecha local que la impresion original (DD/MM/YYYY HH:mm).
+  const d = new Date("2026-09-10T15:30:45.000Z");
+  const p = (n) => String(n).padStart(2, "0");
+  assert.equal(
+    ticket.date,
+    `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`,
+  );
+  assert.equal(ticket.items[0].description, "[7591234567890] A");
+  // El total es el mismo que la impresion original (misma matematica de money.ts).
+  assert.equal(ticket.total, buildFallbackInvoice(order).total);
+});
+
+test("buildSaleReprintTicket: cae a resp.numerocontrol y al id si falta numero_control", () => {
+  const base = {
+    id: "o2",
+    date: "2026-09-10T15:30:45.000Z",
+    rate: RATE,
+    medications: [{ quantity: 1, price: 5, name: "A" }],
+  };
+  const fromResp = buildSaleReprintTicket({ name: "F", rif: "J-1" }, {
+    ...base,
+    facturacion: { resp: { numerocontrol: "00009999" } },
+  });
+  assert.equal(fromResp.controlNumber, "00009999");
+  // Comprobante "No Fiscal" del fallback: numeroControl camelCase.
+  const fromFallback = buildSaleReprintTicket({ name: "F", rif: "J-1" }, {
+    ...base,
+    facturacion: { numeroControl: "NF000000000777", fecha: "2026-09-10T15:30:45.000Z" },
+  });
+  assert.equal(fromFallback.controlNumber, "NF000000000777");
+  const fromId = buildSaleReprintTicket({ name: "F", rif: "J-1" }, {
+    ...base,
+    facturacion: null,
+  });
+  assert.equal(fromId.controlNumber, "o2");
 });
 
 // --- C3: Z persistence retry via createZReport on the fallback path ---

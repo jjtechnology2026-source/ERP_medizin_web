@@ -52,8 +52,30 @@ export function paymentLabel(method?: string, currency?: string): string {
   return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
 }
 
+interface FallbackOrderShape {
+  medications: Array<{
+    quantity: number;
+    price: number;
+    name?: string;
+    description?: string;
+    barCode?: string;
+  }>;
+  rate?: number;
+  client?: { name?: string; documento?: string };
+  payments?: unknown;
+  facturacion?: {
+    numero_control?: string | null;
+    numeroControl?: string | null;
+    fecha?: string;
+    resp?: { numerocontrol?: string; fecha?: string } | null;
+  } | null;
+  numeroControlInterno?: string;
+  date?: string;
+  id?: string;
+}
+
 /** Pagos del comprobante: todo en Bs (divisa x tasa). */
-function buildPayments(order: Record<string, unknown>, rate: number, fallbackTotal: number): TicketMoneyLine[] {
+function buildPayments(order: FallbackOrderShape, rate: number, fallbackTotal: number): TicketMoneyLine[] {
   const raw = order.payments;
   const pays = Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [];
   if (pays.length === 0) return [{ label: "Efectivo Bs", amount: fallbackTotal }];
@@ -71,6 +93,69 @@ function fmtDate(input?: string | Date | null): string {
   if (isNaN(d.getTime())) return "";
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export interface SaleTicketInputs {
+  header: TicketHeader;
+  order: FallbackOrderShape;
+  controlNumber: string;
+  date: string;
+}
+
+/**
+ * Comprobante de venta "No Fiscal" (mismo formato que la impresion original).
+ * Funcion pura: reutilizada tanto en el fallback de venta como en la reimpresion.
+ */
+export function buildSaleTicketForOrder(inputs: SaleTicketInputs): NoFiscalTicket {
+  const order = inputs.order;
+  const rate = order.rate || 1;
+  const items = (order.medications || []).map((m) => {
+    const base = m.name || m.description || "";
+    return {
+      qty: m.quantity,
+      description: m.barCode ? `[${m.barCode}] ${base}` : base,
+      amount: toBs2(m.quantity * toBs2(m.price * rate)),
+    };
+  });
+  const total = toBs2(items.reduce((sum, it) => sum + it.amount, 0));
+  return {
+    kind: "sale",
+    header: inputs.header,
+    title: "COMPROBANTE NO FISCAL",
+    controlNumber: inputs.controlNumber,
+    date: inputs.date,
+    customerName: order.client?.name || "Cliente General",
+    customerDoc: order.client?.documento || "V-00000000",
+    items,
+    totals: [],
+    total,
+    payments: buildPayments(order, rate, total),
+    legend: NO_FISCAL,
+  };
+}
+
+/** Reimpresion: reusa numero de control, fecha y montos del comprobante original. */
+export function buildSaleReprintTicket(
+  header: TicketHeader,
+  order: FallbackOrderShape,
+): NoFiscalTicket {
+  const fac = order.facturacion;
+  const controlNumber = String(
+    fac?.numero_control ||
+      fac?.numeroControl ||
+      fac?.resp?.numerocontrol ||
+      order.numeroControlInterno ||
+      order.id ||
+      "",
+  );
+  const dateSource =
+    fac?.resp?.fecha || fac?.fecha || order.date || new Date().toISOString();
+  return buildSaleTicketForOrder({
+    header,
+    order,
+    controlNumber,
+    date: fmtDate(dateSource),
+  });
 }
 
 export interface OrderFallbackInputs<TResult extends { ordenId: string }> {
@@ -98,39 +183,18 @@ export interface OrderFallbackOutcome {
 export async function runOrderFallback<TResult extends { ordenId: string }>(
   inputs: OrderFallbackInputs<TResult>,
 ): Promise<OrderFallbackOutcome> {
-  const order = inputs.order as {
-    medications: Array<{ quantity: number; price: number; name?: string; description?: string; barCode?: string }>;
-    rate?: number;
-    client?: { name?: string; documento?: string };
-    payments?: unknown;
-  };
-  const rate = order.rate || 1;
+  const order = inputs.order as unknown as FallbackOrderShape;
   const invoice = buildFallbackInvoice(order);
   const fallbackOrder = applyFallbackInvoiceToOrder(inputs.order, invoice);
 
-  const items = (order.medications || []).map((m) => {
-    const base = m.name || m.description || "";
-    return {
-      qty: m.quantity,
-      description: m.barCode ? `[${m.barCode}] ${base}` : base,
-      amount: toBs2(m.quantity * toBs2(m.price * rate)),
-    };
-  });
-
-  const printOutcome = await inputs.print({
-    kind: "sale",
-    header: inputs.header,
-    title: "COMPROBANTE NO FISCAL",
-    controlNumber: invoice.numeroControl,
-    date: fmtDate(invoice.fecha),
-    customerName: order.client?.name || "Cliente General",
-    customerDoc: order.client?.documento || "V-00000000",
-    items,
-    totals: [],
-    total: invoice.total,
-    payments: buildPayments(inputs.order, rate, invoice.total),
-    legend: NO_FISCAL,
-  });
+  const printOutcome = await inputs.print(
+    buildSaleTicketForOrder({
+      header: inputs.header,
+      order,
+      controlNumber: invoice.numeroControl,
+      date: fmtDate(invoice.fecha),
+    }),
+  );
 
   // Solo se reintenta persistir cuando la llamada original fallo por
   // transporte; un success=false del backend ya dejo su propio ordenId.

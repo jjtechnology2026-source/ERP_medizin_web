@@ -1,9 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { HiOutlineExternalLink } from "react-icons/hi";
+import { HiOutlineExternalLink, HiOutlinePrinter } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { buildSaleReprintTicket } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -27,6 +30,7 @@ const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: 
 export default function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
   const [visibleOrder, setVisibleOrder] = useState<Order | null>(order);
   const [isOpen, setIsOpen] = useState(!!order);
+  const [isReprinting, setIsReprinting] = useState(false);
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -43,6 +47,29 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     setIsOpen(false);
     setVisibleOrder(null);
     onClose();
+  };
+
+  const handleReprint = async () => {
+    if (!visibleOrder) return;
+    setIsReprinting(true);
+    try {
+      // WebUSB exige gesto del usuario para el pairing: enganchamos la POS80
+      // en el mismo click, antes de renderizar/imprimir.
+      await prepairPrinter();
+      const profile = useAuthStore.getState().profile;
+      const header = {
+        name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+        rif: String(profile?.rif || ""),
+        address: String(profile?.pharmacyAddress || ""),
+        phone: String(profile?.pharmacyPhone || ""),
+      };
+      const result = await printNoFiscalTicket(buildSaleReprintTicket(header, visibleOrder));
+      if (!result.printed) {
+        alert(result.error || "No se pudo imprimir en la POS");
+      }
+    } finally {
+      setIsReprinting(false);
+    }
   };
 
   if (!visibleOrder) return null;
@@ -98,8 +125,8 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 <DetailItem label="Fecha Fiscal" value={new Date(visibleOrder.date).toISOString()} isSmall isFull />
               </div>
               {/* Sección corregida del PDF fiscal */}
-              <div className="pt-4 border-t border-slate-200">
-                <span className="text-[10px] font-black text-slate-900 uppercase mb-2 block">PDF fiscal:</span>
+              <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <span className="text-[10px] font-black text-slate-900 uppercase block">PDF fiscal:</span>
                 <button
                   onClick={() => {
                     // Accedemos a la ruta exacta según tu JSON
@@ -114,6 +141,13 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                   className="text-[#1D68EF] text-sm font-black flex items-center gap-1 hover:underline active:scale-95"
                 >
                   Ver factura <HiOutlineExternalLink size={18} />
+                </button>
+                <button
+                  onClick={handleReprint}
+                  disabled={isReprinting}
+                  className="text-[#059669] text-sm font-black flex items-center gap-1 hover:underline active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isReprinting ? "Imprimiendo..." : "Reimprimir factura"} <HiOutlinePrinter size={18} />
                 </button>
               </div>
             </div>
