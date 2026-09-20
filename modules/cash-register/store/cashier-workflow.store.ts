@@ -60,6 +60,8 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     const rate = useCurrencyStore.getState().getEffectiveRate();
     set({ currentRate: rate });
 
+    const assignedCaja = useAuthStore.getState().profile?.cajaId;
+
     const [cashBoxes, rawSession] = await Promise.all([
       (async () => {
         try {
@@ -113,7 +115,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       activeSession,
       sessionInvoices,
       sessionTransactions,
-      selectedCashBoxId: activeSession?.cashBoxId ?? cashBoxes[0]?.id ?? null,
+      selectedCashBoxId:
+        activeSession?.cashBoxId ??
+        (assignedCaja && cashBoxes.some((cb) => cb.id === assignedCaja)
+          ? assignedCaja
+          : cashBoxes[0]?.id) ??
+        null,
     });
   },
 

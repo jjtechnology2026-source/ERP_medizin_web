@@ -128,6 +128,7 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
         ? agent.permits
         : [],
     usesDigitalBilling: Boolean(agent.usesDigitalBilling),
+    cajaId: agent.cajaId ?? null,
     accessToken: data.token || agent.token,
     refreshToken: data.refresh_token || agent.refresh_token,
     expiresAt: decodeJwtExp(data.token || agent.token),
