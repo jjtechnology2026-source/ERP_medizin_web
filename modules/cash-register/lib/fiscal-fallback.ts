@@ -4,7 +4,7 @@
 // tocan aqui: el total del documento sale de money.ts (fiscalItemsTotal/toBs2),
 // igual que buildFiscalPayload, para no introducir una segunda matematica.
 
-import { toBs2, fiscalItemsTotal } from "./money.ts";
+import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
 
 export const NO_FISCAL_LEGEND = "No Fiscal";
 export const FALLBACK_NOTE_ERROR = "No Fiscal fallback";
@@ -57,7 +57,7 @@ export function buildFallbackInvoice(
   const rate = order.rate || 1;
   const items = (order.medications || []).map((m) => ({
     quantity: m.quantity,
-    unit_price: toBs2(m.price * rate),
+    unit_price: fiscalUnitPriceBs(m.price, rate),
   }));
   return {
     numeroControl: synthesizeFiscalNumber(),

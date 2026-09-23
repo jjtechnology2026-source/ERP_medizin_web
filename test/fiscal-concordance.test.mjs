@@ -5,6 +5,7 @@ import {
   computeFiscalItemsExpectedTotal,
 } from "../modules/cash-register/lib/fiscal-payload.ts";
 import { toBs2, fiscalItemsTotal } from "../modules/cash-register/lib/money.ts";
+import { computeFiscalTotals } from "../modules/cash-register/lib/fiscal-totals.ts";
 
 // Convención service_fiscal (schemas.py): precios incluyen IVA ->
 // line_total = round2(qty * price); total = round2(sum(line_total))
@@ -128,4 +129,37 @@ test("fiscalItemsTotal replica subtotal del servicio (round2 por linea + round2 
   const expected = r2(items.reduce((s, it, i) => s + r2(it.quantity * ups[i]), 0));
   assert.equal(fiscalItemsTotal(items), expected);
   assert.equal(serviceTotal(items), expected);
+});
+
+// Regresión del "Resumen Fiscal": con un precio derivado sin redondear
+// (costo 1.25, ganancia 40%, IVA 0% -> 1.25/0.6 = 2.0833...), la fila "Total"
+// mostraba Bs 1775.28 mientras "Total a cobrar" cobraba Bs 1778.12. La causa era
+// redondear el USD por línea antes de aplicar la tasa. El agregado canónico
+// (computeFiscalTotals) debe salir de la MISMA matemática que la impresora.
+test("resumen fiscal: agregado en Bs == total fiscal impreso (precio 2.0833...)", () => {
+  const VIDEO_RATE = 853.5;
+  const price = 1.25 / 0.6; // 2.0833...
+  const meds = [{ price, quantity: 1, vat: 0 }];
+
+  const t = computeFiscalTotals(meds, VIDEO_RATE);
+  const items = buildFiscalPayload({ rate: VIDEO_RATE, client: {}, medications: meds, payments: [], totalreal: price }).items;
+  const oldDisplayPath = toBs2(toBs2(price) * VIDEO_RATE); // redondeo USD -> bug
+
+  assert.equal(oldDisplayPath, 1775.28);          // el valor que se veía mal
+  assert.equal(t.totalBs, fiscalItemsTotal(items)); // fuente única
+  assert.notEqual(t.totalBs, oldDisplayPath);     // el bug no reaparece
+  assert.equal(t.exemptTotalBs, t.totalBs);       // "Monto exento" == "Total"
+});
+
+test("resumen fiscal: base + IVA + exento == total en Bs (carrito mixto)", () => {
+  const meds = [
+    { price: 1.25 / 0.6, quantity: 3, vat: 0 },
+    { price: 10.44, quantity: 1, vat: 16 },
+    { price: 3.33, quantity: 3, vat: 8 },
+  ];
+  const t = computeFiscalTotals(meds, RATE);
+  const items = buildFiscalPayload({ rate: RATE, client: {}, medications: meds, payments: [], totalreal: 0 }).items;
+
+  assert.equal(t.totalBs, fiscalItemsTotal(items));
+  assert.equal(toBs2(t.taxableBaseBs + t.totalVatBs + t.exemptTotalBs), t.totalBs);
 });

@@ -1,4 +1,4 @@
-import { toBs2, fiscalItemsTotal } from "./money.ts";
+import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
 
 export type FiscalTaxCode = "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO";
 
@@ -72,7 +72,7 @@ export function buildFiscalPayload(order: any): FiscalPayload {
     items: order.medications.map((m: any) => ({
       description: m.name || m.description || "",
       quantity: m.quantity,
-      unit_price: r2(m.price * rate),
+      unit_price: fiscalUnitPriceBs(m.price, rate),
       tax_code: mapVatToTaxCode(m.vat || 16),
       sku: m.barCode || "",
     })),

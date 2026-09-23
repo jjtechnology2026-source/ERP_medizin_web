@@ -47,7 +47,7 @@ const CARD_TYPES = ["Débito", "Crédito"];
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const formatUsd = (n: number) => `$ ${r2(n).toFixed(2)}`;
-const formatBs = (n: number, rate: number) => `Bs ${r2(n * rate).toFixed(2)}`;
+const formatBs = (bs: number) => `Bs ${r2(bs).toFixed(2)}`;
 
 export default function PaymentDialog({
   onClose,
@@ -543,27 +543,27 @@ export default function PaymentDialog({
             <div className="space-y-6">
               <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Resumen Fiscal</p>
               <div className="bg-slate-50 rounded-2xl p-5 space-y-4">
-                <SummaryRow label="Base imponible:" usd={totals.taxableBase} rate={rate} />
-                {Object.entries(totals.vatByRate)
+                <SummaryRow label="Base imponible:" bs={totals.taxableBaseBs} rate={rate} />
+                {Object.entries(totals.vatByRateBs)
                   .sort(([a], [b]) => Number(a) - Number(b))
                   .map(([vat, amount]) => (
-                    <SummaryRow key={vat} label={`IVA ${vat}%:`} usd={amount} rate={rate} />
+                    <SummaryRow key={vat} label={`IVA ${vat}%:`} bs={amount} rate={rate} />
                   ))}
-                {totals.exemptTotal > 0 && (
-                  <SummaryRow label="Monto exento:" usd={totals.exemptTotal} rate={rate} />
+                {totals.exemptTotalBs > 0 && (
+                  <SummaryRow label="Monto exento:" bs={totals.exemptTotalBs} rate={rate} />
                 )}
                 <div className="h-px bg-slate-200" />
-                <SummaryRow label="Total:" usd={totals.total} rate={rate} bold highlight />
+                <SummaryRow label="Total:" bs={totals.totalBs} rate={rate} bold highlight />
                 {igtfVes > 0 && (
-                  <SummaryRow label="IGTF 3%:" usd={igtfVes / rate} rate={rate} amber />
+                  <SummaryRow label="IGTF 3%:" bs={igtfVes} rate={rate} amber />
                 )}
-                <SummaryRow label="Total a cobrar:" usd={totalConIgtfVes / rate} rate={rate} large />
-                <SummaryRow label="Total cubierto:" usd={totalPaid / rate} rate={rate} large color={totalPaid >= totalConIgtfVes ? 'green' : 'red'} />
+                <SummaryRow label="Total a cobrar:" bs={totalConIgtfVes} rate={rate} large />
+                <SummaryRow label="Total cubierto:" bs={totalPaid} rate={rate} large color={totalPaid >= totalConIgtfVes ? 'green' : 'red'} />
                 {remaining > 0 && (
-                  <SummaryRow label="Pendiente:" usd={remaining / rate} rate={rate} large color="red" />
+                  <SummaryRow label="Pendiente:" bs={remaining} rate={rate} large color="red" />
                 )}
                 {exceso > VES_TOLERANCE && (
-                  <SummaryRow label="Vuelto:" usd={exceso / rate} rate={rate} large color="amber" />
+                  <SummaryRow label="Vuelto:" bs={exceso} rate={rate} large color="amber" />
                 )}
               </div>
             </div>
@@ -638,9 +638,9 @@ function NoFiscalOutcomeDialog({ onClose, error }: { onClose: () => void; error?
   );
 }
 
-function SummaryRow({ label, usd, rate, bold, highlight, amber, large, color }: {
+function SummaryRow({ label, bs, rate, bold, highlight, amber, large, color }: {
   label: string;
-  usd: number;
+  bs: number;
   rate: number;
   bold?: boolean;
   highlight?: boolean;
@@ -655,11 +655,11 @@ function SummaryRow({ label, usd, rate, bold, highlight, amber, large, color }: 
       <span className="font-bold text-slate-500 text-sm">{label}</span>
       <div className="text-right">
         <span className={`${primaryClass} font-black ${colorClass} leading-tight`}>
-          {formatUsd(usd)}
+          {formatUsd(rate > 0 ? bs / rate : 0)}
         </span>
         <br />
         <span className="text-[10px] font-bold text-slate-400 leading-tight">
-          {formatBs(usd, rate)}
+          {formatBs(bs)}
         </span>
       </div>
     </div>

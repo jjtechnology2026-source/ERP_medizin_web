@@ -17,7 +17,7 @@ import {
   type FallbackZReport,
   type FallbackZInvoice,
 } from "./fiscal-fallback.ts";
-import { toBs2 } from "./money.ts";
+import { toBs2, fiscalLineTotalBs } from "./money.ts";
 import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos58-print.ts";
 import type { TicketHeader, TicketMoneyLine } from "./pos58-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
@@ -114,7 +114,7 @@ export function buildSaleTicketForOrder(inputs: SaleTicketInputs): NoFiscalTicke
     return {
       qty: m.quantity,
       description: m.barCode ? `[${m.barCode}] ${base}` : base,
-      amount: toBs2(m.quantity * toBs2(m.price * rate)),
+      amount: fiscalLineTotalBs(m.price, m.quantity, rate),
     };
   });
   const total = toBs2(items.reduce((sum, it) => sum + it.amount, 0));

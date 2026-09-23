@@ -3,8 +3,7 @@ import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, M
 import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { toBs2 } from "@/modules/cash-register/lib/money";
-
-const r2 = (n: number) => Math.round(n * 100) / 100;
+import { computeFiscalTotals } from "@/modules/cash-register/lib/fiscal-totals";
 
 interface CurrentOrderState {
   orders: Order[];
@@ -28,7 +27,7 @@ interface CurrentOrderActions {
   setPayment: (payment: Payment) => void;
   autoDistributePayment: (total: number, rate: number) => void;
   getCurrentOrder: () => Order;
-  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; totalBs: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number> };
+  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; totalBs: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number>; exemptTotalBs: number; taxableBaseBs: number; vatByRateBs: Record<number, number>; totalVatBs: number };
   getPaymentsForInvoice: () => Payment[];
   /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
   buildModelOrder: (profile: Record<string, any>) => Record<string, any> | null;
@@ -246,46 +245,29 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
   getComputedTotals: () => {
     const order = get().orders[get().currentOrderIndex];
-    if (!order) return { subtotal: 0, totalVat: 0, total: 0, totalBs: 0, itemCount: 0, exemptTotal: 0, taxableBase: 0, vatByRate: {} };
+    if (!order) return { subtotal: 0, totalVat: 0, total: 0, totalBs: 0, itemCount: 0, exemptTotal: 0, taxableBase: 0, vatByRate: {}, exemptTotalBs: 0, taxableBaseBs: 0, vatByRateBs: {}, totalVatBs: 0 };
 
     const rate = useCurrencyStore.getState().getEffectiveRate();
-    let total = 0;
-    let totalBs = 0;
-    let totalVat = 0;
-    let itemCount = 0;
-    let exemptTotal = 0;
-    let taxableBase = 0;
-    const vatByRate: Record<number, number> = {};
-
-    for (const med of order.medications) {
-      // Redondeo por linea en Bs: mismo orden que el servicio fiscal
-      // (schemas.py subtotal = Σ round(cantidad x precio_con_iva, 2)).
-      const lineTotal = toBs2(med.price * med.quantity);
-      total += lineTotal;
-      totalBs += toBs2(med.quantity * med.price * rate);
-      const taxAmount = lineTotal * med.vat / (100 + med.vat);
-      totalVat += taxAmount;
-      itemCount += med.quantity;
-
-      if (med.vat === 0) {
-        exemptTotal += lineTotal;
-      } else {
-        taxableBase += lineTotal - taxAmount;
-        vatByRate[med.vat] = r2((vatByRate[med.vat] || 0) + taxAmount);
-      }
-    }
-    exemptTotal = r2(exemptTotal);
-    taxableBase = r2(taxableBase);
+    // Fuente unica: misma matematica que el servicio/impresora fiscal.
+    // Los agregados en Bs son el canonico; el USD es presentacion derivada.
+    const t = computeFiscalTotals(order.medications, rate);
+    const usd = (bs: number) => toBs2(bs / rate);
 
     return {
-      subtotal: total,
-      totalVat,
-      total,
-      totalBs,
-      itemCount,
-      exemptTotal,
-      taxableBase,
-      vatByRate,
+      totalBs: t.totalBs,
+      exemptTotalBs: t.exemptTotalBs,
+      taxableBaseBs: t.taxableBaseBs,
+      vatByRateBs: t.vatByRateBs,
+      totalVatBs: t.totalVatBs,
+      itemCount: t.itemCount,
+      subtotal: usd(t.totalBs),
+      totalVat: usd(t.totalVatBs),
+      total: usd(t.totalBs),
+      exemptTotal: usd(t.exemptTotalBs),
+      taxableBase: usd(t.taxableBaseBs),
+      vatByRate: Object.fromEntries(
+        Object.entries(t.vatByRateBs).map(([vat, bs]) => [Number(vat), usd(bs)]),
+      ),
     };
   },
 

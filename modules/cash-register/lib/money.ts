@@ -9,6 +9,19 @@ export function toBs2(n: unknown): number {
   return Math.round(v * 100) / 100;
 }
 
+// Precio unitario en Bs tal como lo recibe la maquina fiscal: el catalogo esta
+// en USD y el servicio fiscal maneja Bs con EXACTAMENTE 2 decimales.
+export function fiscalUnitPriceBs(priceUsd: number, rate: number): number {
+  return toBs2(priceUsd * rate);
+}
+
+// Total de linea tal como lo totaliza la maquina: primero redondea el precio
+// unitario en Bs y recien entonces multiplica por la cantidad. Es la fuente
+// unica que deben usar resumen, payload fiscal y comprobantes.
+export function fiscalLineTotalBs(priceUsd: number, quantity: number, rate: number): number {
+  return toBs2(quantity * fiscalUnitPriceBs(priceUsd, rate));
+}
+
 // Total fiscal = suma de (cantidad x precio unitario CON IVA), redondeando
 // cada linea a 2 decimales y luego el acumulado. Espeja el subtotal que calcula
 // el servicio (schemas.py: InvoiceRequest.subtotal / total con prices_include_tax).
