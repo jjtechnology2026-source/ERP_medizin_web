@@ -172,7 +172,9 @@ function normalizeIncomingOrder(payload: Uint8Array | string): MarketplaceOrderS
       // no bloquear decode si falla la búsqueda en el store
     }
 
-    const total = parsed.total ?? normalizedItems.reduce((acc: number, item: any) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const itemsTotal = normalizedItems.reduce((acc: number, item: any) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    // Preferimos el total del payload solo si es válido (> 0); si viene 0/ausente, sumamos los ítems.
+    const total = parsed.total && Number(parsed.total) > 0 ? Number(parsed.total) : itemsTotal;
 
   return {
     orderId,
@@ -576,6 +578,14 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
                 }
               }
             }
+
+            // Recalcular el total con los precios finales ya resueltos.
+            // Los DTO de MQTT (OrderContactAndItems / OrderDto) no traen `total`,
+            // así que normalizeIncomingOrder pudo calcularlo en 0 antes del backfill.
+            normalized.total = (normalized.items || []).reduce(
+              (sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0),
+              0
+            );
 
             addNotification({
               type: 'order',
