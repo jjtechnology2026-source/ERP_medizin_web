@@ -153,7 +153,7 @@ class MqttServerService {
     const username = this.runtimeConfig?.EMQX_USER || process.env.NEXT_PUBLIC_MQTT_USERNAME;
     const password = this.runtimeConfig?.EMQX_PASS || process.env.NEXT_PUBLIC_MQTT_PASSWORD;
 
-    const finalUrl = isServer ? `mqtt://${host}:${port}` : wssUrl || `wss://${host}:${port}/mqtt`;
+    const finalUrl = isServer ? `wss://${host}:${port}/mqtt` : wssUrl || `wss://${host}:${port}/mqtt`;
 
     if (!finalUrl || finalUrl.includes("undefined") || finalUrl === "mqtt://undefined:undefined") {
       const err = "MQTT config missing (URL/Host/Port)";

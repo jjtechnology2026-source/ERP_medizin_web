@@ -1,6 +1,6 @@
 import mqtt from "mqtt";
 
-const brokerUrl = "mqtts://wb171279.ala.us-east-1.emqxsl.com:8883";
+const brokerUrl = "wss://mqtt-broker-production-7352.up.railway.app:443/mqtt";
 const baseOptions = {
   username: "medizin",
   password: "Medizin12",
