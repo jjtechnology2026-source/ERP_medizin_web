@@ -1,9 +1,9 @@
 import mqtt from "mqtt";
 
-const brokerUrl = "mqtts://v1106ae1.ala.us-east-1.emqxsl.com:8883";
+const brokerUrl = "mqtts://wb171279.ala.us-east-1.emqxsl.com:8883";
 const baseOptions = {
-  username: "inventario_medizin",
-  password: "prueba1234",
+  username: "medizin",
+  password: "Medizin12",
   clean: true,
   reconnectPeriod: 5000,
   connectTimeout: 30000,
