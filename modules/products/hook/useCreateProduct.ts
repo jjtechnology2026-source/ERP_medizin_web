@@ -18,7 +18,7 @@ export interface MedicationData {
   quantity: number;
   description: string;
   controlled: boolean;
-  vat: number;
+  vat?: number;
   antibiotic: boolean;
   minimum: number;
   image: string;
@@ -61,7 +61,11 @@ export const useCreateMedication = () => {
           quantity: parseInt(baseData.stock) || 0,
           description: baseData.description || "",
           controlled: baseData.controlled || false,
-          vat: Math.round(parseFloat(baseData.vat)) || 0,
+          // Preserve absence: a blank VAT must not be coerced to an explicit 0,
+          // so the inventory row stays NULL and falls back to the catalog/default.
+          vat: baseData.vat === undefined || baseData.vat === null || baseData.vat === ""
+            ? undefined
+            : Number(baseData.vat),
           antibiotic: baseData.antibiotic || false,
           minimum: parseInt(baseData.minimum) || 0,
           image: mainImage,
@@ -74,7 +78,15 @@ export const useCreateMedication = () => {
         };
 
         // El lote y el vencimiento son por-farmacia (inventario), no del catálogo universal: se envían solo en el increase.
-        const catalogPayload = { ...payloadData, lote: undefined, fechaVencimiento: undefined };
+        // basePrice/profitPercentage tampoco van al catálogo: el backend rechaza el pricing
+        // en `/Medications/Create`; el precio se deriva sólo en el inventory write.
+        const catalogPayload = {
+          ...payloadData,
+          basePrice: undefined,
+          profitPercentage: undefined,
+          lote: undefined,
+          fechaVencimiento: undefined,
+        };
         const { data: medResult } = await api.post(
           "/Medications/Create",
           [catalogPayload]
@@ -99,6 +111,7 @@ export const useCreateMedication = () => {
             discount: payloadData.discount,
             basePrice: payloadData.basePrice,
             profitPercentage: payloadData.profitPercentage,
+            vat: payloadData.vat,
           },
           existing: null,
         });
@@ -112,6 +125,7 @@ export const useCreateMedication = () => {
                 discount: payloadData.discount,
                 basePrice: payloadData.basePrice,
                 profitPercentage: payloadData.profitPercentage,
+                vat: payloadData.vat,
                 lote: payloadData.lote,
                 fechaVencimiento: payloadData.fechaVencimiento,
               },

@@ -73,6 +73,28 @@ test("profit-percentage-only edit on existing product writes", () => {
   );
 });
 
+test("vat-only edit on existing product writes (no silent skip)", () => {
+  assert.equal(
+    shouldWriteInventory({
+      stockDelta: 0,
+      submitted: { ...existing, vat: 8 },
+      existing: { ...existing, vat: 0 },
+    }),
+    true
+  );
+});
+
+test("matching vat is a no-op and does not force a write", () => {
+  assert.equal(
+    shouldWriteInventory({
+      stockDelta: 0,
+      submitted: { ...existing, vat: 0 },
+      existing: { ...existing, vat: 0 },
+    }),
+    false
+  );
+});
+
 test("positive stock delta writes even with no pricing change", () => {
   assert.equal(
     shouldWriteInventory({ stockDelta: 5, submitted: existing, existing }),
@@ -158,6 +180,21 @@ test("buildIncreaseItem forwards pricing fields and conditional optionals", () =
   assert.equal(item.discount, 5);
   assert.equal(item.base_price, 1000);
   assert.equal(item.profit_percentage, 20);
+});
+
+test("buildIncreaseItem forwards an explicit 0 VAT and omits an absent one", () => {
+  const withZero = buildIncreaseItem({ ...med, vat: 0 }, 0);
+  assert.equal(withZero.vat, 0, "an explicit 0% VAT must be sent, not dropped");
+  assert.equal("vat" in withZero, true);
+
+  const absent = buildIncreaseItem({ ...med }, 0);
+  assert.equal("vat" in absent, false, "an absent VAT must be omitted (leave stored)");
+});
+
+test("buildIncreaseItem sends null to clear VAT (tri-state)", () => {
+  const item = buildIncreaseItem({ ...med, vat: null }, 0);
+  assert.equal(item.vat, null);
+  assert.equal("vat" in item, true);
 });
 
 test("buildIncreaseItem omits lote and expiry when stock delta is 0", () => {

@@ -5,7 +5,8 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
-import { sellingPrice, costFromPrice, isValidProfit } from "@/modules/products/lib/pricing";
+import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice } from "@/modules/products/lib/pricing";
+import { toBs2 } from "@/modules/cash-register/lib/money";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
 type TabType = "PRECIO_STOCK" | "INFO_ADICIONAL";
@@ -107,13 +108,12 @@ export default function StockFeaturesForm({
     const min = parseInput(minStock);
     const disc = parseInput(discount);
 
-    // Si el form no tiene costo, el precio derivado queda en 0: en ese caso se
-    // conserva el precio ya guardado en vez de mandar 0 (que lo borraría).
-    const computedPrice = hasDiscount ? discountedPrice : priceWithVat;
+    // El FE no calcula ni envía el precio cobrado: el backend lo deriva de
+    // base_price/profit/IVA/descuento. `price` queda en el valor persistido para
+    // no competir con la derivación (la caja cobra ese precio guardado).
     const medicine: Medication = {
       ...(currentMedicine as Medication),
       name: nameDraft.trim() || (currentMedicine as Medication).name,
-      price: computedPrice > 0 ? computedPrice : currentMedicine.price ?? 0,
       stock: q,
       vat: selectedVat,
       minimum: min,
@@ -126,6 +126,16 @@ export default function StockFeaturesForm({
 
     const success = await saveMedicine(medicine);
     if (success) {
+      // Recargar desde el listado para que `currentMedicine` lleve el precio ya derivado
+      // por el backend (el panel muestra el precio persistido, no la vista previa).
+      try {
+        const refreshed = await useProductsStore
+          .getState()
+          .findInventoryItem(medicine.barCode, { strict: true });
+        if (refreshed) setCurrentMedicine(refreshed);
+      } catch {
+        // best-effort: el guardado ya tuvo éxito
+      }
       setShowSuccessDialog(true);
     } else {
       setFeedback({ type: "error", message: "Error al guardar el producto" });
@@ -270,10 +280,25 @@ export default function StockFeaturesForm({
                 </div>
               </div>
 
+              <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-100">
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Precio Final (cobrado)</span>
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mt-1">
+                  <p className="text-3xl font-black text-emerald-700">
+                    ${displayedChargePrice(currentMedicine).toFixed(2)}
+                  </p>
+                  <p className="text-sm font-black text-emerald-600">
+                    {toBs2(displayedChargePrice(currentMedicine) * rate).toFixed(2)} Bs
+                  </p>
+                </div>
+                <p className="text-[10px] text-emerald-600/70 font-medium mt-2">
+                  Precio persistido en el inventario: es el que cobra la caja registradora.
+                </p>
+              </div>
+
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-3xl p-6 border border-blue-100">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Precio Final (con IVA)</span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Vista previa (no cobrado)</span>
                     {hasDiscount ? (
                       <div>
                         <p className="text-lg font-bold text-slate-400 line-through">{fmt(priceWithVat)}</p>
@@ -484,11 +509,8 @@ export default function StockFeaturesForm({
                 <span className="text-sm font-black text-slate-800">{currentMedicine?.minimum ?? 0} und</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                <span className="text-xs font-bold text-slate-400">Precio unitario</span>
-                <div className="text-right">
-                  {hasDiscount && <span className="text-[10px] font-bold text-slate-400 line-through block">{fmt(priceWithVat)}</span>}
-                  <span className={`text-sm font-black ${hasDiscount ? "text-emerald-600" : "text-blue-600"}`}>{fmt(discountedPrice)}</span>
-                </div>
+                <span className="text-xs font-bold text-slate-400">Precio unitario (cobrado)</span>
+                <span className="text-sm font-black text-emerald-600">{fmt(displayedChargePrice(currentMedicine))}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">IVA aplicado</span>

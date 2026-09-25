@@ -123,8 +123,9 @@ export const productsService = {
       antibiotic: Boolean(medication.antibiotic),
       minimum: Math.round(Number(medication.minimum)) || 0,
       discount: medication.discount !== undefined ? Number(medication.discount) : null,
-      basePrice: medication.basePrice !== undefined ? Number(medication.basePrice) : null,
-      profitPercentage: medication.profitPercentage !== undefined ? Number(medication.profitPercentage) : null,
+      // Catalog create MUST NOT receive basePrice/profitPercentage: the backend
+      // rejects catalog pricing (pricing belongs to the per-pharmacy inventory
+      // write via `increaseInventory`). Sending them now breaks `/Medications/Create`.
       detalle: (medication as any).detalle || "",
     }];
 
@@ -193,7 +194,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; vat?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,

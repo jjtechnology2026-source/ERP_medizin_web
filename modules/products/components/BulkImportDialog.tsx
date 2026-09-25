@@ -233,6 +233,7 @@ export default function BulkImportDialog({
             discount: p.discount,
             basePrice: p.basePrice,
             profitPercentage: p.profitPercentage,
+            vat: p.vat,
           },
           existing: null,
         })
@@ -254,6 +255,7 @@ export default function BulkImportDialog({
                   discount: p.discount,
                   basePrice: p.basePrice,
                   profitPercentage: p.profitPercentage,
+                  vat: p.vat,
                   lote: p.lote,
                   fechaVencimiento: p.fechaVencimiento,
                 },

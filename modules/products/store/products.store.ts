@@ -318,6 +318,8 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         discount: medicine.discount,
         basePrice: medicine.basePrice,
         profitPercentage: medicine.profitPercentage,
+        // VAT participates so a VAT-only edit is not silently skipped.
+        vat: medicine.vat,
       };
 
       // Decision table (design Decision 3): `found` writes on a stock delta or a
