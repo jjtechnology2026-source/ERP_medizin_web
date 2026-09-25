@@ -28,6 +28,7 @@ import {
   FeedbackType 
 } from "../types/mqtt-orders";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { addChatMessage } from "@/modules/core/store/chat.store";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
@@ -406,7 +407,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
                 stock: full?.stock ?? 0,
                 description: full?.description || "",
                 controlled: full?.controlled || false,
-                vat: full?.vat ?? 16,
+                vat: effectiveVat(full?.vat),
                 antibiotic: full?.antibiotic || false,
                 minimum: full?.minimum || 0,
               };

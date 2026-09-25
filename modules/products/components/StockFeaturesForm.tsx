@@ -5,7 +5,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
-import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice } from "@/modules/products/lib/pricing";
+import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
@@ -24,7 +24,7 @@ export default function StockFeaturesForm({
 
   const [activeTab, setActiveTab] = useState<TabType>("PRECIO_STOCK");
   const [priceWithoutVat, setPriceWithoutVat] = useState("");
-  const [selectedVat, setSelectedVat] = useState<number>(16);
+  const [selectedVat, setSelectedVat] = useState<number>(DEFAULT_VAT_PCT);
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("");
   const [discount, setDiscount] = useState("");
@@ -44,9 +44,8 @@ export default function StockFeaturesForm({
     if (lastBarCodeRef.current === currentMedicine.barCode) return;
     lastBarCodeRef.current = currentMedicine.barCode;
     setNameDraft(currentMedicine.name ?? "");
-    const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
-      ? (currentMedicine.vat as number)
-      : 16;
+    // Ausente/desconocido resuelve al default documentado 0 (no fabricar 16).
+    const vat = effectiveVat(currentMedicine.vat);
     // "Costo (sin IVA)" es el costo (base_price); el precio de venta se deriva (costo + Ganancia% + IVA).
     // Fallback para productos viejos sin base_price: estimar el costo desde el precio guardado (quitando IVA y Ganancia).
     const storedCost = currentMedicine.basePrice;

@@ -23,6 +23,7 @@ import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
 import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { mergeEcho } from "@/modules/products/lib/inventory-write";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 import type { Medication } from "@/modules/products/types/products.types";
 
 // ─── Context (simple marker so we don't mount twice) ────────────────────────
@@ -60,7 +61,7 @@ function protoToMedication(proto: MedicationProtoLike): Medication {
         : (typeof proto.quantity === "number" ? proto.quantity : 0),
     description: proto.description || "",
     controlled: !!proto.controlled,
-    vat: typeof proto.vat === "number" ? proto.vat : 16,
+    vat: effectiveVat(proto.vat),
     antibiotic: !!proto.antibiotic,
     minimum: typeof proto.minimum === "number" ? proto.minimum : 0,
   };

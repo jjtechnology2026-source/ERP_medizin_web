@@ -34,8 +34,13 @@ export function computeFiscalItemsExpectedTotal(items: Array<{ quantity: number;
   return fiscalItemsTotal(items);
 }
 
-export function mapVatToTaxCode(vat: number): FiscalTaxCode {
-  switch (vat) {
+/**
+ * Maps a VAT percent to its fiscal tax code. Absent/undefined resolves to the
+ * documented default (`effectiveVat` -> 0) so an unknown VAT is treated as
+ * exempt, never fabricated as IVA_GENERAL. An explicit 0 stays EXENTO.
+ */
+export function mapVatToTaxCode(vat?: number | null): FiscalTaxCode {
+  switch (effectiveVat(vat)) {
     case 0: return "EXENTO";
     case 8: return "IVA_REDUCIDO";
     case 31: return "IVA_ADICIONAL";
@@ -74,9 +79,9 @@ export function buildFiscalPayload(order: any): FiscalPayload {
       description: m.name || m.description || "",
       quantity: m.quantity,
       unit_price: fiscalUnitPriceBs(m.price, rate),
-      // `effectiveVat` preserves an explicit 0% and resolves absent/undefined to
-      // the documented default (0), so 0% maps to EXENTO instead of IVA_GENERAL.
-      tax_code: mapVatToTaxCode(effectiveVat(m.vat)),
+      // `mapVatToTaxCode` applies the shared default: explicit 0% and an absent
+      // VAT both map to EXENTO instead of a fabricated IVA_GENERAL.
+      tax_code: mapVatToTaxCode(m.vat),
       sku: m.barCode || "",
     })),
     payments:

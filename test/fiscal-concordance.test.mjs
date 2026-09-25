@@ -76,6 +76,18 @@ test("tax_code: 0% explícito -> EXENTO y VAT ausente -> default efectivo (0 -> 
   );
 });
 
+// El default 0 vive en mapVatToTaxCode: un VAT ausente/null nunca debe fabricar
+// IVA_GENERAL (16). Cubre también los call sites que delegan en este helper.
+test("mapVatToTaxCode: ausente/null -> EXENTO (default 0), nunca IVA_GENERAL", () => {
+  assert.equal(mapVatToTaxCode(0), "EXENTO");
+  assert.equal(mapVatToTaxCode(undefined), "EXENTO");
+  assert.equal(mapVatToTaxCode(null), "EXENTO");
+  assert.equal(mapVatToTaxCode(NaN), "EXENTO");
+  assert.equal(mapVatToTaxCode(8), "IVA_REDUCIDO");
+  assert.equal(mapVatToTaxCode(16), "IVA_GENERAL");
+  assert.equal(mapVatToTaxCode(31), "IVA_ADICIONAL");
+});
+
 test("concordancia: total máquina == esperado por línea (carrito mixto)", () => {
   const order = {
     rate: RATE,

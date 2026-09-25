@@ -10,6 +10,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
+import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
 import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
@@ -120,7 +121,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
             quantity: item.cantidad,
             // Precio CON IVA, 2 decimales (convencion unica del sistema fiscal).
             unit_price: toBs2(item.precio_unitario),
-            tax_code: item.vat === 0 ? "EXENTO" as const : item.vat === 8 ? "IVA_REDUCIDO" as const : item.vat === 31 ? "IVA_ADICIONAL" as const : "IVA_GENERAL" as const,
+            tax_code: mapVatToTaxCode(item.vat),
             sku: item.codigo_plu,
           })),
           payments: order.payments?.length

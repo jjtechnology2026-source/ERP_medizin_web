@@ -9,6 +9,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { facturasService } from "../api/facturas.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
+import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
 import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
@@ -50,14 +51,8 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
       // precio_unitario_ves viene como BASE sin IVA desde la BD: lo llevamos a
       // CON IVA (2 decimales) para respetar la convencion unica del sistema fiscal.
       unit_price: toBs2(d.precio_unitario_ves * (1 + (d.iva_porcentaje || 0) / 100)),
-      tax_code:
-        (d.iva_porcentaje === 0
-          ? "EXENTO"
-          : d.iva_porcentaje === 8
-            ? "IVA_REDUCIDO"
-            : d.iva_porcentaje === 31
-              ? "IVA_ADICIONAL"
-              : "IVA_GENERAL") as "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO",
+      // Un IVA nulo/ausente de la BD cae al default 0 -> EXENTO (y un 0 explícito también).
+      tax_code: mapVatToTaxCode(d.iva_porcentaje),
       sku: d.producto_id || "",
     })),
     payments: detail.transacciones?.length

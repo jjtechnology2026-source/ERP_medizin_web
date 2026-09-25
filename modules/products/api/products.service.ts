@@ -1,5 +1,6 @@
 import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 
 const cleanImg = (item: any) => ({
   ...item,
@@ -169,7 +170,7 @@ export const productsService = {
           antibiotic: product.antibiotic,
           price: product.price ?? 0,
           stock: product.stock ?? 0,
-          vat: product.vat ?? 16,
+          vat: effectiveVat(product.vat),
           minimum: product.minimum ?? 0,
           basePrice: product.basePrice,
           profitPercentage: product.profitPercentage,
