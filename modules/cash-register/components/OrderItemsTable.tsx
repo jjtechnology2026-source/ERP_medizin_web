@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
+import { taxBreakdown } from "@/modules/products/lib/pricing";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function OrderItemsTable() {
@@ -13,8 +14,17 @@ export default function OrderItemsTable() {
   const rate = getEffectiveRate();
 
   const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${(price / (rate || 300)).toFixed(2)}`;
-    return `Bs ${price.toFixed(2)}`;
+    if (isDollar) return `$ ${price.toFixed(2)}`;
+    return `Bs ${(price * (rate || 1)).toFixed(2)}`;
+  };
+
+  const lineBreakdown = (med: { price: number; vat?: number }) => {
+    const b = taxBreakdown(med.price, med.vat ?? 0);
+    return (
+      <span className="block text-[9px] text-slate-400 font-medium mt-0.5">
+        Base {formatPrice(b.saleNoVat)} · IVA {formatPrice(b.iva)}
+      </span>
+    );
   };
 
   const handleDoubleClick = (index: number, currentQty: number) => {
@@ -73,7 +83,13 @@ export default function OrderItemsTable() {
                 <p className="text-[10px] text-slate-400">{med.brand}</p>
               </td>
               <td className="py-3 pr-4 font-bold text-xs text-slate-600">
-                {formatPrice(med.price)}
+                {med.discount ? (
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 line-through">{formatPrice(med.price / (1 - med.discount / 100))}</span>
+                    <span className="text-xs text-emerald-600">{formatPrice(med.price)}</span>
+                  </div>
+                ) : formatPrice(med.price)}
+                {lineBreakdown(med)}
               </td>
               <td className="py-3 pr-4">
                 {editingIndex === i ? (

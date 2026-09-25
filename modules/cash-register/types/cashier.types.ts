@@ -51,6 +51,46 @@ export interface CashierInvoiceLine {
   quantity: number;
   unitPriceVes: number;
   vatPercentage: number;
+  subtotalVes?: number;
+  productoId?: string;
+  discount?: number;
+}
+
+export interface CashierInvoiceDetail {
+  id: string;
+  controlNumber: string;
+  emittedAt: string | null;
+  clientName: string;
+  clientRif: string;
+  clientDocType: string;
+  clientDoc: string;
+  baseImponibleVes: number;
+  totalExentoVes: number;
+  ivaPorcentaje: number;
+  ivaMontoVes: number;
+  igtfMontoVes: number | null;
+  totalVes: number;
+  totalUsd: number;
+  exchangeRate: number | null;
+  pdfUrl: string | null;
+  observaciones: string | null;
+  retencionAplicada: number | null;
+  ivaRetenidoClienteVes: number | null;
+  ivaAPagarEmpresaVes: number | null;
+  lines: CashierInvoiceLine[];
+  transacciones: CashierPaymentTransaction[];
+}
+
+export interface CashierPaymentTransaction {
+  id: string;
+  tipo: string;
+  metodoPago: string;
+  moneda: string;
+  montoOriginal: number;
+  montoVes: number;
+  tasaCambio: number | null;
+  descripcion: string | null;
+  fechaHora: string;
 }
 
 export interface CashierTransaction {
@@ -69,6 +109,8 @@ export interface CashierClosePhysicalCount {
   efectivo_ves: number;
   tarjeta_ves: number;
   otros_ves: number;
+  pago_movil_ves: number;
+  biopago_ves: number;
   efectivo_usd: number;
   tarjeta_usd: number;
   otros_usd: number;
@@ -119,9 +161,18 @@ export interface CashierWorkflowState {
   sessionInvoices: CashierInvoice[];
   sessionTransactions: CashierTransaction[];
   selectedCashBoxId: string | null;
-  currentRate: number;
   errorMessage: string | null;
   infoMessage: string | null;
+  /** null = sin verificar; true/false = resultado del ultimo chequeo de /health fiscal. */
+  fiscalAvailable: boolean | null;
+}
+
+export interface MovimientoCajaPayload {
+  moneda: string;
+  monto_original: number;
+  tasa_cambio?: number;
+  metodo_pago: string;
+  descripcion?: string;
 }
 
 export interface CreateInvoicePayload {
@@ -138,13 +189,7 @@ export interface CreateInvoicePayload {
     precio_unitario_ves: number;
     iva_porcentaje: number;
   }[];
-  movimiento_caja?: {
-    moneda: string;
-    monto_original: number;
-    tasa_cambio?: number;
-    metodo_pago: string;
-    descripcion: string;
-  };
+  movimientos_caja: MovimientoCajaPayload[];
 }
 
 export interface CloseSessionPayload {

@@ -21,7 +21,12 @@ export default function LoginWrapper({ children }: LoginWrapperProps) {
         <div className="bg-white rounded-[3rem] shadow-[0_30px_70px_rgba(0,0,0,0.15)] p-10 md:p-14 border border-gray-100">{children}</div>
       </div>
 
-      {/* Footer eliminado como se solicitó */}
+      {/* Versión del sistema */}
+      <div className="absolute bottom-4 left-0 w-full text-center z-20">
+        <p className="text-[11px] text-slate-400 font-medium">
+          v{process.env.NEXT_PUBLIC_APP_VERSION || "1.0.0"}
+        </p>
+      </div>
     </div>
   );
 }

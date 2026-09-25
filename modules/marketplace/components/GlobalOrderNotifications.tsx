@@ -3,7 +3,7 @@
 import { useMqttOrders } from "../providers/MqttOrdersProvider";
 import MarketplaceOrderModal from "./MarketplaceOrderModal";
 import ModalWrapper from "@/components/shared/modals/ModalWrapper";
-import { HiOutlineCheckCircle, HiOutlineXCircle } from "react-icons/hi";
+import { HiOutlineCheckCircle, HiOutlineXCircle, HiOutlineExclamation } from "react-icons/hi";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function GlobalOrderNotifications() {
@@ -14,7 +14,9 @@ export default function GlobalOrderNotifications() {
     rejectOrder, 
     dismissOrder,
     feedback,
-    clearFeedback
+    clearFeedback,
+    mqttError,
+    clearMqttError,
   } = useMqttOrders();
 
   const handleAccept = async () => {
@@ -27,6 +29,19 @@ export default function GlobalOrderNotifications() {
 
   return (
     <>
+      {mqttError && (
+        <div className="fixed bottom-4 right-4 z-[300] max-w-sm bg-amber-50 border border-amber-300 rounded-2xl p-4 shadow-lg flex items-start gap-3">
+          <HiOutlineExclamation className="text-amber-500 w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-amber-800">Conexión MQTT</p>
+            <p className="text-xs text-amber-600 mt-0.5">{mqttError}</p>
+          </div>
+          <button onClick={clearMqttError} className="text-amber-400 hover:text-amber-600 shrink-0">
+            <HiOutlineXCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Real-time Order Modal */}
       <MarketplaceOrderModal
         order={currentOrder}

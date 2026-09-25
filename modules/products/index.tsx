@@ -7,7 +7,6 @@ import StockAutocomplete from "./components/StockAutocomplete";
 import StockFeaturesForm from "./components/StockFeaturesForm";
 import StockTaxBreakdown from "./components/StockTaxBreakdown";
 
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { MqttInventoryProvider } from "@/modules/products/providers/MqttInventoryProvider";
 import type { ViewState, StockFilter, Medication } from "@/modules/products/types/products.types";
@@ -19,16 +18,10 @@ export default function InventoryManagement() {
   const [stockTab, setStockTab] = useState<StockFilter>("GENERAL");
 
   const {
-    inventory,
     isLoading,
     setCurrentMedicine,
     setEditMode,
-    setSearchQuery,
   } = useProductsStore();
-
-  const { medicinesCatalog } = useAuthStore();
-
-  const autocompleteInventory = medicinesCatalog && medicinesCatalog.length > 0 ? medicinesCatalog : inventory;
 
   const handleStockAutocompleteSelect = (med: Medication) => {
     setCurrentMedicine(med);
@@ -66,7 +59,6 @@ export default function InventoryManagement() {
                 </div>
               ) : (
                 <StockAutocomplete
-                  inventory={autocompleteInventory}
                   onSelect={handleStockAutocompleteSelect}
                 />
               )}

@@ -1,38 +1,354 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import fiscalPrinterClient, { type FiscalSerialPort, setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
+import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
+import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
+import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
+import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
+import { pairPrinter, isWebUsbSupported, prepairPrinter, printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { buildSessionSummary } from "@/modules/cash-register/lib/z-report";
+import { runXReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 
-// Datos de soporte fiscal agrupados
+// Implementaciones fiscales reales cableadas al servicio (service_fiscal).
+// El value es la marca que usa el cliente para enrutar a /bematech/* o a las
+// rutas raiz (hka80). "PNP" se descarta: no tiene implementacion en el servicio.
 const FISCAL_SUPPORT_DATA = [
   {
-    id: "pos_venezuela",
-    name: "POS Venezuela",
-    status: "Soportado",
-    description: "Disponible mediante la integracion de la libreria POSV.",
-  },
-  {
-    id: "pnp",
-    name: "PNP",
-    status: "Soportado",
-    description: "Soportado mediante PFAbreNF, PFLine aNF y PFCierraNF en la DLL PNP.",
-  },
-  {
-    id: "factory_hka",
+    id: "hka80",
     name: "The Factory HKA",
     status: "Soportado",
-    description: "Disponible mediante la secuencia 80/81/810 del paquete The Factory.",
+    description: "FISCAT HKA80 (protocolo HKA v8.5.0) via las rutas raiz del servicio fiscal.",
+  },
+  {
+    id: "bematech",
+    name: "Potencia de POS Venezuela",
+    status: "Soportado",
+    description: "Bematech MP-4200 FI / SX4200 (FW 01.00.22) via /bematech/*.",
   },
 ];
 
+const FISCAL_PORT_STORAGE_KEY = "fiscal-serial-port";
+
+// Puerto persistido en localStorage: sobrevive al refresh aunque el
+// servicio fiscal no responda en ese momento.
+function getStoredPort(): string {
+  if (typeof window === "undefined") return "99";
+  return window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY) ?? "99";
+}
+
+function persistPort(serialPort: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(FISCAL_PORT_STORAGE_KEY, serialPort);
+}
+
 export default function FiscalConfigCard() {
-  const [implementation, setImplementation] = useState("POS Venezuela");
-  const [port, setPort] = useState("99");
-  const [exchangeRate, setExchangeRate] = useState("");
+  const chatToast = useChatToast();
+  const [implementation, setImplementation] = useState<string>(() => {
+    if (typeof window === "undefined") return "hka80";
+    return window.localStorage.getItem("fiscal-implementation") ?? "hka80";
+  });
+  const [port, setPort] = useState<string>(getStoredPort);
+  const [availablePorts, setAvailablePorts] = useState<FiscalSerialPort[]>([]);
+  const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
+  const [pos58Status, setPos58Status] = useState<"idle" | "pairing" | "done" | "error">("idle");
+  const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
+  const [showZReport, setShowZReport] = useState(false);
+  const [showZHistory, setShowZHistory] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
+  const [showManualInstall, setShowManualInstall] = useState(false);
+  // Ref para el auto-guardado: evita reintentos repetidos en el mismo puerto
+  // detectado y no pisa una seleccion manual reciente del operador.
+  const lastAutoApplyRef = useRef<Record<string, number>>({});
+  const manualOverrideRef = useRef(false);
+
+  useEffect(() => {
+    const checkService = () => {
+      fiscalPrinterClient
+        .getHealth()
+        .then(() => setServiceInstalled(true))
+        .catch(() => setServiceInstalled(false));
+    };
+
+    checkService();
+    const timer = setInterval(checkService, 15000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Auto-guardado: cuando el servicio reporta una impresora fiscal (fiscal:true)
+  // que difiere del puerto activo, se aplica sola (sin el boton Guardar).
+  useEffect(() => {
+    let disposed = false;
+
+    const applyFiscalPort = async (fiscalDevice: string) => {
+      const now = Date.now();
+      const last = lastAutoApplyRef.current[fiscalDevice] ?? 0;
+      // Throttle: como mucho un intento por puerto cada 30s.
+      if (now - last < 30000) return;
+      lastAutoApplyRef.current[fiscalDevice] = now;
+      try {
+        const res = await fiscalPrinterClient.setSerialPort(fiscalDevice);
+        if (res?.serial_port) {
+          setPort(res.serial_port);
+          persistPort(res.serial_port);
+          chatToast.show(`Impresora fiscal detectada en ${res.serial_port}. Configuración aplicada automáticamente.`);
+        }
+      } catch {
+        // El servicio no confirmo el puerto (sin maquina o marca equivocada);
+        // se deja el selector para eleccion manual sin molestar al operador.
+      }
+    };
+
+    const sync = async () => {
+      try {
+        const [health, portsRes] = await Promise.all([
+          fiscalPrinterClient.getHealth(),
+          fiscalPrinterClient.listSerialPorts(),
+        ]);
+        const ports = portsRes?.ports ?? [];
+        if (disposed) return;
+        setAvailablePorts(ports);
+
+        const activePort = health?.serial_port ? String(health.serial_port) : "";
+        const fiscalDevice = ports.find((p) => p.fiscal)?.device;
+
+        // Si hay impresora fiscal detectada y no coincide con la activa, y el
+        // operador no acaba de guardar a mano, se aplica automaticamente.
+        if (fiscalDevice && activePort && fiscalDevice !== activePort && !manualOverrideRef.current) {
+          setPort(fiscalDevice);
+          persistPort(fiscalDevice);
+          void applyFiscalPort(fiscalDevice);
+        }
+      } catch {
+        // Servicio no disponible; se mantiene la seleccion local.
+      }
+    };
+
+    sync();
+    const timer = setInterval(sync, 15000);
+
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [implementation]);
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
   };
 
+  // Cambia la marca activa del cliente fiscal (enruta a hka80 o /bematech/*).
+  const handleImplementationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const brand = e.target.value as "hka80" | "bematech";
+    setImplementation(brand);
+    setFiscalBrand(brand);
+    // Nueva marca => se re-habilita el auto-guardado del puerto fiscal.
+    manualOverrideRef.current = false;
+  };
+
+  // Instala o actualiza el servicio fiscal en la PC de la caja con un solo clic.
+  // Si el servicio ya responde (/health), actua como "Actualizar servicio":
+  // dispara el protocolo que fuerza la verificacion de actualizaciones
+  // (update.ps1 -Restart) y arranca el servicio si hace falta.
+  // Si el servicio no responde, actua como "Instalar servicio":
+  // 1. Dispara el protocolo local medizin-fiscal://install (registrado por el
+  //    instalador; ejecuta el launcher silencioso).
+  // 2. Hace polling de /health y muestra el resultado en la card.
+  // Plan B (primera vez en una maquina nueva): si el protocolo no esta
+  // registrado, se ofrece descargar el instalador .cmd (una sola vez).
+  const handleInstallService = () => {
+    setInstallStatus("installing");
+    setShowManualInstall(false);
+
+    if (serviceInstalled) {
+      chatToast.show("Buscando actualizaciones del servicio fiscal...");
+      window.location.href = "medizin-fiscal://install";
+
+      const startedAt = Date.now();
+      const interval = setInterval(async () => {
+        try {
+          const health = await fiscalPrinterClient.getHealth();
+          if (health?.status === "ok") {
+            clearInterval(interval);
+            setInstallStatus("done");
+            chatToast.show("Verificación de actualizaciones completada.");
+            setTimeout(() => setInstallStatus("idle"), 4000);
+            return;
+          }
+        } catch {
+          // el servicio se esta reiniciando por la actualizacion
+        }
+        if (Date.now() - startedAt > 30000) {
+          clearInterval(interval);
+          setInstallStatus("error");
+          chatToast.show("El servicio fiscal no respondió tras la verificación.");
+          setTimeout(() => setInstallStatus("idle"), 4000);
+        }
+      }, 3000);
+      return;
+    }
+
+    window.location.href = "medizin-fiscal://install";
+
+    const startedAt = Date.now();
+    const interval = setInterval(async () => {
+      try {
+        const health = await fiscalPrinterClient.getHealth();
+        if (health?.status === "ok") {
+          clearInterval(interval);
+          setInstallStatus("done");
+          chatToast.show("Servicio fiscal instalado correctamente. ¡Listo para facturar!");
+          setTimeout(() => setInstallStatus("idle"), 4000);
+          return;
+        }
+      } catch {
+        // aun instalando
+      }
+      if (Date.now() - startedAt > 15000) {
+        clearInterval(interval);
+        setInstallStatus("error");
+        setShowManualInstall(true);
+        chatToast.show("La instalación automática no se pudo iniciar. Use el instalador manual (una sola vez).");
+      }
+    }, 2000);
+  };
+
+  const handleDownloadInstaller = () => {
+    const origin = window.location.origin;
+    const cmd = `@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -Command "$u='${origin}/install-fiscal-service.ps1'; $p=Join-Path $env:TEMP 'install_fiscal_service.ps1'; Invoke-WebRequest $u -OutFile $p; & $p"\r\npause\r\n`;
+    const blob = new Blob([cmd], { type: "application/x-msdownload" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instalar-servicio-fiscal.cmd";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    chatToast.show("Descargado. Haga doble clic en 'instalar-servicio-fiscal.cmd' (una sola vez) y luego siempre use el botón Instalar servicio.");
+  };
+
+  const handleSavePort = async () => {
+    if (!port) {
+      chatToast.show("Selecciona un puerto de la lista antes de guardar.");
+      return;
+    }
+    setPortStatus("saving");
+    manualOverrideRef.current = true;
+    try {
+      const res = await fiscalPrinterClient.setSerialPort(port);
+      if (res?.serial_port) {
+        setPort(res.serial_port);
+        persistPort(res.serial_port);
+      }
+      setPortStatus("saved");
+      chatToast.show(`Configuración fiscal guardada correctamente (puerto ${res.serial_port ?? port}).`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    } catch (e) {
+      setPortStatus("error");
+      chatToast.show(`Error al guardar la configuración fiscal: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    }
+  };
+
+  // Detecta la impresora fiscal (USB/COM) y aplica el puerto automaticamente.
+  const handleDetectPort = async () => {
+    setPortStatus("saving");
+    try {
+      const res = await fiscalPrinterClient.detectAndApplyPort();
+      if (res?.serial_port) {
+        setPort(res.serial_port);
+        persistPort(res.serial_port);
+      }
+      setPortStatus("saved");
+      const iface = res?.interface === "usb" ? "USB" : "Serial";
+      chatToast.show(`Impresora fiscal detectada en ${res.serial_port} (${iface}) y configurada.`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    } catch (e) {
+      setPortStatus("error");
+      chatToast.show(`No se detectó impresora fiscal: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      setTimeout(() => setPortStatus("idle"), 4000);
+    }
+  };
+
+  const handleReportX = async () => {
+    setReportXStatus("printing");
+    const done = () => setReportXStatus("done");
+    const fail = () => setReportXStatus("error");
+    try {
+      // 1) Maquina fiscal: el X es un corte parcial, no cierra el turno.
+      await fiscalPrinterClient.reportX();
+      done();
+      chatToast.show("Reporte X generado en la máquina fiscal (no cierra el turno).");
+    } catch {
+      // 2) Sin maquina fiscal: se imprime el X en la POS80 (No Fiscal), con el
+      // mismo cuadre que el Z pero sin registrar nada.
+      try {
+        await prepairPrinter();
+        const profile = useAuthStore.getState().profile;
+        const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+        await useCashierWorkflowStore.getState().load(pharmacyId || undefined);
+        const { sessionInvoices, sessionTransactions } = useCashierWorkflowStore.getState();
+        const { paymentBreakdown, deviationsByMethod, summary } = buildSessionSummary({
+          sessionInvoices: sessionInvoices as Array<{ totalVes?: number }>,
+          sessionTransactions: sessionTransactions as Array<{
+            type?: string;
+            paymentMethod?: string;
+            amountVes?: number;
+          }>,
+        });
+        const res = await runXReportFallback({
+          header: {
+            name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+            rif: String(profile?.rif || ""),
+            address: String(profile?.pharmacyAddress || ""),
+            phone: String(profile?.pharmacyPhone || ""),
+          },
+          pharmacyId,
+          sessionInvoices: sessionInvoices as Array<{ controlNumber?: string; totalVes?: number }>,
+          paymentBreakdown: paymentBreakdown,
+          deviations: deviationsByMethod,
+          reconciliation: summary.reconciliation,
+          netTotal: summary.netTotal,
+          rate: useCurrencyStore.getState().getEffectiveRate(),
+          print: printNoFiscalTicket,
+        });
+        if (res.printed) {
+          done();
+          chatToast.show("Reporte X impreso en la POS80 (No Fiscal). El turno sigue abierto.");
+        } else {
+          fail();
+          chatToast.show(`No se pudo imprimir el reporte X en la POS80: ${res.error || "error"}`);
+        }
+      } catch (e) {
+        fail();
+        chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+      }
+    }
+    setTimeout(() => setReportXStatus("idle"), 4000);
+  };
+
+  const handlePairPos58 = async () => {
+    setPos58Status("pairing");
+    const res = await pairPrinter();
+    if (res.printed) {
+      setPos58Status("done");
+      chatToast.show("Impresora POS80 emparejada. Los comprobantes 'No Fiscal' saldrán por acá.");
+    } else {
+      setPos58Status("error");
+      chatToast.show(`No se pudo emparejar la POS80: ${res.error || "error"}`);
+    }
+    setTimeout(() => setPos58Status("idle"), 4000);
+  };
+
   return (
+    <>
     <div className="flex flex-col gap-8 w-full">
       {/* --- SECCIÓN SUPERIOR: CONFIGURACIÓN Y ESTADO --- */}
       <div className="grid grid-cols-1 lg:grid-cols-[2.2fr_1fr] gap-8 items-start">
@@ -41,24 +357,10 @@ export default function FiscalConfigCard() {
         <div className="bg-white p-10 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Configuración fiscal</h2>
-            <p className="text-sm font-bold text-slate-400 max-w-2xl">Organiza la tasa, la implementación fiscal y las acciones operativas en un solo bloque.</p>
+            <p className="text-sm font-bold text-slate-400 max-w-2xl">Organiza la implementación fiscal y las acciones operativas en un solo bloque.</p>
           </div>
 
           <div className="flex flex-col gap-8 max-w-3xl">
-            {/* Input: Tipo de Cambio */}
-            <div className="flex flex-col gap-2.5">
-              <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
-                Ingrese el tipo de cambio: <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="tipo de cambio"
-                value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
-                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 placeholder:text-slate-400"
-              />
-            </div>
-
             {/* Select: Implementación Fiscal */}
             <div className="flex flex-col gap-2.5">
               <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
@@ -67,12 +369,11 @@ export default function FiscalConfigCard() {
               <div className="relative">
                 <select
                   value={implementation}
-                  onChange={(e) => setImplementation(e.target.value)}
+                  onChange={handleImplementationChange}
                   className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 appearance-none pr-12"
                 >
-                  <option>POS Venezuela</option>
-                  <option>PNP</option>
-                  <option>The Factory HKA</option>
+                  <option value="hka80">The Factory HKA</option>
+                  <option value="bematech">Potencia de POS Venezuela</option>
                 </select>
                 <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
@@ -80,18 +381,36 @@ export default function FiscalConfigCard() {
               </div>
             </div>
 
-            {/* Input: Puerto */}
-            <div className="flex flex-col gap-2.5">
+            {/* Selector: Puerto */}
+            <div className="relative flex flex-col gap-2.5">
               <label className="text-[12px] font-black text-slate-800 uppercase tracking-widest ml-1">
                 Puerto de la máquina fiscal: <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
-                placeholder="99"
-                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600"
-              />
+                className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 appearance-none pr-12"
+              >
+                {availablePorts.length === 0 && (
+                  <option value="">No hay puertos detectados</option>
+                )}
+                {availablePorts.map((p) => (
+                  <option key={p.device} value={p.device}>
+                    {p.device}
+                    {p.description ? ` — ${p.description}` : ""}
+                    {p.interface === "usb" ? " (USB)" : p.interface === "serial" ? " (Serial)" : ""}
+                    {p.fiscal ? " ★" : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-slate-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+              {availablePorts.length > 0 && (
+                <p className="text-[11px] font-bold text-slate-400 ml-1">
+                  Puertos detectados por el servicio fiscal (USB/Serial según conexión). ★ = impresora fiscal identificada. Usá "Detectar impresora" para conectar automáticamente.
+                </p>
+              )}
             </div>
           </div>
 
@@ -99,19 +418,52 @@ export default function FiscalConfigCard() {
           <div className="flex flex-col gap-5 mt-2">
             <div className="flex flex-wrap items-center gap-4">
               <button
-                onClick={() => handleAction("Guardar Tasa")}
-                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95"
+                onClick={handleInstallService}
+                disabled={installStatus === "installing"}
+                className="px-10 py-5 bg-[#16a34a] text-white font-black text-[15px] rounded-xl shadow-lg shadow-green-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
               >
-                Guardar Tasa
+                {installStatus === "installing"
+                  ? serviceInstalled
+                    ? "Buscando actualizaciones..."
+                    : "Instalando servicio..."
+                  : installStatus === "done"
+                    ? "Listo"
+                    : installStatus === "error"
+                      ? "Reintentar"
+                      : serviceInstalled
+                        ? "Actualizar servicio"
+                        : "Instalar servicio"}
+              </button>
+              {showManualInstall && (
+                <button
+                  onClick={handleDownloadInstaller}
+                  className="px-10 py-5 bg-[#f59e0b] text-white font-black text-[15px] rounded-xl hover:brightness-110 transition-all active:scale-95"
+                >
+                  Descargar instalador (una sola vez)
+                </button>
+              )}
+              <button
+                onClick={handleDetectPort}
+                disabled={portStatus === "saving"}
+                className="px-10 py-5 bg-[#7c3aed] text-white font-black text-[15px] rounded-xl shadow-lg shadow-purple-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {portStatus === "saving" ? "Detectando..." : "Detectar impresora"}
               </button>
               <button
-                onClick={() => handleAction("Guardar Configuración Fiscal")}
-                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95"
+                onClick={handleSavePort}
+                disabled={portStatus === "saving"}
+                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
               >
-                Guardar Configuración Fiscal
+                {portStatus === "saving"
+                  ? "Guardando..."
+                  : portStatus === "saved"
+                    ? "Puerto guardado"
+                    : portStatus === "error"
+                      ? "Error al guardar"
+                      : "Guardar Configuración Fiscal"}
               </button>
               <button
-                onClick={() => handleAction("Abrir Diagnóstico Fiscal")}
+                onClick={() => setShowDiagnostic(true)}
                 className="px-10 py-5 bg-[#E0E3FF] text-[#4F46E5] font-black text-[15px] rounded-xl hover:brightness-105 transition-all active:scale-95"
               >
                 Abrir Diagnóstico Fiscal
@@ -119,10 +471,43 @@ export default function FiscalConfigCard() {
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <button
-                onClick={() => handleAction("Ver Historial Reporte Z")}
-                className="px-10 py-5 bg-[#0F172A] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+                onClick={handleReportX}
+                disabled={reportXStatus === "printing"}
+                className="px-10 py-5 bg-[#0f766e] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
               >
-                Ver Historial Reporte Z
+                {reportXStatus === "printing"
+                  ? "Imprimiendo reporte X..."
+                  : reportXStatus === "done"
+                    ? "Reporte X generado"
+                    : reportXStatus === "error"
+                      ? "Error en reporte X"
+                      : "Generar reporte X"}
+              </button>
+              <button
+                onClick={async () => { await prepairPrinter(); setShowZReport(true); }}
+                className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+              >
+                Generar reporte Z
+              </button>
+              <button
+                onClick={handlePairPos58}
+                disabled={!isWebUsbSupported() || pos58Status === "pairing"}
+                title={isWebUsbSupported() ? "" : "Requiere Chrome/Edge"}
+                className="px-10 py-5 bg-[#0369a1] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {pos58Status === "pairing"
+                  ? "Emparejando POS80..."
+                  : pos58Status === "done"
+                    ? "POS80 emparejada"
+                    : pos58Status === "error"
+                      ? "Error al emparejar"
+                      : "Emparejar POS80"}
+              </button>
+              <button
+                onClick={() => setShowZHistory(true)}
+                className="px-10 py-5 bg-[#374151] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+              >
+                Historial Z
               </button>
               <button
                 onClick={() => handleAction("Ver Auditoria Fiscal")}
@@ -153,7 +538,7 @@ export default function FiscalConfigCard() {
             </div>
             
             <p className="text-xs font-bold text-slate-400 px-4 leading-relaxed">
-              Disponible mediante la integracion de la libreria POSV.
+              Soporte operativo para maquinas fiscales HKA80 y Bematech (Potencia de POS Venezuela).
             </p>
           </div>
         </div>
@@ -181,5 +566,9 @@ export default function FiscalConfigCard() {
         </div>
       </div>
     </div>
+      {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
+      {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
+      {showDiagnostic && <FiscalDiagnosticDialog onClose={() => setShowDiagnostic(false)} />}
+    </>
   );
 }

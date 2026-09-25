@@ -15,6 +15,13 @@ interface MarketplaceOrderModalProps {
 export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, onReject, onClose }: MarketplaceOrderModalProps) {
   if (!order) return null;
 
+  // Fallback: si el total viene en 0/ausente (DTO de MQTT sin total), lo derivamos de los ítems.
+  const itemsTotal = (order.items || []).reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0
+  );
+  const displayTotal = order.total && order.total > 0 ? order.total : itemsTotal;
+
   // Timer color logic
   const getTimerColor = () => {
     if (secondsLeft >= 30) return "text-emerald-500";
@@ -98,7 +105,7 @@ export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, on
               <div className="mt-2 sm:mt-4 flex justify-between items-center border-t border-slate-100 pt-4 sm:pt-6">
                 <span className="text-sm sm:text-lg font-bold text-slate-700">Total:</span>
                 <span className="text-lg sm:text-2xl font-black text-blue-500">
-                  {MarketplaceOrderService.formatCurrency(order.total ?? 0)}
+                  {MarketplaceOrderService.formatCurrency(displayTotal)}
                 </span>
               </div>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { HiMenuAlt2, HiMenu, HiOutlineBell, HiSearch, HiX } from "react-icons/hi";
 import UserAvatar from "@/components/shared/dashboard/UserAvatar";
 import { useUserNavbar } from "./useUserNavbar";
@@ -9,7 +9,8 @@ import { useNotifications } from "@/modules/core/providers/NotificationProvider"
 import { NotificationsDialog } from "./NotificationsDialog";
 import { SearchBar, CurrencySwitch, NotificationsDropdown, ProfileDropdown } from "./NavbarComponents";
 import { ConfirmationDialog } from "@/components/shared/modals/ConfirmationDialog";
-import { useProductsStore } from "@/modules/products/store/products.store";
+import { productsService } from "@/modules/products/api/products.service";
+import type { Medication } from "@/modules/products/types/products.types";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useRouter } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
@@ -49,24 +50,40 @@ export default function Navbar({
     handleLogout
   } = useUserNavbar();
 
-  const { inventory } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
   const router = useRouter();
   const [searchFocused, setSearchFocused] = useState(false);
 
-  const searchResults = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q || q.length < 2) return [];
-    return inventory
-      .filter(m =>
-        m.name.toLowerCase().includes(q) ||
-        m.barCode.toLowerCase().includes(q) ||
-        m.activeIngredient.toLowerCase().includes(q) ||
-        m.brand.toLowerCase().includes(q)
-      )
-      .slice(0, 8);
-  }, [inventory, searchQuery]);
+  // Busqueda server-side del inventario de la farmacia (no depende de tener
+  // todo el inventario precargado en memoria).
+  const [searchResults, setSearchResults] = useState<Medication[]>([]);
+  useEffect(() => {
+    const q = searchQuery.trim();
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (q.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      const pharmacyId = profile?.pharmacyId;
+      if (!pharmacyId) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        const page = await productsService.getCursorInventory(pharmacyId, { query: q, limit: 8 });
+        if (!cancelled) setSearchResults(page.medications);
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, profile?.pharmacyId]);
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$${price.toFixed(2)}`;

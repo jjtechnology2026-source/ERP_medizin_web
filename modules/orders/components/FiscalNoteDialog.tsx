@@ -1,0 +1,386 @@
+"use client";
+import { useState, useMemo } from "react";
+import {
+  HiOutlineXCircle,
+  HiOutlineDocumentReport,
+  HiOutlineExclamationCircle,
+  HiOutlineOfficeBuilding,
+} from "react-icons/hi";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
+import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
+import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
+import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import type { Order } from "@/modules/orders/types/orders";
+import type {
+  FiscalNoteItem,
+  FiscalNoteCliente,
+  FiscalNoteDocumentoAfectado,
+} from "@/modules/cash-register/types/fiscal-notes.types";
+
+interface FiscalNoteDialogProps {
+  order: Order;
+  onClose: () => void;
+  mode?: "digital" | "fiscal";
+}
+
+export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: FiscalNoteDialogProps) {
+  const profile = useAuthStore((s) => s.profile);
+  const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+  const rifEmisor = profile?.rif || order.rifEmisor || "";
+  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
+
+  const [step, setStep] = useState<"form" | "loading" | "result" | "error">("form");
+  const [motivo, setMotivo] = useState("");
+  const [tasaCambio, setTasaCambio] = useState(order.rate || 1);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [resultMsg, setResultMsg] = useState("");
+  const [fiscalFallback, setFiscalFallback] = useState(false);
+
+  const defaultItems: FiscalNoteItem[] = useMemo(
+    () =>
+      order.medications.map((m) => ({
+        descripcion: m.name || m.brand || "",
+        codigo_plu: m.barCode || "",
+        cantidad: m.quantity || 0,
+        precio_unitario:
+          Math.round(((m.price || 0) / (1 + (m.vat || 0) / 100)) * (order.rate || 1) * 100) / 100,
+        vat: m.vat || 0,
+        es_exento: m.vat === 0,
+      })),
+    [order.medications],
+  );
+
+  const cliente: FiscalNoteCliente = useMemo(() => {
+    const doc = order.client?.documento || "";
+    const tipoId = (doc.match(/^[A-Za-z]/)?.[0] || "V").toUpperCase();
+    const numeroId = doc.replace(/^[A-Za-z]-?/, "").replace(/-/g, "");
+    return {
+      tipo_identificacion: tipoId,
+      numero_identificacion: numeroId,
+      razon_social: order.client?.name || "Cliente General",
+      direccion: order.client?.direccion || "",
+      telefono: order.client?.phone || "",
+      correo: order.client?.email || "",
+      pais: "VE",
+    };
+  }, [order.client]);
+
+  const documentoAfectado: FiscalNoteDocumentoAfectado = useMemo(() => {
+    const facturacion = order.facturacion;
+    return {
+      numero_documento:
+        facturacion?.resp?.numerocontrol ||
+        facturacion?.numero_control ||
+        order.id ||
+        "",
+      fecha_emision: facturacion?.resp?.fecha || order.date || "",
+      monto_total: Math.round((order.totalreal || 0) * (order.rate || 1) * 100) / 100,
+      motivo: "",
+      serie: facturacion?.resp?.serie || "001",
+    };
+  }, [order]);
+
+  const buildPayload = () => ({
+    id_pharmacy: pharmacyId,
+    entidad: "TFHKA",
+    tasa_cambio: tasaCambio,
+    rif_emisor: rifEmisor,
+    tracking_id: order.id,
+    numero_control_interno: `INT-${Date.now()}`,
+    tipo_de_pago: "Contado",
+    moneda: "VED",
+    cliente,
+    documento_afectado: { ...documentoAfectado, motivo },
+    items: defaultItems,
+    id_order: order.id,
+  });
+
+  const handleEmit = async () => {
+    if (!motivo.trim()) {
+      setErrorMsg("El motivo es obligatorio.");
+      return;
+    }
+
+    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
+    await prepairPrinter();
+    setStep("loading");
+
+    if (mode === "fiscal") {
+        const payload = {
+          customer: {
+            name: cliente.razon_social,
+            document: `${cliente.tipo_identificacion}${cliente.numero_identificacion}`,
+            address: cliente.direccion,
+          },
+          items: defaultItems.map((item) => ({
+            description: item.descripcion,
+            quantity: item.cantidad,
+            // Precio CON IVA, 2 decimales (convencion unica del sistema fiscal).
+            unit_price: toBs2(item.precio_unitario),
+            tax_code: mapVatToTaxCode(item.vat),
+            sku: item.codigo_plu,
+          })),
+          payments: order.payments?.length
+            ? order.payments.map((p: any) => {
+                if (p.method === "dollars") return { method: "cash" as const, amount: toBs2(p.amount), currency: "USD" as const, exchange_rate: tasaCambio };
+                if (p.method === "card") return { method: "card" as const, amount: toBs2(p.amount) };
+                return { method: "cash" as const, amount: toBs2(p.amount), currency: "VES" as const };
+              })
+            : [{ method: "cash" as const, amount: toBs2((order.totalreal || 0) * tasaCambio), currency: "VES" as const }],
+          prices_include_tax: true,
+          dry_run: false,
+          affected_fiscal_number: documentoAfectado.numero_documento,
+          affected_invoice_date: documentoAfectado.fecha_emision
+            ? new Date(documentoAfectado.fecha_emision).toLocaleDateString("es-VE")
+            : undefined,
+          reason: motivo,
+        };
+
+        const result = await fiscalPrinterClient.createCreditNote(payload);
+
+        const recon = reconcileFiscalTotal(result.total, payload.items);
+        if (recon) console.error("❌ [FiscalNoteDialog]", recon);
+
+        if (!result.fiscal_number) {
+          setStep("error");
+          setErrorMsg("La impresora fiscal no devolvió número de control");
+          return;
+        }
+
+        setStep("result");
+        setResultMsg(
+          `Nota de Crédito fiscal emitida: ${result.fiscal_number}`
+        );
+        return;
+      }
+
+    const payload = buildPayload();
+    const result = await fiscalNotesService.createNotaCredito(payload);
+
+    if (!result.success) {
+      // Fallback "No Fiscal" (digital o local): se sintetizan los identificadores no
+      // monetarios (money.ts sigue siendo el unico origen de montos), se imprime en la
+      // POS80 y se persiste la NC real por el endpoint existente.
+      const note = await runNoteFallback({
+        header: {
+          name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+          rif: rifEmisor || String(profile?.rif || ""),
+          address: String(profile?.pharmacyAddress || ""),
+          phone: String(profile?.pharmacyPhone || ""),
+        },
+        payload,
+        createNote: fiscalNotesService.createNotaCredito,
+        print: printNoFiscalTicket,
+        affectedDocument: documentoAfectado.numero_documento,
+        total: documentoAfectado.monto_total,
+        reason: motivo,
+      });
+
+      setFiscalFallback(true);
+      setStep("result");
+      setResultMsg(`Nota de Crédito No Fiscal emitida: ${note.numero_control}`);
+      return;
+    }
+
+    setStep("result");
+    setResultMsg(
+      `Nota de Crédito emitida: ${
+        result.response?.numero_control || "OK"
+      }`
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-slate-900 text-white rounded-2xl">
+              <HiOutlineDocumentReport size={22} />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+              Emitir Nota Fiscal
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <HiOutlineXCircle size={22} className="text-slate-400" />
+          </button>
+        </div>
+
+        {step === "form" && (
+          <div className="p-6 space-y-6">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <HiOutlineOfficeBuilding size={16} className="text-slate-500" />
+                <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">Datos del cliente</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block">Identificación</span>
+                  <span className="font-bold text-slate-800">
+                    {cliente.tipo_identificacion}-{cliente.numero_identificacion || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Razón Social</span>
+                  <span className="font-bold text-slate-800">{cliente.razon_social || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Teléfono</span>
+                  <span className="font-bold text-slate-800">{cliente.telefono || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Correo</span>
+                  <span className="font-bold text-slate-800">{cliente.correo || "—"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">Documento afectado</h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block">Nro. Documento</span>
+                  <span className="font-bold text-slate-800 font-mono">
+                    {documentoAfectado.numero_documento}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Fecha emisión</span>
+                  <span className="font-bold text-slate-800">
+                    {documentoAfectado.fecha_emision
+                      ? new Date(documentoAfectado.fecha_emision).toLocaleDateString("es-VE")
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-2">
+                Motivo
+              </label>
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Motivo de la nota fiscal..."
+                className="w-full p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 min-h-[80px] resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-2">
+                Tasa de cambio
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={tasaCambio}
+                onChange={(e) => setTasaCambio(parseFloat(e.target.value) || 0)}
+                className="w-full p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">
+                Items ({defaultItems.length})
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {defaultItems.map((item, i) => (
+                  <div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded-xl">
+                    <span className="font-bold text-slate-700 truncate flex-1">{item.descripcion}</span>
+                    <span className="font-mono text-slate-500 mx-2">x{item.cantidad}</span>
+                    <span className="font-bold text-slate-800">Bs {item.precio_unitario.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {!usesDigitalBilling && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-xl text-red-700 text-xs font-bold">
+                <HiOutlineExclamationCircle size={16} />
+                La facturación digital no está activada. Contacta al administrador.
+              </div>
+            )}
+
+            {usesDigitalBilling && !motivo.trim() && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-xl text-amber-700 text-xs font-bold">
+                <HiOutlineExclamationCircle size={16} />
+                Ingresa el motivo para habilitar la emisión.
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                onClick={onClose}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleEmit()}
+                disabled={!motivo.trim() || !usesDigitalBilling}
+                className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg disabled:opacity-50"
+              >
+                Emitir NC
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {step === "loading" && (
+          <div className="p-8 flex flex-col items-center gap-4 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
+            <p className="text-sm font-bold text-slate-600">Emitiendo nota fiscal...</p>
+          </div>
+        )}
+
+        {step === "error" && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div className="p-5 bg-red-50 rounded-full text-red-500">
+              <HiOutlineXCircle size={48} />
+            </div>
+            <p className="text-sm text-slate-500 max-w-md">{errorMsg}</p>
+            <button
+              onClick={() => setStep("form")}
+              className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
+            >
+              Volver
+            </button>
+          </div>
+        )}
+
+        {step === "result" && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div
+              className={`p-5 rounded-full ${
+                fiscalFallback ? "bg-amber-50 text-amber-500" : "bg-emerald-50 text-emerald-500"
+              }`}
+            >
+              <HiOutlineDocumentReport size={48} />
+            </div>
+            {fiscalFallback && (
+              <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-black">
+                {NO_FISCAL_LEGEND}
+              </span>
+            )}
+            <p className={`text-sm font-bold ${fiscalFallback ? "text-amber-700" : "text-emerald-700"}`}>
+              {resultMsg}
+            </p>
+            <button
+              onClick={onClose}
+              className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

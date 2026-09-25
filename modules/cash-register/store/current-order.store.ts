@@ -1,11 +1,15 @@
 import { create } from "zustand";
-import type { Payment, PaymentMethod } from "@/modules/cash-register/types/cashier.types";
+import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment } from "@/modules/cash-register/types/cashier.types";
 import type { Medication, Order } from "@/modules/orders/types/orders";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { toBs2 } from "@/modules/cash-register/lib/money";
+import { computeFiscalTotals } from "@/modules/cash-register/lib/fiscal-totals";
 
 interface CurrentOrderState {
   orders: Order[];
   currentOrderIndex: number;
   selectedPaymentMethod: PaymentMethod;
+  activePaymentMethods: PaymentMethod[];
   payments: Record<PaymentMethod, Payment>;
 }
 
@@ -19,10 +23,16 @@ interface CurrentOrderActions {
   updateQuantity: (index: number, quantity: number) => { success: boolean; error?: string };
   setCustomerField: (field: string, value: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  togglePaymentMethod: (method: PaymentMethod) => void;
   setPayment: (payment: Payment) => void;
+  autoDistributePayment: (total: number, rate: number) => void;
   getCurrentOrder: () => Order;
-  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; itemCount: number };
+  getComputedTotals: () => { subtotal: number; totalVat: number; total: number; totalBs: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number>; exemptTotalBs: number; taxableBaseBs: number; vatByRateBs: Record<number, number>; totalVatBs: number };
+  getPaymentsForInvoice: () => Payment[];
+  /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
+  buildModelOrder: (profile: Record<string, any>) => Record<string, any> | null;
   resetPayments: () => void;
+  clearCurrentOrder: () => void;
 }
 
 function createEmptyOrder(): Order {
@@ -38,7 +48,7 @@ function createEmptyOrder(): Order {
     totalreal: 0,
     totalsystem: 0,
     rifEmisor: "",
-    client: { id: "", documento: "", name: "", email: "", direccion: "", phone: "" },
+    client: { id: "", documento: "", name: "", email: "", direccion: "", phone: "", tipo_documento: "" },
     payments: [],
     rate: 1,
     gender: "",
@@ -68,6 +78,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
   orders: [createEmptyOrder()],
   currentOrderIndex: 0,
   selectedPaymentMethod: "efectivo",
+  activePaymentMethods: ["efectivo"],
   payments: createDefaultPayments(),
 
   newOrder: () => {
@@ -75,6 +86,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       orders: [...s.orders, createEmptyOrder()],
       currentOrderIndex: s.orders.length,
       payments: createDefaultPayments(),
+      activePaymentMethods: ["efectivo"],
     }));
   },
 
@@ -90,11 +102,11 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
   },
 
   deleteAllOrders: () => {
-    set({ orders: [createEmptyOrder()], currentOrderIndex: 0, payments: createDefaultPayments() });
+    set({ orders: [createEmptyOrder()], currentOrderIndex: 0, payments: createDefaultPayments(), activePaymentMethods: ["efectivo"] });
   },
 
   switchOrder: (index) => {
-    set({ currentOrderIndex: index, payments: createDefaultPayments() });
+    set({ currentOrderIndex: index, payments: createDefaultPayments(), activePaymentMethods: ["efectivo"] });
   },
 
   addMedication: (med, quantity) => {
@@ -178,10 +190,53 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
   setPaymentMethod: (method) => set({ selectedPaymentMethod: method }),
 
+  togglePaymentMethod: (method) => {
+    set((s) => {
+      const alreadyActive = s.activePaymentMethods.includes(method);
+      if (alreadyActive) {
+        if (s.activePaymentMethods.length <= 1) return s;
+        const updated = s.activePaymentMethods.filter((m) => m !== method);
+        return {
+          activePaymentMethods: updated,
+          selectedPaymentMethod: updated[0],
+        };
+      } else {
+        return {
+          activePaymentMethods: [...s.activePaymentMethods, method],
+          selectedPaymentMethod: method,
+        };
+      }
+    });
+  },
+
   setPayment: (payment) => {
     set((s) => ({
       payments: { ...s.payments, [payment.type]: payment },
     }));
+  },
+
+  autoDistributePayment: (total, rate) => {
+    const { activePaymentMethods } = get();
+    if (activePaymentMethods.length === 0) return;
+    const share = total / activePaymentMethods.length;
+    const newPayments = { ...get().payments };
+    const effectiveRate = rate > 0 ? rate : useCurrencyStore.getState().getEffectiveRate();
+
+    activePaymentMethods.forEach((method) => {
+      const current = newPayments[method];
+      if (method === "efectivo") {
+        newPayments[method] = { ...current, amount: share * effectiveRate, change: Math.max(0, (share * effectiveRate) - (total * effectiveRate)) } as CashPayment;
+      } else if (method === "dolares") {
+        newPayments[method] = { ...current, amount: share, change: 0 } as DollarPayment;
+      } else if (method === "tarjeta") {
+        newPayments[method] = { ...current, amount: share * effectiveRate } as CardPayment;
+      } else if (method === "pagomovil") {
+        newPayments[method] = { ...current, amount: share * effectiveRate } as MobilePayment;
+      } else if (method === "biopago") {
+        newPayments[method] = { ...current, amount: share * effectiveRate } as BiopagoPayment;
+      }
+    });
+    set({ payments: newPayments });
   },
 
   getCurrentOrder: () => {
@@ -190,28 +245,184 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
   getComputedTotals: () => {
     const order = get().orders[get().currentOrderIndex];
-    if (!order) return { subtotal: 0, totalVat: 0, total: 0, itemCount: 0 };
+    if (!order) return { subtotal: 0, totalVat: 0, total: 0, totalBs: 0, itemCount: 0, exemptTotal: 0, taxableBase: 0, vatByRate: {}, exemptTotalBs: 0, taxableBaseBs: 0, vatByRateBs: {}, totalVatBs: 0 };
 
-    let subtotal = 0;
-    let totalVat = 0;
-    let itemCount = 0;
-
-    for (const med of order.medications) {
-      const lineTotal = med.price * med.quantity;
-      subtotal += lineTotal;
-      totalVat += lineTotal * (med.vat / 100);
-      itemCount += med.quantity;
-    }
+    const rate = useCurrencyStore.getState().getEffectiveRate();
+    // Fuente unica: misma matematica que el servicio/impresora fiscal.
+    // Los agregados en Bs son el canonico; el USD es presentacion derivada.
+    const t = computeFiscalTotals(order.medications, rate);
+    const usd = (bs: number) => toBs2(bs / rate);
 
     return {
-      subtotal,
-      totalVat,
-      total: subtotal + totalVat,
-      itemCount,
+      totalBs: t.totalBs,
+      exemptTotalBs: t.exemptTotalBs,
+      taxableBaseBs: t.taxableBaseBs,
+      vatByRateBs: t.vatByRateBs,
+      totalVatBs: t.totalVatBs,
+      itemCount: t.itemCount,
+      subtotal: usd(t.totalBs),
+      totalVat: usd(t.totalVatBs),
+      total: usd(t.totalBs),
+      exemptTotal: usd(t.exemptTotalBs),
+      taxableBase: usd(t.taxableBaseBs),
+      vatByRate: Object.fromEntries(
+        Object.entries(t.vatByRateBs).map(([vat, bs]) => [Number(vat), usd(bs)]),
+      ),
+    };
+  },
+
+  getPaymentsForInvoice: () => {
+    const { activePaymentMethods, payments } = get();
+    return activePaymentMethods
+      .map((m) => payments[m])
+      .filter((p) => p.amount > 0);
+  },
+
+  buildModelOrder: (profile) => {
+    const order = get().orders[get().currentOrderIndex];
+    if (!order || order.medications.length === 0) return null;
+
+    const invoicePayments = get()
+      .activePaymentMethods.map((m) => get().payments[m])
+      .filter((p) => p.amount > 0);
+
+    const backendPayments = invoicePayments.map((p: any) => {
+      switch (p.type) {
+        case "efectivo": return { method: "cash", currency: "VES", amount: p.amount };
+        case "dolares":  return { method: "dollars", amount: p.amount };
+        case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount };
+        case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
+        case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
+        default:         return { method: "cash", currency: "VES", amount: p.amount };
+      }
+    });
+
+    const rate = useCurrencyStore.getState().getEffectiveRate();
+    const subtotal = order.medications.reduce((s, m) => s + m.price * m.quantity, 0);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    // IGTF: 3% sobre pagos en divisas, doble redondeo (igual que backend build_formas_pago_and_igtf)
+    const usdPayment = invoicePayments.filter(
+      (p: any) => p.type === "dolares" || (p.type === "efectivo" && p.currency === "USD")
+    );
+    const usdTotal = usdPayment.reduce((s: number, p: any) => s + p.amount, 0);
+    const igtfUsd = r2(usdTotal * 0.03);
+    const igtfVes = usdTotal > 0 ? r2(igtfUsd * rate) : 0;
+    const totalConIgtfVes = r2(subtotal * rate + igtfVes);
+
+    const totalPaidIn = invoicePayments.reduce((s, p) => {
+      if (p.type === "dolares") return s + p.amount * rate;
+      return s + p.amount;
+    }, 0);
+
+    // Ajustar pagos para que la suma coincida con el total de la orden.
+    // El exceso se registra como cambio (totalChangeOut) sin ir a TFHKA.
+    let totalChangeOut = 0;
+    let finalPayments = backendPayments;
+    const excesso = totalPaidIn - totalConIgtfVes;
+    if (excesso > rate * 0.01) {
+      for (let i = backendPayments.length - 1; i >= 0; i--) {
+        const p = backendPayments[i];
+        if (p.method !== "dollars" && p.currency !== "USD") {
+          const reduced = r2(p.amount - excesso);
+          if (reduced >= 0) {
+            finalPayments = backendPayments.map((bp, idx) =>
+              idx === i ? { ...bp, amount: reduced } : bp
+            );
+            totalChangeOut = excesso;
+            break;
+          }
+        }
+      }
+      // VES insuficiente → reducir último pago USD
+      if (totalChangeOut === 0) {
+        for (let i = backendPayments.length - 1; i >= 0; i--) {
+          const p = backendPayments[i];
+          if (p.method === "dollars" || p.currency === "USD") {
+            const reducedUsd = r2(p.amount - excesso / rate);
+            if (reducedUsd >= 0) {
+              finalPayments = backendPayments.map((bp, idx) =>
+                idx === i ? { ...bp, amount: reducedUsd } : bp
+              );
+              totalChangeOut = excesso;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const rif = (profile as any)?.rif || (profile as any)?.rifPharmacy || "J-00000000-0";
+
+    return {
+      date: new Date().toISOString(),
+      id: order.id,
+      nameGroup: (profile as any)?.name_group || "",
+      idAgent: (profile as any)?.id_agent || (profile as any)?.agentId || "",
+      nameAgent: profile?.name || "",
+      idPharmacy: (profile as any)?.pharmacyId || "",
+      idGroup: (profile as any)?.id_group || "",
+      pharmacy: (profile as any)?.pharmacyName || "",
+      medications: order.medications.map((m) => ({
+        brand: m.brand || "",
+        activeIngredient: m.activeIngredient || "",
+        dosage: m.dosage || "",
+        tablets: m.tablets || "",
+        barCode: m.barCode,
+        name: m.name,
+        image: m.image || "",
+        category: m.category || "",
+        subcategory: m.subcategory || "",
+        price: m.price,
+        quantity: m.quantity,
+        stock: m.stock,
+        description: m.description || "",
+        controlled: m.controlled || false,
+        vat: m.vat || 0,
+        antibiotic: m.antibiotic || false,
+        minimum: m.minimum || 0,
+        discount: m.discount,
+      })),
+      totalreal: subtotal,
+      totalsystem: subtotal,
+      rate,
+      payments: finalPayments,
+      changes: [],
+      totalPaidIn,
+      totalChangeOut,
+      rifEmisor: rif,
+      client: {
+        id: order.client?.id || "",
+        documento: order.client?.documento || "V-00000000",
+        name: order.client?.name || "Cliente General",
+        email: order.client?.email || "",
+        direccion: order.client?.direccion || "",
+        phone: order.client?.phone || "0000000000",
+        retencion: (() => { const v = parseFloat((order.client as any)?.retencion); return v > 0 ? v : null; })(),
+        tipo_documento: (order.client?.documento?.match(/^[A-Za-z]/)?.[0]?.toUpperCase()) || "V",
+      },
+      facturacion: null,
+      notaCredito: null,
+      numeroControlInterno: null,
+      gender: order.gender || "Male",
+      saleStatus: "Completed",
+      isControlled: order.isControlled || false,
+      saleType: "Local",
+      address: order.address || "",
+      observation: order.observation || null,
+      delivery: null,
     };
   },
 
   resetPayments: () => {
     set({ payments: createDefaultPayments() });
   },
+
+  clearCurrentOrder: () =>
+    set((s) => {
+      const updated = s.orders.map((o, i) =>
+        i === s.currentOrderIndex ? createEmptyOrder() : o
+      );
+      return { orders: updated, payments: createDefaultPayments(), activePaymentMethods: ["efectivo"] };
+    }),
 }));

@@ -29,10 +29,7 @@ export const COLUMNS = [
     key: "total_orders",
     render: (item: VentasTotales) => (
       <span className="font-bold text-blue-600">
-        {item.total_orders.toLocaleString("de-DE", {
-          minimumFractionDigits: 2,
-        })}{" "}
-        BS
+        BS {item.total_orders.toFixed(2)}
       </span>
     ),
   },

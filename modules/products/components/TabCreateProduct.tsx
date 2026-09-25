@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocumentDownload, HiOutlineTable, HiTrash } from "react-icons/hi";
 import { useCreateMedication } from "../hook/useCreateProduct";
+import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -14,6 +17,7 @@ export interface LocalImage {
 const CATEGORY_MAP: Record<string, string[]> = {
   "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
   "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Ampollas": ["Otros"],
   "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
   "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
   "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"]
@@ -123,6 +127,7 @@ export default function CreateProductPage({ setView }: any) {
   const { createMedication, isLoading, error } = useCreateMedication();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const pharmacyId = useAuthStore((s: any) => s.profile?.pharmacy_id ?? s.profile?.pharmacyId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,7 +137,7 @@ export default function CreateProductPage({ setView }: any) {
       const headers = [
         "Nombre Comercial", "Marca", "Código de Barras", "Principio Activo",
         "Dosis", "Presentación/Tabletas", "Categoría", "Subcategoría",
-        "Descripción", "Precio", "Stock Inicial", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
+        "Descripción", "Precio Base (USD)", "Ganancia (%)", "Stock Inicial", "Lote", "Vencimiento (AAAA-MM-DD)", "Mínimo Stock", "IVA", "Controlado (SI/NO)", "Antibiótico (SI/NO)"
       ];
       const dummyData = [
         {
@@ -145,8 +150,11 @@ export default function CreateProductPage({ setView }: any) {
           "Categoría": "Medicamentos",
           "Subcategoría": "Analgesicos",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
-          "Precio": 3.5,
+          "Precio Base (USD)": "3.50",
+          "Ganancia (%)": "20",
           "Stock Inicial": 20,
+          "Lote": "L-2026-001",
+          "Vencimiento (AAAA-MM-DD)": "2027-12-31",
           "Mínimo Stock": 5,
           "IVA": 16,
           "Controlado (SI/NO)": "NO",
@@ -177,6 +185,15 @@ export default function CreateProductPage({ setView }: any) {
     subcategory: "",
     description: "",
     presentation: "Tabletas",
+    price: "",
+    stock: "",
+    // El selector de IVA arranca en el default compartido (0%), no en 16.
+    vat: String(DEFAULT_VAT_PCT),
+    minimum: "0",
+    basePrice: "",
+    profit: "",
+    lote: "",
+    fechaVencimiento: "",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -253,20 +270,57 @@ export default function CreateProductPage({ setView }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Precio de venta = costo / (1 - Ganancia%) + IVA (margen sobre precio de venta)
+    const cost = parseFloat(formData.price) || 0;
+    const profitPct = parseFloat(formData.profit) || 0;
+    // Blank VAT -> undefined -> documented default 0; an explicit "0" survives.
+    const vatPct = effectiveVat(parseVatInput(formData.vat));
+    if (formData.profit && !isValidProfit(profitPct)) {
+      alert("La utilidad debe ser ≥ 0 y < 100%.");
+      return;
+    }
+    const sellingPrice = calcSellingPrice(cost, profitPct, vatPct);
+
     const payload = {
       ...formData,
       doseUnit: selectedUnit,
-      price: "0",
-      stock: "0",
-      minimum: "0",
-      vat: 0,
+      price: sellingPrice > 0 ? String(Number(sellingPrice.toFixed(2))) : "0",
+      stock: formData.stock || "0",
+      minimum: formData.minimum || "0",
+      vat: parseVatInput(formData.vat),
       controlled: false,
       antibiotic: false,
+      basePrice: cost > 0 ? cost : undefined,
+      profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
+      lote: formData.lote.trim() || undefined,
+      fechaVencimiento: formData.fechaVencimiento || undefined,
     };
 
     const result = await createMedication(payload, images);
 
     if (result.success) {
+      const newMed = {
+        barCode: payload.barCode,
+        name: payload.name,
+        brand: payload.brand,
+        activeIngredient: payload.activeIngredient,
+        dosage: `${payload.doseValue || ""} ${selectedUnit || ""}`.trim(),
+        tablets: `${payload.amount || ""} ${payload.presentation || ""}`.trim(),
+        price: parseFloat(payload.price) || 0,
+        stock: parseInt(payload.stock) || 0,
+        quantity: parseInt(payload.stock) || 0,
+        category: payload.category,
+        subcategory: payload.subcategory,
+        description: payload.description,
+        vat: effectiveVat(parseVatInput(payload.vat)),
+        controlled: false,
+        antibiotic: false,
+        minimum: parseInt(payload.minimum) || 0,
+        image: images.length > 0 ? images[0].name : "",
+        basePrice: payload.basePrice ?? undefined,
+        profitPercentage: payload.profitPercentage,
+      };
+      useProductsStore.getState().addToInventory([newMed]);
       setSuccessMsg("Producto creado exitosamente. Redirigiendo...");
       setTimeout(() => setView("LIST"), 1500);
     }
@@ -280,8 +334,8 @@ export default function CreateProductPage({ setView }: any) {
 
       <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-10">
         <div className="flex gap-6 mb-10 text-[11px] font-black text-blue-600 uppercase tracking-widest">
-          <button onClick={() => setView("LIST")} className="hover:underline flex items-center gap-1">
-            ‹ Regresar
+          <button onClick={() => setView("LIST")} className="flex items-center gap-1 hover:text-blue-800 transition-colors">
+            ← Regresar
           </button>
           <button onClick={downloadTemplate} className="flex items-center gap-1 hover:underline">
             <HiOutlineDocumentDownload size={16} /> Plantilla Excel
@@ -380,24 +434,6 @@ export default function CreateProductPage({ setView }: any) {
               </div>
             )}
 
-            <div className="space-y-5">
-              <SearchableSelect
-                label="Categoría"
-                placeholder="Seleccione una categoría"
-                required
-                value={formData.category}
-                options={CATEGORY_KEYS}
-                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
-              />
-              <SearchableSelect
-                label="Subcategoría"
-                placeholder="Seleccione una subcategoría"
-                required
-                value={formData.subcategory}
-                options={subcategoryOptions}
-                onChange={(val) => setFormData({ ...formData, subcategory: val })}
-              />
-            </div>
           </div>
 
           {/* COLUMNA DERECHA */}
@@ -452,7 +488,7 @@ export default function CreateProductPage({ setView }: any) {
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Presentación: *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque"].map((opt) => (
+                  {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque", "Ampollas"].map((opt) => (
                     <div
                       key={opt}
                       onClick={() => setFormData({ ...formData, presentation: opt })}
@@ -489,13 +525,89 @@ export default function CreateProductPage({ setView }: any) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
-                <textarea
-                  className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
-                  placeholder="ej: Escribe la descripción de tu producto..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
+              <textarea
+                className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
+                placeholder="ej: Escribe la descripción de tu producto..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <SearchableSelect
+                label="Categoría"
+                placeholder="Seleccione una categoría"
+                required
+                value={formData.category}
+                options={CATEGORY_KEYS}
+                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
+              />
+              <SearchableSelect
+                label="Subcategoría"
+                placeholder="Seleccione una subcategoría"
+                required
+                value={formData.subcategory}
+                options={subcategoryOptions}
+                onChange={(val) => setFormData({ ...formData, subcategory: val })}
+              />
+            </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6 mt-6">
+              <h3 className="text-lg font-black text-slate-800 mb-4">Precio y Stock</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <InputField
+                  label="Costo (sin IVA)"
+                  placeholder="ej: 3.00"
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e: any) => setFormData({ ...formData, price: e.target.value })}
+                />
+                <InputField
+                  label="Stock inicial"
+                  placeholder="ej: 10"
+                  type="number"
+                  step="1"
+                  value={formData.stock}
+                  onChange={(e: any) => setFormData({ ...formData, stock: e.target.value })}
+                />
+                <InputField
+                  label="IVA (%)"
+                  type="number"
+                  step="1"
+                  value={formData.vat}
+                  onChange={(e: any) => setFormData({ ...formData, vat: e.target.value })}
+                />
+                <InputField
+                  label="Stock mínimo"
+                  placeholder="ej: 5"
+                  type="number"
+                  step="1"
+                  value={formData.minimum}
+                  onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
+                />
+                <InputField
+                  label="Ganancia (%)"
+                  placeholder="ej: 20"
+                  type="number"
+                  step="1"
+                  value={formData.profit}
+                  onChange={(e: any) => setFormData({ ...formData, profit: e.target.value })}
+                />
+                <InputField
+                  label="Lote (opcional)"
+                  placeholder="ej: L-2026-001"
+                  value={formData.lote}
+                  onChange={(e: any) => setFormData({ ...formData, lote: e.target.value })}
+                />
+                <InputField
+                  label="Vencimiento (opcional)"
+                  type="date"
+                  value={formData.fechaVencimiento}
+                  onChange={(e: any) => setFormData({ ...formData, fechaVencimiento: e.target.value })}
                 />
               </div>
             </div>
@@ -527,6 +639,7 @@ export default function CreateProductPage({ setView }: any) {
         </form>
       </div>
       <BulkImportDialog
+        pharmacyId={pharmacyId}
         isOpen={showBulkImport}
         onClose={() => setShowBulkImport(false)}
         onComplete={() => {

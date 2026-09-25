@@ -1,0 +1,190 @@
+import api from "@/modules/core/api/client";
+import type { FacturaListItem, FacturaDetail, FacturaTransaccion, NotaCreditoResumen, FacturaFilters } from "../types";
+
+export const facturasService = {
+  async list(filtros: FacturaFilters): Promise<FacturaListItem[]> {
+    const response = await api.get("/admin/facturas", { params: filtros });
+    const payload = response.data?.data ?? response.data;
+    return (Array.isArray(payload) ? payload : []).map(parseFacturaListItem);
+  },
+
+  async detail(id: string): Promise<FacturaDetail> {
+    const response = await api.get(`/admin/facturas/${id}`);
+    const raw = response.data?.data ?? response.data;
+    return parseFacturaDetail(raw);
+  },
+
+  async listNotasCredito(filtros: { pharmacy_id: string; fecha_desde?: string; fecha_hasta?: string }): Promise<NotaCreditoResumen[]> {
+    const response = await api.get("/admin/notas-credito", { params: filtros });
+    const payload = response.data?.data ?? response.data;
+    return (Array.isArray(payload) ? payload : []).map((n: any) => ({
+      id: n.id ?? "",
+      factura_id: n.factura_id ?? "",
+      numero_control: n.numero_control ?? "",
+      fecha_emision: n.fecha_emision ?? "",
+      motivo: n.motivo ?? "",
+      total_ves: Number(n.total_ves ?? 0),
+      total_usd: Number(n.total_usd ?? 0),
+    }));
+  },
+
+  async getNotasCreditoPorFactura(facturaId: string): Promise<NotaCreditoResumen[]> {
+    const response = await api.get(`/admin/facturas/${facturaId}/notas-credito`);
+    const payload = response.data?.data ?? response.data;
+    return (Array.isArray(payload) ? payload : []).map((n: any) => ({
+      id: n.id ?? "",
+      factura_id: n.factura_id ?? "",
+      numero_control: n.numero_control ?? "",
+      fecha_emision: n.fecha_emision ?? "",
+      motivo: n.motivo ?? "",
+      total_ves: Number(n.total_ves ?? 0),
+      total_usd: Number(n.total_usd ?? 0),
+    }));
+  },
+
+  async createCreditNote(payload: {
+    factura_id: string;
+    sesion_caja_id: string;
+    numero_control: string;
+    motivo: string;
+    tasa_cambio: number;
+    observaciones?: string;
+    detalles: {
+      detalle_factura_id: string;
+      descripcion: string;
+      cantidad: number;
+      precio_unitario_ves: number;
+      iva_porcentaje: number;
+    }[];
+    movimientos_caja: {
+      moneda: string;
+      monto_original: number;
+      tasa_cambio?: number;
+      metodo_pago: string;
+      descripcion?: string;
+    }[];
+  }): Promise<void> {
+    await api.post("/admin/notas-credito", payload);
+  },
+
+  async createCreditNoteTFHKA(payload: {
+    id_pharmacy: string;
+    rif_emisor: string;
+    entidad?: string;
+    tasa_cambio: number;
+    tracking_id: string;
+    numero_control_interno: string;
+    cliente: {
+      tipo_identificacion: string;
+      numero_identificacion: string;
+      razon_social: string;
+      direccion: string;
+      telefono: string;
+      correo: string;
+    };
+    documento_afectado: {
+      numero_documento: string;
+      fecha_emision: string;
+      monto_total: number;
+      motivo: string;
+    };
+    items: {
+      descripcion: string;
+      codigo_plu: string;
+      cantidad: number;
+      precio_unitario: number;
+      vat: number;
+      es_exento: boolean;
+    }[];
+    sesion_caja_id: string;
+    factura_id: string;
+    detalles_persist: {
+      detalle_factura_id: string;
+      descripcion: string;
+      cantidad: number;
+      precio_unitario_ves: number;
+      iva_porcentaje: number;
+      subtotal_ves: number;
+    }[];
+    movimientos_persist: {
+      moneda: string;
+      monto_original: number;
+      tasa_cambio?: number;
+      metodo_pago: string;
+      descripcion?: string;
+    }[];
+  }): Promise<void> {
+    await api.post("/admin/Facturacion/nota_credito", payload);
+  },
+};
+
+function parseFacturaListItem(raw: any): FacturaListItem {
+  return {
+    id: raw.id ?? "",
+    sesion_caja_id: raw.sesion_caja_id ?? "",
+    pharmacy_id: raw.pharmacy_id ?? "",
+    usuario_id: raw.usuario_id ?? "",
+    numero_control: raw.numero_control ?? "",
+    fecha_emision: raw.fecha_emision ?? "",
+    cliente_nombre: raw.cliente_nombre ?? "Cliente General",
+    cliente_rif: raw.cliente_rif ?? "",
+    total_ves: Number(raw.total_ves ?? 0),
+    total_usd: Number(raw.total_usd ?? 0),
+    tasa_cambio: Number(raw.tasa_cambio ?? 1),
+    url_pdf: raw.url_pdf ?? null,
+  };
+}
+
+function parseFacturaDetail(raw: any): FacturaDetail {
+  const f = raw?.factura ?? raw;
+  const detalles = raw?.detalles ?? raw?.lines ?? [];
+  const transacciones: FacturaTransaccion[] = Array.isArray(raw?.transacciones)
+    ? raw.transacciones.map((t: any) => ({
+        id: t.id ?? "",
+        tipo: t.tipo ?? "",
+        metodo_pago: t.metodo_pago ?? "",
+        moneda: t.moneda ?? "",
+        monto_original: Number(t.monto_original ?? 0),
+        monto_ves: Number(t.monto_ves ?? 0),
+        tasa_cambio: t.tasa_cambio ?? null,
+        descripcion: t.descripcion ?? null,
+        fecha_hora: t.fecha_hora ?? "",
+      }))
+    : [];
+  return {
+    id: f.id ?? "",
+    sesion_caja_id: f.sesion_caja_id ?? "",
+    pharmacy_id: f.pharmacy_id ?? "",
+    usuario_id: f.usuario_id ?? "",
+    numero_control: f.numero_control ?? "",
+    fecha_emision: f.fecha_emision ?? "",
+    cliente_nombre: f.cliente_nombre ?? "Cliente General",
+    cliente_rif: f.cliente_rif ?? "",
+    cliente_correo: f.cliente_correo ?? null,
+    cliente_direccion: f.cliente_direccion ?? null,
+    serie_fiscal: f.serie_fiscal ?? null,
+    total_ves: Number(f.total_ves ?? f.totalVes ?? f.total ?? 0),
+    total_usd: Number(f.total_usd ?? f.totalUsd ?? 0),
+    tasa_cambio: Number(f.tasa_cambio ?? f.exchangeRate ?? 1),
+    base_imponible_ves: Number(f.base_imponible_ves ?? f.baseImponibleVes ?? 0),
+    total_exento_ves: Number(f.total_exento_ves ?? f.totalExentoVes ?? 0),
+    iva_porcentaje: Number(f.iva_porcentaje ?? f.ivaPorcentaje ?? 0),
+    iva_monto_ves: Number(f.iva_monto_ves ?? f.ivaMontoVes ?? 0),
+    igtf_monto_ves: Number(f.igtf_monto_ves ?? f.igtfMontoVes ?? 0),
+    url_pdf: f.url_pdf ?? null,
+    observaciones: f.observaciones ?? null,
+    detalles: Array.isArray(detalles)
+      ? detalles.map((d: any) => ({
+          id: d.id ?? "",
+          factura_id: d.factura_id ?? "",
+          producto_id: d.producto_id ?? undefined,
+          descripcion: d.descripcion ?? "",
+          cantidad: Number(d.cantidad ?? 0),
+          precio_unitario_ves: Number(d.precio_unitario_ves ?? 0),
+          iva_porcentaje: Number(d.iva_porcentaje ?? 0),
+          subtotal_ves: Number(d.subtotal_ves ?? 0),
+        }))
+      : [],
+    transacciones,
+  };
+}

@@ -6,8 +6,10 @@ import { SalesTypeCard } from "./components/SalesTypeCard";
 import { TopProductsCard } from "./components/TopProductsCard";
 import PanelStatsCards from "./components/PanelStatsCard";
 import { usePanel } from "./hooks/usePanel";
+import { useFiscalPrinterConnection } from "@/modules/cash-register/hooks/useFiscalPrinterConnection";
 
 export default function PanelFeature() {
+  const { state: printerState, retry } = useFiscalPrinterConnection();
   const {
     profile,
     totalSales,
@@ -31,6 +33,21 @@ export default function PanelFeature() {
           Bienvenido de nuevo, <span className="text-blue-600">{profile?.name || "Administrador"}</span>
         </p>
       </header>
+
+      {printerState === "blocked" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <p className="text-sm font-bold text-amber-800">
+              Impresora fiscal no disponible — el navegador bloqueó la conexión al dispositivo local.
+              Permitila desde el diálogo que aparece en la barra de direcciones.
+            </p>
+          </div>
+          <button onClick={retry} className="shrink-0 px-5 py-2.5 bg-amber-600 text-white text-xs font-black rounded-xl hover:bg-amber-700 transition-all active:scale-95">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Usamos el nuevo componente pasándole los datos necesarios */}
       <PanelStatsCards totalUsers={totalUsers} totalOrders={totalOrders} totalSales={totalSales} canceledOrders={canceledOrders} trends={trends} salesTrend={salesTrend} />

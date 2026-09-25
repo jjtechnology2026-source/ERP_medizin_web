@@ -1,27 +1,56 @@
 "use client";
-import { useProductSearch } from "@/modules/products/hooks/useProductSearch";
+import { useEffect, useState } from "react";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import type { Medication } from "@/modules/products/types/products.types";
+
+const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
+  { label: "Todos", value: null },
+  { label: "Con stock", value: "in" },
+  { label: "Sin stock", value: "out" },
+];
 
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
-  const { inventory } = useProductsStore();
-  const { addMedication } = useCurrentOrderStore();
-  const { query, setQuery, results, hasMore, loadMore } = useProductSearch({
+  const {
     inventory,
-    pageSize: 15,
-    onlyInStock: true,
-  });
+    isLoading,
+    hasMore,
+    page,
+    searchInventory,
+    setPage,
+    stockFilter,
+    setStockFilter,
+  } = useProductsStore();
+
+  const { addMedication } = useCurrentOrderStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
+  const [query, setQuery] = useState("");
+
+  // Busqueda server-side con debounce (dispara tambien la primera pagina al abrir).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void searchInventory(query);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, searchInventory]);
+
+  // Al cerrar se limpia el filtro para no filtrar el inventario de Productos.
+  useEffect(() => {
+    return () => {
+      setStockFilter(null);
+    };
+  }, [setStockFilter]);
+
   const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${(price / (rate || 300)).toFixed(2)}`;
-    return `Bs ${price.toFixed(2)}`;
+    if (isDollar) return `$ ${price.toFixed(2)}`;
+    return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  const handleSelect = (med: any) => {
+  const handleSelect = (med: Medication) => {
     addMedication(med, 1);
     onClose();
   };
@@ -47,12 +76,28 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               autoFocus
             />
           </div>
+
+          <div className="flex items-center gap-1.5 mt-3">
+            {STOCK_FILTERS.map((opt) => (
+              <button
+                key={opt.label}
+                onClick={() => setStockFilter(opt.value)}
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all ${
+                  stockFilter === opt.value
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {results.length === 0 ? (
+          {inventory.length === 0 ? (
             <div className="py-12 text-center text-sm font-bold text-slate-300">
-              {query ? "Sin resultados" : "Escribe para buscar productos"}
+              {isLoading ? "Buscando..." : query ? "Sin resultados" : "Escribe para buscar productos"}
             </div>
           ) : (
             <table className="w-full text-left">
@@ -65,7 +110,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {results.map((med, i) => (
+                {inventory.map((med, i) => (
                   <tr
                     key={med.barCode || i}
                     onClick={() => handleSelect(med)}
@@ -76,7 +121,12 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                       <p className="text-[10px] text-slate-400">{med.barCode}</p>
                     </td>
                     <td className="py-3 pr-4 font-bold text-xs text-slate-600">
-                      {formatPrice(med.price)}
+                      {med.discount ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 line-through">{formatPrice(med.price / (1 - med.discount / 100))}</span>
+                          <span className="text-xs text-emerald-600">{formatPrice(med.price)} <span className="text-[9px] text-slate-400">(-{med.discount}%)</span></span>
+                        </div>
+                      ) : formatPrice(med.price)}
                     </td>
                     <td className="py-3 pr-4">
                       <span className={`text-xs font-bold ${med.stock <= med.minimum ? "text-red-500" : "text-slate-500"}`}>
@@ -95,14 +145,25 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
           )}
         </div>
 
-        {hasMore && (
-          <div className="p-4 border-t border-slate-100 text-center">
-            <button
-              onClick={loadMore}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              Cargar mas resultados ({results.length} mostrados)
-            </button>
+        {inventory.length > 0 && (
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">Página {page}</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1 || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={!hasMore || isLoading}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </div>

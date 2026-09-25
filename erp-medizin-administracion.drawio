@@ -1,0 +1,133 @@
+<mxfile host="65bd71144e">
+    <diagram id="UMG6taQeyERZqSbjiYoo" name="Página-1">
+        <mxGraphModel dx="433" dy="697" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="t2" value="&lt;b&gt;ERP MEDIZIN — ADMINISTRACION Y ANALISIS&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=22;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="10" width="640" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="ci" value="&lt;b&gt;CIERRE DE CAJA&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#B91C1C;strokeColor=#B91C1C;gradientColor=#d06767;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="60" width="360" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" value="Revisar balance teorico del dia" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FEF2F2;strokeColor=#EF4444;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="ci" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" value="Contar dinero fisico: Bs, dolares, tarjeta" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FEF2F2;strokeColor=#EF4444;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="ci" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" value="Calcular diferencia vs sistema" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="ci" vertex="1">
+                    <mxGeometry x="90" y="150" width="200" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4" value="Cerrar turno e imprimir reporte" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="ci" vertex="1">
+                    <mxGeometry x="20" y="246" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ec1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="ci" source="c1" target="c2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ec2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="ci" source="c2" target="c3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ec3" value="Si" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="ci" source="c3" target="c4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="or" value="&lt;b&gt;CONSULTA DE ORDENES&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#0F766E;strokeColor=#0F766E;gradientColor=#5fa39e;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="60" width="360" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="o1" value="Ver lista de todas las ordenes" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#14B8A6;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="or" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="o2" value="Filtrar por fecha, estado o tipo de venta" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDFA;strokeColor=#14B8A6;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="or" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="o3" value="Ver detalle y factura fiscal" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="or" vertex="1">
+                    <mxGeometry x="20" y="148" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="eo1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="or" source="o1" target="o2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eo2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="or" source="o2" target="o3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="fa" value="&lt;b&gt;GESTION DE FACTURAS&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#7C3AED;strokeColor=#7C3AED;gradientColor=#a77bf3;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="60" width="360" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1" value="Ver listado de facturas emitidas" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FAF5FF;strokeColor=#A855F7;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="fa" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2" value="Ver detalle: montos, IVA, pagos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FAF5FF;strokeColor=#A855F7;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="fa" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="fdc" value="Emitir nota de credito?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#EAB308;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="fa" vertex="1">
+                    <mxGeometry x="90" y="148" width="200" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="f3" value="Emitir nota de credito (devolucion)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FEF2F2;strokeColor=#EF4444;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="fa" vertex="1">
+                    <mxGeometry x="20" y="214" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ef1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="fa" source="f1" target="f2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ef2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="fa" source="f2" target="fdc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ef3" value="Si" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="fa" source="fdc" target="f3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="es" value="&lt;b&gt;ESTADISTICAS&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#0E7490;strokeColor=#0E7490;gradientColor=#5ea2b5;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="360" width="360" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="Filtrar por producto, categoria o fecha" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#ECFEFF;strokeColor=#06B6D4;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="es" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="Ver productos vendidos e ingresos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#ECFEFF;strokeColor=#06B6D4;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="es" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" value="Alternar entre dolares y bolivares" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="es" vertex="1">
+                    <mxGeometry x="20" y="148" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="ees1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="es" source="e1" target="e2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ees2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="es" source="e2" target="e3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="re" value="&lt;b&gt;REPORTES Y METRICAS&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#16A34A;strokeColor=#16A34A;gradientColor=#63c186;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="360" width="360" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" value="Ver ventas del dia, semana y mes" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDF4;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="re" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" value="Comparar con periodo anterior" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F0FDF4;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="re" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="r3" value="Ver resumen notas credito y debito" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="re" vertex="1">
+                    <mxGeometry x="20" y="148" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="er1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="re" source="r1" target="r2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="er2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="re" source="r2" target="r3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="au" value="&lt;b&gt;AUDITORIA&lt;/b&gt;" style="swimlane;rounded=1;startSize=30;horizontal=0;fillColor=#4B5563;strokeColor=#4B5563;gradientColor=#878d97;gradientDirection=south;fontColor=#FFFFFF;fontStyle=1;fontSize=14;html=1;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="360" width="360" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="u1" value="Ver registro de todas las acciones" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F9FAFB;strokeColor=#6B7280;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="au" vertex="1">
+                    <mxGeometry x="20" y="44" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="u2" value="Filtrar por accion, usuario o fecha" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F9FAFB;strokeColor=#6B7280;strokeWidth=2;fontColor=#1E293B;fontSize=13" parent="au" vertex="1">
+                    <mxGeometry x="20" y="94" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="u3" value="Ver cambios: que, quien y cuando" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#DCFCE7;strokeColor=#22C55E;strokeWidth=2;fontColor=#1E293B;fontStyle=1;fontSize=13;shadow=1" parent="au" vertex="1">
+                    <mxGeometry x="20" y="148" width="320" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="eu1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="au" source="u1" target="u2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="eu2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;strokeWidth=2;strokeColor=#64748B;fontColor=#64748B;fontSize=10;" parent="au" source="u2" target="u3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

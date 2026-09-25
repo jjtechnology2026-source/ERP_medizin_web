@@ -1,14 +1,19 @@
 {
   "name": "inventory-system",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "private": true,
   "packageManager": "pnpm@10.33.4",
   "scripts": {
-    "dev": "next dev",
+    "dev": "rm -f .next/dev/lock && next dev",
     "generate:proto": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --proto_path=./proto/interfaces ./proto/interfaces/dto.proto ./proto/interfaces/present.proto --ts_proto_out=./proto/interfaces --ts_proto_opt=esModuleInterop=true,outputJsonMethods=true",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:fiscal": "node --experimental-strip-types --test test/fiscal-concordance.test.mjs test/fiscal-fallback.test.mjs test/z-report.test.mjs",
+    "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs",
+    "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
+    "test:inventory": "node --experimental-strip-types --test test/inventory-write.test.mjs",
+    "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

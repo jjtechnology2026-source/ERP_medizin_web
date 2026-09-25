@@ -12,21 +12,9 @@ export function useApiQuery<T>(
   } = {},
 ) {
   const { method = "GET", body, params, ...queryOptions } = options;
-  const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === "true";
-
   return useQuery<T>({
     queryKey: [...key, method, body, params],
     queryFn: async () => {
-      // Retornar Mock si estamos en Modo Test
-      if (isTestMode) {
-        const { getMockData } = require("@/docs/mocks");
-        const mock = getMockData(endpoint);
-        if (mock) {
-          console.log(`[Mock] Sirviendo datos para: ${endpoint}`);
-          return mock as T;
-        }
-      }
-
       try {
         const response = method === "POST" ? await api.post(endpoint, body) : await api.get(endpoint, { params });
 

@@ -1,10 +1,12 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { HiArrowLeft, HiOutlineCash, HiOutlineAdjustments, HiOutlineInformationCircle, HiOutlineCube, HiOutlineTag, HiOutlineShieldCheck, HiCheckCircle } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
+import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
+import { toBs2 } from "@/modules/cash-register/lib/money";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
 type TabType = "PRECIO_STOCK" | "INFO_ADICIONAL";
@@ -14,65 +16,146 @@ export default function StockFeaturesForm({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine } = useProductsStore();
+  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine, updateMedicineName } = useProductsStore();
   const { parseInput, format } = useFormatCurrency();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
+  const fmt = (v: number) => (Number.isFinite(v) ? format(v) : "—");
 
   const [activeTab, setActiveTab] = useState<TabType>("PRECIO_STOCK");
   const [priceWithoutVat, setPriceWithoutVat] = useState("");
-  const [selectedVat, setSelectedVat] = useState<number>(16);
+  const [selectedVat, setSelectedVat] = useState<number>(DEFAULT_VAT_PCT);
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [profit, setProfit] = useState("");
+  const [lote, setLote] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
+  const lastBarCodeRef = useRef<string | null | undefined>(null);
+
   useEffect(() => {
     if (!currentMedicine) return;
-    const vat = VAT_OPTIONS.includes(currentMedicine.vat as typeof VAT_OPTIONS[number])
-      ? (currentMedicine.vat as number)
-      : 16;
-    const p = currentMedicine.price ?? 0;
-    const priceExVat = vat > 0 ? p / (1 + vat / 100) : p;
-    setPriceWithoutVat(priceExVat.toFixed(2));
+    if (lastBarCodeRef.current === currentMedicine.barCode) return;
+    lastBarCodeRef.current = currentMedicine.barCode;
+    setNameDraft(currentMedicine.name ?? "");
+    // Ausente/desconocido resuelve al default documentado 0 (no fabricar 16).
+    const vat = effectiveVat(currentMedicine.vat);
+    // "Costo (sin IVA)" es el costo (base_price); el precio de venta se deriva (costo + Ganancia% + IVA).
+    // Fallback para productos viejos sin base_price: estimar el costo desde el precio guardado (quitando IVA y Ganancia).
+    const storedCost = currentMedicine.basePrice;
+    if (storedCost !== undefined) {
+      setPriceWithoutVat(String(storedCost));
+    } else if (currentMedicine.price && currentMedicine.price > 0) {
+      const profitPct = currentMedicine.profitPercentage ?? 0;
+      const estCost = costFromPrice(currentMedicine.price, profitPct, vat);
+      setPriceWithoutVat(estCost.toFixed(2));
+    } else {
+      setPriceWithoutVat("");
+    }
     setSelectedVat(vat);
-    setQuantity(String(currentMedicine.stock ?? 0));
+    setQuantity(""); // ponytail: start empty — stock is added, not replaced
+    setLote("");
+    setFechaVencimiento("");
     setMinStock(String(currentMedicine.minimum ?? 0));
+    setDiscount(currentMedicine.discount !== undefined ? String(currentMedicine.discount) : "");
+    setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage) : "");
   }, [currentMedicine]);
 
-  const priceWithVat = useMemo(() => {
-    const p = parseInput(priceWithoutVat);
-    return p * (1 + selectedVat / 100);
-  }, [priceWithoutVat, selectedVat, parseInput]);
+  const profitInvalid = profit.trim() !== "" && !isValidProfit(parseInput(profit));
 
-  const finalPriceUSD = priceWithVat;
-  const finalPriceVES = priceWithVat * rate;
+  const priceWithVat = useMemo(() => {
+    const c = parseInput(priceWithoutVat); // costo
+    return sellingPrice(c, parseInput(profit) || 0, selectedVat);
+  }, [priceWithoutVat, selectedVat, profit, parseInput]);
+
+  const discountPercent = parseInput(discount);
+  const hasDiscount = discountPercent > 0;
+
+  const discountedPrice = useMemo(() => {
+    if (!hasDiscount) return priceWithVat;
+    return priceWithVat * (1 - discountPercent / 100);
+  }, [priceWithVat, discountPercent, hasDiscount]);
+
+  const finalPriceUSD = discountedPrice;
+  const finalPriceVES = discountedPrice * rate;
+
+  const base = parseInput(priceWithoutVat);
+  const profitPct = parseInput(profit);
+  const discountPct = hasDiscount ? discountPercent : 0;
+  const priceWithProfit = isValidProfit(profitPct) ? base / (1 - profitPct / 100) : NaN;
+  const ganancia = priceWithProfit - base;
+  const subtotal = priceWithProfit * (1 - discountPct / 100);
+  const iva = subtotal * selectedVat / 100;
 
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
+    if (profitInvalid) {
+      setFeedback({ type: "error", message: "La utilidad debe ser ≥ 0 y < 100%." });
+      return;
+    }
     setIsSaving(true);
     setFeedback(null);
 
-    const p = parseInput(priceWithoutVat);
+    const c = parseInput(priceWithoutVat); // costo
     const q = parseInput(quantity);
     const min = parseInput(minStock);
+    const disc = parseInput(discount);
 
+    // El FE no calcula ni envía el precio cobrado: el backend lo deriva de
+    // base_price/profit/IVA/descuento. `price` queda en el valor persistido para
+    // no competir con la derivación (la caja cobra ese precio guardado).
     const medicine: Medication = {
       ...(currentMedicine as Medication),
-      price: p * (1 + selectedVat / 100),
+      name: nameDraft.trim() || (currentMedicine as Medication).name,
       stock: q,
       vat: selectedVat,
       minimum: min,
+      discount: disc || undefined,
+      basePrice: c || undefined,
+      profitPercentage: profit ? parseInput(profit) : undefined,
+      lote: lote.trim() || undefined,
+      fechaVencimiento: fechaVencimiento.trim() || undefined,
     };
 
     const success = await saveMedicine(medicine);
     if (success) {
+      // Recargar desde el listado para que `currentMedicine` lleve el precio ya derivado
+      // por el backend (el panel muestra el precio persistido, no la vista previa).
+      try {
+        const refreshed = await useProductsStore
+          .getState()
+          .findInventoryItem(medicine.barCode, { strict: true });
+        if (refreshed) setCurrentMedicine(refreshed);
+      } catch {
+        // best-effort: el guardado ya tuvo éxito
+      }
       setShowSuccessDialog(true);
     } else {
       setFeedback({ type: "error", message: "Error al guardar el producto" });
     }
     setIsSaving(false);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!currentMedicine?.barCode || !trimmed) return;
+    if (trimmed === currentMedicine.name) return;
+    setIsSavingName(true);
+    setFeedback(null);
+    const ok = await updateMedicineName(currentMedicine.barCode, trimmed);
+    if (ok) {
+      setNameDraft(trimmed);
+      setFeedback({ type: "success", message: "Nombre actualizado correctamente." });
+    } else {
+      setFeedback({ type: "error", message: "Error al actualizar el nombre" });
+    }
+    setIsSavingName(false);
   };
 
   const handleCancel = () => {
@@ -169,7 +252,7 @@ export default function StockFeaturesForm({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Precio Base (sin IVA)</label>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Costo (sin IVA)</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                     <input
@@ -196,15 +279,58 @@ export default function StockFeaturesForm({
                 </div>
               </div>
 
+              <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-100">
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Precio Final (cobrado)</span>
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mt-1">
+                  <p className="text-3xl font-black text-emerald-700">
+                    ${displayedChargePrice(currentMedicine).toFixed(2)}
+                  </p>
+                  <p className="text-sm font-black text-emerald-600">
+                    {toBs2(displayedChargePrice(currentMedicine) * rate).toFixed(2)} Bs
+                  </p>
+                </div>
+                <p className="text-[10px] text-emerald-600/70 font-medium mt-2">
+                  Precio persistido en el inventario: es el que cobra la caja registradora.
+                </p>
+              </div>
+
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-3xl p-6 border border-blue-100">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Precio Final (con IVA)</span>
-                    <p className="text-3xl font-black text-slate-800 mt-1">{format(priceWithVat)}</p>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Vista previa (no cobrado)</span>
+                    {hasDiscount ? (
+                      <div>
+                        <p className="text-lg font-bold text-slate-400 line-through">{fmt(priceWithVat)}</p>
+                        <p className="text-3xl font-black text-emerald-600 mt-0.5">
+                          {fmt(discountedPrice)}
+                          <span className="ml-2 px-2 py-0.5 bg-emerald-100 rounded-lg text-[11px] font-black text-emerald-700">-{discountPercent}%</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-3xl font-black text-slate-800 mt-1">{fmt(priceWithVat)}</p>
+                    )}
+                    <div className="mt-4 space-y-1.5 pt-4 border-t border-blue-100/70">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Costo (sin IVA)</span>
+                        <span className="font-black text-slate-700">{format(base)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Ganancia {profit || "0"}%</span>
+                        <span className="font-black text-blue-600">{fmt(ganancia)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">Precio de venta (sin IVA)</span>
+                        <span className="font-black text-slate-700">{fmt(priceWithProfit)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-500">IVA {selectedVat}%</span>
+                        <span className="font-black text-indigo-600">{fmt(iva)}</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex flex-col text-xs font-bold text-slate-500 gap-1 border-t md:border-t-0 md:border-l border-blue-100 pt-3 md:pt-0 md:pl-6">
-                    <span>USD: <strong className="text-blue-600 font-black">${finalPriceUSD.toFixed(2)}</strong></span>
-                    <span>VES: <strong className="text-indigo-600 font-black">{finalPriceVES.toFixed(2)} Bs</strong></span>
+                    <span>USD: <strong className="text-blue-600 font-black">{Number.isFinite(finalPriceUSD) ? `$${finalPriceUSD.toFixed(2)}` : "—"}</strong></span>
+                    <span>VES: <strong className="text-indigo-600 font-black">{Number.isFinite(finalPriceVES) ? `${finalPriceVES.toFixed(2)} Bs` : "—"}</strong></span>
                   </div>
                 </div>
               </div>
@@ -212,7 +338,10 @@ export default function StockFeaturesForm({
               <div className="border-t border-slate-100 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Existencias en stock</label>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
+                      Agregar al stock (+)
+                      {medStock > 0 && <span className="ml-2 font-normal text-[10px] text-slate-400">(actual: {medStock})</span>}
+                    </label>
                     <input type="text" inputMode="numeric" value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       placeholder="0"
@@ -227,6 +356,46 @@ export default function StockFeaturesForm({
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Descuento (%)</label>
+                    <input type="text" inputMode="decimal" value={discount}
+                      onChange={(e) => setDiscount(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Ganancia (%)</label>
+                    <input type="text" inputMode="decimal" value={profit}
+                      onChange={(e) => setProfit(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                    {profitInvalid && (
+                      <p className="text-[10px] font-bold text-rose-600 ml-1">La utilidad debe ser ≥ 0 y &lt; 100%.</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
+                      Lote
+                      <span className="ml-2 font-normal text-[10px] text-slate-400">(opcional)</span>
+                    </label>
+                    <input type="text" value={lote}
+                      onChange={(e) => setLote(e.target.value)}
+                      placeholder="ej: L-2026-001"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">
+                      Vencimiento
+                      <span className="ml-2 font-normal text-[10px] text-slate-400">(opcional)</span>
+                    </label>
+                    <input type="date" value={fechaVencimiento}
+                      onChange={(e) => setFechaVencimiento(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
                 </div>
 
                 <div className="bg-slate-50 rounded-3xl p-5 border border-slate-100 mt-4">
@@ -236,8 +405,11 @@ export default function StockFeaturesForm({
                     </div>
                     <div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor total del stock</span>
-                      <p className="text-xl font-black text-slate-800 mt-1">{format(priceWithVat * (parseInput(quantity) || 0))}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">{parseInput(quantity) || 0} unidades x {format(priceWithVat)} c/u</p>
+                      <p className="text-xl font-black text-slate-800 mt-1">{fmt(discountedPrice * (parseInput(quantity) || 0))}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {parseInput(quantity) || 0} unidades x {fmt(discountedPrice)} c/u
+                        {hasDiscount && <span className="block text-emerald-600 font-bold">(con {discountPercent}% desc.)</span>}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -255,9 +427,23 @@ export default function StockFeaturesForm({
               {currentMedicine ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nombre comercial</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.name}</p>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          value={nameDraft}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-200/60 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        />
+                        <button
+                          onClick={handleSaveName}
+                          disabled={isSavingName || !nameDraft.trim() || nameDraft.trim() === currentMedicine.name}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isSavingName ? "Guardando..." : "Guardar nombre"}
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Código de barras</span>
@@ -322,12 +508,16 @@ export default function StockFeaturesForm({
                 <span className="text-sm font-black text-slate-800">{currentMedicine?.minimum ?? 0} und</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                <span className="text-xs font-bold text-slate-400">Precio unitario</span>
-                <span className="text-sm font-black text-blue-600">{format(priceWithVat)}</span>
+                <span className="text-xs font-bold text-slate-400">Precio unitario (cobrado)</span>
+                <span className="text-sm font-black text-emerald-600">{fmt(displayedChargePrice(currentMedicine))}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400">IVA aplicado</span>
                 <span className="text-sm font-black text-slate-800">{selectedVat}%</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
+                <span className="text-xs font-bold text-slate-400">Descuento</span>
+                <span className="text-sm font-black text-slate-800">{discount || "0"}%</span>
               </div>
             </div>
           </div>

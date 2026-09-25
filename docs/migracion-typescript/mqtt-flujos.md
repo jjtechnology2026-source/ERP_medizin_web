@@ -55,7 +55,7 @@ Cuando el cliente se conecta, se suscribe a estos topics:
 - farmacia/alertas/stock
 - pharmacy/{pharmacyId}/insert_inventory
 - pharmacy/{pharmacyId}/update_inventory
-- pharmacy/{pharmacyId}/remove_inventory
+- pharmacy/{pharmacyId}/decrease_inventory
 
 ### Marketplace y ordenes remotas
 
@@ -203,7 +203,7 @@ La aplicacion usa el mensaje DtoUpdateMedications para tres operaciones reales:
 
 - pharmacy/{pharmacyId}/insert_inventory
 - pharmacy/{pharmacyId}/update_inventory
-- pharmacy/{pharmacyId}/remove_inventory
+- pharmacy/{pharmacyId}/decrease_inventory
 
 ### Mensaje principal: DtoUpdateMedications
 
@@ -263,7 +263,7 @@ Que hace el receptor:
 - Misma ruta que insert_inventory.
 - Update por barCode.
 
-#### pharmacy/{pharmacyId}/remove_inventory
+#### pharmacy/{pharmacyId}/decrease_inventory
 
 Que manda:
 
@@ -277,7 +277,7 @@ Que hace el receptor:
 
 Riesgo detectado para la migracion:
 
-- En el receptor actual hay una ambiguedad semantica: para remove_inventory se usa quantity como nuevo stock, aunque el emisor tambien calcula stock restante en el campo stock. Esto debe corregirse o normalizarse en TypeScript para evitar divergencia de inventario.
+- En el receptor actual hay una ambiguedad semantica: para decrease_inventory se usa quantity como nuevo stock, aunque el emisor tambien calcula stock restante en el campo stock. Esto debe corregirse o normalizarse en TypeScript para evitar divergencia de inventario.
 
 ## Flujos Protobuf de Marketplace Cliente -> Farmacia
 
@@ -463,7 +463,7 @@ Que hace la app al recibirlo:
 
 - Busca la orden marketplace local.
 - La cambia a Completed y saleType delivery.
-- Publica remove_inventory por MQTT.
+- Publica decrease_inventory por MQTT.
 - Descuenta inventario local.
 - Guarda cambios en disco.
 
@@ -572,7 +572,7 @@ Responsabilidades:
 - Escuchar ventas de otras maquinas.
 - Escuchar updates de inventario.
 - Escuchar alertas de stock.
-- Escuchar protobuf de insert_inventory, update_inventory y remove_inventory.
+- Escuchar protobuf de insert_inventory, update_inventory y decrease_inventory.
 - Aplicar cambios sobre el inventario local.
 
 ### MarketplaceOrdersResponseNotifier
@@ -599,7 +599,7 @@ Responsabilidades:
 - Los topics del marketplace y de inventario no siguen una sola convencion de idioma.
 - Hay mezcla de JSON y protobuf en el mismo cliente; no conviene abstraerlos como si fueran iguales.
 - El provider de inventario hace side effects directos sobre persistencia local.
-- La semantica de remove_inventory debe normalizarse antes del port.
+- La semantica de decrease_inventory debe normalizarse antes del port.
 - Los mensajes payment_accepted se infieren por nombre del topic, no por payload.
 - Hay listeners que hoy solo registran eventos pero no completan el flujo de negocio.
 
@@ -620,7 +620,7 @@ Separar la migracion MQTT en capas:
 - ClientId estable por farmacia.
 - Suscripcion a todos los topics listados.
 - Soporte para JSON y protobuf.
-- Recepcion y aplicacion de insert_inventory, update_inventory y remove_inventory.
+- Recepcion y aplicacion de insert_inventory, update_inventory y decrease_inventory.
 - Recepcion de marketplace en pharmacy/{pharmacyId}.
 - Procesamiento de payment_accepted.
 - Emision de accept_order y negada_order.

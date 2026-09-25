@@ -49,8 +49,8 @@ export default function ModalWrapper({ isOpen, onClose, children, zIndex = 100 }
             : 'opacity-0 translate-y-2 scale-[0.98]'
         }`}
         style={{
-          // Esta curva (Quintic) es la clave de la elegancia: suave al inicio, rápida en medio, muy lenta al final.
-          transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)'
+          transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
+          willChange: 'transform, opacity'
         }}
         onClick={(e) => e.stopPropagation()}
       >

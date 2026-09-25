@@ -520,7 +520,7 @@ export const MQTT_TOPICS = {
   stockAlerts: 'farmacia/alertas/stock',
   inventoryInsert: (pharmacyId: string) => `pharmacy/${pharmacyId}/insert_inventory`,
   inventoryUpdate: (pharmacyId: string) => `pharmacy/${pharmacyId}/update_inventory`,
-  inventoryRemove: (pharmacyId: string) => `pharmacy/${pharmacyId}/remove_inventory`,
+  inventoryDecrease: (pharmacyId: string) => `pharmacy/${pharmacyId}/decrease_inventory`,
   marketplacePharmacy: (pharmacyId: string) => `pharmacy/${pharmacyId}`,
   pendingOrdersWildcard: 'farmacia/ordenes/pendientes/+',
   pendingOrdersConfirmationWildcard: 'farmacia/ordenes/confirmacion/+',

@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import { HiX } from "react-icons/hi";
 import { cn } from "@/modules/core/utils/ui"; 
 import { SidebarItem, SidebarHeader } from "./SidebarComponents";
-import { MENU_ITEMS } from "./menuConstants";
+import { MENU_ITEMS, filterMenuByPermits } from "./menuConstants";
 import { useAuth } from "@/modules/core/hooks/useAuth";
+import { usePermissions } from "@/modules/core/hooks/usePermissions";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { ConfirmationDialog } from "@/components/shared/modals/ConfirmationDialog";
 
 export default function Sidebar({ 
@@ -26,6 +28,11 @@ export default function Sidebar({
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const { logout } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+
+  const { permits, isAdmin } = usePermissions();
+  const profile = useAuthStore((state) => state.profile);
+  // Sin perfil (modo test / bypass) no restringimos para no vaciar el menú.
+  const menuItems = filterMenuByPermits(MENU_ITEMS, permits, isAdmin || !profile);
 
   const handleExpandToggle = () => {
     if (onExpandToggle) {
@@ -82,7 +89,7 @@ export default function Sidebar({
 
       {/* Botón para colapsar/expandir (opcional, integrado en el diseño) */}
       <nav className="flex-1 overflow-y-auto px-3 py-6 scrollbar-hide space-y-1">
-        {MENU_ITEMS.map((item, index) => (
+        {menuItems.map((item, index) => (
           <React.Fragment key={index}>
             {item.isHeader ? (
               <SidebarHeader name={item.name} isExpanded={isExpanded} />

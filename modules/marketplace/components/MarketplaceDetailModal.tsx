@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useState } from "react";
 import { HiOutlineXCircle } from "react-icons/hi";
 import { Order } from "../../orders/types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
@@ -11,33 +10,16 @@ interface MarketplaceDetailModalProps {
 }
 
 export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDetailModalProps) {
-  const [visibleOrder, setVisibleOrder] = useState<Order | null>(order);
-  const [isOpen, setIsOpen] = useState(!!order);
-
-  useEffect(() => {
-    if (order) {
-      setVisibleOrder(order);
-      setIsOpen(true);
-      return;
-    }
-    setIsOpen(false);
-  }, [order]);
+  if (!order) return null;
 
   const handleClose = () => {
-    setIsOpen(false);
-    setTimeout(() => {
-      setVisibleOrder(null);
-      onClose();
-    }, 330);
+    onClose();
   };
 
-  if (!visibleOrder) return null;
-
-  // Cálculo del total (usando totalreal o sumando items)
-  const totalOrder = visibleOrder.totalreal || visibleOrder.medications?.reduce((acc, med) => acc + (med.price * med.quantity), 0) || 0;
+  const totalOrder = order.totalreal || order.medications?.reduce((acc, med) => acc + (med.price * med.quantity), 0) || 0;
 
   return (
-    <ModalWrapper isOpen={isOpen} onClose={handleClose} zIndex={100}>
+    <ModalWrapper isOpen={!!order} onClose={handleClose} zIndex={100}>
       <div className="w-full max-w-6xl rounded-[3rem] bg-white shadow-2xl overflow-hidden flex flex-col p-4">
         {/* Header (Match Image 3) */}
         <div className="flex justify-between items-center px-10 py-8">
@@ -61,15 +43,15 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
               <div className="grid grid-cols-1 gap-y-5">
                 <div className="grid grid-cols-[140px_1fr] items-center">
                   <span className="text-base font-bold text-slate-400">Cliente:</span>
-                  <span className="text-base font-black text-slate-800">{visibleOrder.client?.name || "Sin nombre"}</span>
+                  <span className="text-base font-black text-slate-800">{order.client?.name || "Sin nombre"}</span>
                 </div>
                 <div className="grid grid-cols-[140px_1fr] items-center">
                   <span className="text-base font-bold text-slate-400">Cédula:</span>
-                  <span className="text-base font-black text-slate-800">{visibleOrder.client?.documento || "---"}</span>
+                  <span className="text-base font-black text-slate-800">{order.client?.documento || "---"}</span>
                 </div>
                 <div className="grid grid-cols-[140px_1fr] items-start">
                   <span className="text-base font-bold text-slate-400 pt-1">Dirección:</span>
-                  <span className="text-base font-black text-slate-800 leading-relaxed">{visibleOrder.client?.direccion || "N/A"}</span>
+                  <span className="text-base font-black text-slate-800 leading-relaxed">{order.client?.direccion || "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -80,15 +62,15 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
               <div className="grid grid-cols-1 gap-y-5">
                 <div className="grid grid-cols-[140px_1fr] items-center">
                   <span className="text-base font-bold text-slate-400">ID de Orden:</span>
-                  <span className="text-base font-black text-slate-800 break-all">{visibleOrder.id}</span>
+                  <span className="text-base font-black text-slate-800 break-all">{order.id}</span>
                 </div>
                 <div className="grid grid-cols-[140px_1fr] items-center">
                   <span className="text-base font-bold text-slate-400">Tipo de entrega:</span>
-                  <span className="text-base font-black text-slate-800 capitalize">{visibleOrder.saleType || "Marketplace"}</span>
+                  <span className="text-base font-black text-slate-800 capitalize">{order.saleType || "Marketplace"}</span>
                 </div>
                 <div className="grid grid-cols-[140px_1fr] items-center">
                   <span className="text-base font-bold text-slate-400">Fecha:</span>
-                  <span className="text-base font-black text-slate-800">{new Date(visibleOrder.date).toLocaleString('es-VE')}</span>
+                  <span className="text-base font-black text-slate-800">{new Date(order.date).toLocaleString('es-VE')}</span>
                 </div>
               </div>
             </div>
@@ -114,17 +96,17 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
 
               {/* Items Section */}
               <div className="p-6 flex flex-col gap-6 overflow-y-auto max-h-[600px]">
-                {visibleOrder.medications?.map((med, idx) => (
+                {order.medications?.map((med, idx) => (
                   <div key={idx} className="grid grid-cols-[80px_1fr_120px] items-center border-b border-slate-50 pb-6 last:border-0 last:pb-0">
                     <span className="text-center text-lg font-black text-slate-800">{med.quantity}</span>
                     <div className="px-6 flex flex-col">
                       <span className="text-lg font-black text-slate-800 leading-tight">{med.name}</span>
-                      <span className="text-xs font-bold text-slate-400 mt-1">Código: {visibleOrder.id.slice(-10).toUpperCase()}</span>
+                      <span className="text-xs font-bold text-slate-400 mt-1">Código: {order.id.slice(-10).toUpperCase()}</span>
                     </div>
                     <span className="text-right text-lg font-black text-blue-600">{med.price.toFixed(2)} USD</span>
                   </div>
                 ))}
-                {!visibleOrder.medications?.length && (
+                {!order.medications?.length && (
                   <p className="text-center py-20 text-slate-400 font-bold italic text-lg">No hay productos listados</p>
                 )}
               </div>

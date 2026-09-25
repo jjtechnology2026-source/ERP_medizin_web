@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import CashierSessionCard from "@/modules/cash-register/components/CashierSessionCard";
 import ProductSearchBar from "@/modules/cash-register/components/ProductSearchBar";
 import ActionButtons from "@/modules/cash-register/components/ActionButtons";
@@ -14,14 +14,18 @@ import PaymentDialog from "@/modules/cash-register/components/PaymentDialog";
 
 export default function CashRegisterFeature() {
   const { load, activeSession, isLoading } = useCashierWorkflowStore();
-  const profile = useAuthStore((s) => s.profile);
-  const pharmacyId = profile?.pharmacyId ?? profile?.id_group;
+  const { data: session } = useSession();
+
+  // pharmacyId directamente de la sesión de NextAuth (valor confirmado en logs)
+  const pharmacyId = (session?.user as any)?.pharmacyId;
 
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
   useEffect(() => {
-    if (pharmacyId) load(pharmacyId);
+    if (pharmacyId) {
+      load(pharmacyId);
+    }
   }, [pharmacyId, load]);
 
   return (
