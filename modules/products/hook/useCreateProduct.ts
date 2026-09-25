@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import api from "@/modules/core/api/client";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { productsService } from "@/modules/products/api/products.service";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
 
 export interface MedicationData {
   brand: string;
@@ -85,27 +86,38 @@ export const useCreateMedication = () => {
           )
         );
 
-        // Ligar inventario de la farmacia vía HTTP increase (el backend ya no suscribe insert_inventory por MQTT)
-        try {
-          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-          const quantityVal = parseInt(baseData.stock) || 0;
-          if (pharmacyId && quantityVal > 0) {
-            await productsService.increaseInventory(pharmacyId, [
+        // Ligar inventario de la farmacia vía HTTP increase (el backend ya no suscribe insert_inventory por MQTT).
+        // El gate es (qty>0 || hasPricing): un alta sin stock pero con precio también debe ligar (PRICING-2).
+        // Un fallo de ligado NO debe reportarse como éxito (2.9): se deja propagar al catch externo.
+        const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+        const quantityVal = parseInt(baseData.stock) || 0;
+        const shouldLink = shouldWriteInventory({
+          stockDelta: quantityVal,
+          submitted: {
+            price: payloadData.price,
+            minimum: payloadData.minimum,
+            discount: payloadData.discount,
+            basePrice: payloadData.basePrice,
+            profitPercentage: payloadData.profitPercentage,
+          },
+          existing: null,
+        });
+        if (pharmacyId && payloadData.barCode && shouldLink) {
+          await productsService.increaseInventory(pharmacyId, [
+            buildIncreaseItem(
               {
-                bar_code: payloadData.barCode,
-                stock: quantityVal,
+                barCode: payloadData.barCode,
                 price: payloadData.price,
                 minimum: payloadData.minimum,
-                discount: payloadData.discount !== undefined ? Number(payloadData.discount) : null,
-                base_price: payloadData.basePrice !== undefined ? Number(payloadData.basePrice) : null,
-                profit_percentage: payloadData.profitPercentage !== undefined ? Number(payloadData.profitPercentage) : null,
-                ...(payloadData.lote ? { lote: payloadData.lote } : {}),
-                ...(payloadData.fechaVencimiento ? { fecha_vencimiento_lote: payloadData.fechaVencimiento } : {}),
+                discount: payloadData.discount,
+                basePrice: payloadData.basePrice,
+                profitPercentage: payloadData.profitPercentage,
+                lote: payloadData.lote,
+                fechaVencimiento: payloadData.fechaVencimiento,
               },
-            ]);
-          }
-        } catch (e) {
-          // noop - ligar inventario es secundario, no debe bloquear la creación
+              quantityVal
+            ),
+          ]);
         }
 
         return { success: true, medication: Array.isArray(medResult) && medResult.length > 0 ? medResult[0] : medResult, images: uploadedImages };
