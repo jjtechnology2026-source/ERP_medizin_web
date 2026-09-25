@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown, derivePrice, effectiveVat, parseVatInput, displayedChargePrice, DEFAULT_VAT_PCT } from "../modules/products/lib/pricing.ts";
 import { toBs2, fiscalUnitPriceBs } from "../modules/cash-register/lib/money.ts";
 
@@ -55,6 +56,24 @@ test("bulkSellingPrice devuelve undefined sin base y NaN con utilidad invalida",
 
 test("DEFAULT_VAT_PCT es 0 (fallback documentado, explícito 0 se preserva)", () => {
   assert.equal(DEFAULT_VAT_PCT, 0);
+});
+
+// El estado inicial del formulario .tsx no es ejecutable en node --test (JSX),
+// así que se pinnea por fuente: arranca en el default compartido y no reintroduce
+// ni el literal "16" ni una coerción `|| 16`.
+test("TabCreateProduct: el selector de IVA arranca en DEFAULT_VAT_PCT (0), no en 16", () => {
+  const src = readFileSync(
+    new URL("../modules/products/components/TabCreateProduct.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /vat:\s*String\(DEFAULT_VAT_PCT\)/, "el estado inicial debe usar String(DEFAULT_VAT_PCT)");
+  assert.doesNotMatch(src, /vat:\s*"16"/, 'no debe volver el default literal "16"');
+  assert.doesNotMatch(src, /placeholder="16"/, "el placeholder no debe sugerir 16");
+  assert.doesNotMatch(
+    src,
+    /parseInt\(\s*[^)]*vat[^)]*\)\s*\|\|\s*16|parseVatInput\([^)]*\)\s*\|\|\s*16/,
+    "no debe reintroducirse la coerción || 16",
+  );
 });
 
 test("effectiveVat: valor finito gana; ausente/NaN/negativo-ausente cae al default 0", () => {

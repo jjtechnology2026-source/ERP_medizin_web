@@ -4,7 +4,7 @@ import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput } from "@/modules/products/lib/pricing";
+import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -187,7 +187,8 @@ export default function CreateProductPage({ setView }: any) {
     presentation: "Tabletas",
     price: "",
     stock: "",
-    vat: "16",
+    // El selector de IVA arranca en el default compartido (0%), no en 16.
+    vat: String(DEFAULT_VAT_PCT),
     minimum: "0",
     basePrice: "",
     profit: "",
@@ -575,7 +576,6 @@ export default function CreateProductPage({ setView }: any) {
                 />
                 <InputField
                   label="IVA (%)"
-                  placeholder="16"
                   type="number"
                   step="1"
                   value={formData.vat}
