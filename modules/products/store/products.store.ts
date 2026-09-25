@@ -361,9 +361,10 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         }
       } catch (e) {
         // Revert the optimistic upsert and surface the failure to the caller.
+        // A failed write must NOT stamp recentMutations: the optimistic stock
+        // was rolled back, so an echo arriving later must still be applied.
         console.error("[saveMedicine] increaseInventory error:", e);
         set({ inventory: previousInventory });
-        set({ recentMutations: { ...get().recentMutations, [barCode]: Date.now() } });
         return false;
       }
 
