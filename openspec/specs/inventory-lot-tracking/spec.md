@@ -33,7 +33,7 @@ The system MUST define `lote?: string` on `Medication`, `BulkProductRow` (in `mo
 - THEN the code type-checks and the payload omits the field
 
 ### Requirement: StockFeaturesForm Captures Lot on Add-Stock
-The system MUST render an optional lot input in `StockFeaturesForm` and MUST forward a trimmed `lote` on the `saveMedicine` increase item only when a positive stock delta fires the increase.
+The system MUST render an optional lot input in `StockFeaturesForm` and MUST forward a trimmed `lote` only when the stock delta is greater than zero. When a save fires the increase with a zero stock delta to persist price fields, the item MUST omit `lote`, so a price edit writes only the no-lot scope and never attaches a lot to a non-stock write (`modules/products/store/products.store.ts:337`).
 
 #### Scenario: User adds stock with lot
 - GIVEN the form shows the Lote input and the user enters a lot plus a positive quantity
@@ -44,6 +44,11 @@ The system MUST render an optional lot input in `StockFeaturesForm` and MUST for
 - GIVEN the Lote input is empty
 - WHEN the user saves a positive quantity
 - THEN the increase item omits the lot (SIN LOTE) and the save succeeds
+
+#### Scenario: Price-only edit carrying a lot value
+- GIVEN the user changes a price field with a zero stock delta and the Lote input has a value
+- WHEN the user saves
+- THEN the increase fires for the price but the item omits `lote`
 
 #### Scenario: Lot-only edit (zero quantity)
 - GIVEN the user changes the lot but leaves quantity at zero and no price/minimum/discount changed
@@ -104,3 +109,16 @@ The system MUST treat `lote` as free text: trim surrounding whitespace before se
 - GIVEN a user enters " L-2026-01 "
 - WHEN the intake is processed
 - THEN the forwarded lot is "L-2026-01" (trimmed)
+
+### Requirement: No-Lote Writes Do Not Fabricate Lot Labels
+The system MUST NOT create a new lot-labeled inventory row, nor assign a lot label, as a side effect of a no-lote price save. Any price change a no-lote save makes to existing rows MUST NOT create, rename, or re-label lot rows.
+
+#### Scenario: No new lot row
+- GIVEN a product has one or more existing lot rows
+- WHEN a no-lote price is saved
+- THEN no new lot-labeled row is created
+
+#### Scenario: Existing lots keep their labels
+- GIVEN a product has lot rows "L-2026-01" and "L-2026-02"
+- WHEN a no-lote price is saved
+- THEN both labels remain unchanged and no lot label is reassigned
