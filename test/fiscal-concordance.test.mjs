@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildFiscalPayload,
   computeFiscalItemsExpectedTotal,
+  mapVatToTaxCode,
 } from "../modules/cash-register/lib/fiscal-payload.ts";
 import { toBs2, fiscalItemsTotal } from "../modules/cash-register/lib/money.ts";
 import { computeFiscalTotals } from "../modules/cash-register/lib/fiscal-totals.ts";
@@ -43,6 +44,36 @@ test("buildFiscalPayload convierte precios USD a Bs redondeados", () => {
   });
   assert.equal(payload.items[0].unit_price, r2(10.44 * RATE));
   assert.equal(payload.prices_include_tax, true);
+});
+
+// Regresión independiente: la assertion lee el tax_code EMITIDO directamente y
+// NO lo re-deriva (a diferencia de dbTotal, que mapea tax_code -> vat). Un `vat: 0`
+// explícito debe ser EXENTO, no IVA_GENERAL; un VAT ausente cae al default efectivo 0.
+test("tax_code: 0% explícito -> EXENTO y VAT ausente -> default efectivo (0 -> EXENTO)", () => {
+  const payload = buildFiscalPayload({
+    rate: RATE,
+    client: {},
+    medications: [
+      { name: "cero", price: 5, quantity: 1, vat: 0 },
+      { name: "ausente", price: 5, quantity: 1 },
+      { name: "general", price: 5, quantity: 1, vat: 16 },
+      { name: "reducido", price: 5, quantity: 1, vat: 8 },
+      { name: "adicional", price: 5, quantity: 1, vat: 31 },
+    ],
+    payments: [],
+    totalreal: 0,
+  });
+
+  assert.equal(mapVatToTaxCode(0), "EXENTO");
+  assert.deepEqual(
+    payload.items.map((it) => it.tax_code),
+    ["EXENTO", "EXENTO", "IVA_GENERAL", "IVA_REDUCIDO", "IVA_ADICIONAL"],
+  );
+  assert.equal(
+    payload.items[1].tax_code,
+    payload.items[0].tax_code,
+    "un VAT ausente debe resolver al mismo default efectivo que 0%",
+  );
 });
 
 test("concordancia: total máquina == esperado por línea (carrito mixto)", () => {

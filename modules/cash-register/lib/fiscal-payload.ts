@@ -1,4 +1,5 @@
 import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
+import { effectiveVat } from "../../products/lib/pricing.ts";
 
 export type FiscalTaxCode = "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO";
 
@@ -73,7 +74,9 @@ export function buildFiscalPayload(order: any): FiscalPayload {
       description: m.name || m.description || "",
       quantity: m.quantity,
       unit_price: fiscalUnitPriceBs(m.price, rate),
-      tax_code: mapVatToTaxCode(m.vat || 16),
+      // `effectiveVat` preserves an explicit 0% and resolves absent/undefined to
+      // the documented default (0), so 0% maps to EXENTO instead of IVA_GENERAL.
+      tax_code: mapVatToTaxCode(effectiveVat(m.vat)),
       sku: m.barCode || "",
     })),
     payments:
