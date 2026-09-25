@@ -13,7 +13,7 @@ export interface Medication {
   stock: number;
   description: string;
   controlled: boolean;
-  vat: number;
+  vat?: number;
   antibiotic: boolean;
   minimum: number;
   discount?: number;

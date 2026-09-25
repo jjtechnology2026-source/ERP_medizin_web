@@ -70,7 +70,7 @@ export default function InventoryList({
   };
 
   const breakdownLine = (med: Medication) => {
-    const b = taxBreakdown(med.price, med.vat, med.basePrice);
+    const b = taxBreakdown(med.price, med.vat ?? 0, med.basePrice);
     return (
       <span className="block text-[9px] text-slate-400 font-medium mt-0.5">
         Base {formatPrice(b.saleNoVat)} · IVA {formatPrice(b.iva)}
@@ -196,7 +196,7 @@ export default function InventoryList({
           pdf.setFont("helvetica", "normal");
         }
 
-        const breakdown = taxBreakdown(item.price, item.vat, item.basePrice);
+        const breakdown = taxBreakdown(item.price, item.vat ?? 0, item.basePrice);
         pdf.text(item.barCode || "-", colX[0], currentY);
         pdf.text(item.name ? item.name.slice(0, 26) : "-", colX[1], currentY);
         pdf.text(String(item.stock ?? 0), colX[2], currentY);

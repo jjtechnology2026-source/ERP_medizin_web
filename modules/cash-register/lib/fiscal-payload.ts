@@ -1,4 +1,5 @@
 import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
+import { effectiveVat } from "../../products/lib/pricing.ts";
 
 export type FiscalTaxCode = "EXENTO" | "IVA_GENERAL" | "IVA_REDUCIDO" | "IVA_ADICIONAL" | "PERCIBIDO";
 
@@ -33,8 +34,13 @@ export function computeFiscalItemsExpectedTotal(items: Array<{ quantity: number;
   return fiscalItemsTotal(items);
 }
 
-export function mapVatToTaxCode(vat: number): FiscalTaxCode {
-  switch (vat) {
+/**
+ * Maps a VAT percent to its fiscal tax code. Absent/undefined resolves to the
+ * documented default (`effectiveVat` -> 0) so an unknown VAT is treated as
+ * exempt, never fabricated as IVA_GENERAL. An explicit 0 stays EXENTO.
+ */
+export function mapVatToTaxCode(vat?: number | null): FiscalTaxCode {
+  switch (effectiveVat(vat)) {
     case 0: return "EXENTO";
     case 8: return "IVA_REDUCIDO";
     case 31: return "IVA_ADICIONAL";
@@ -73,7 +79,9 @@ export function buildFiscalPayload(order: any): FiscalPayload {
       description: m.name || m.description || "",
       quantity: m.quantity,
       unit_price: fiscalUnitPriceBs(m.price, rate),
-      tax_code: mapVatToTaxCode(m.vat || 16),
+      // `mapVatToTaxCode` applies the shared default: explicit 0% and an absent
+      // VAT both map to EXENTO instead of a fabricated IVA_GENERAL.
+      tax_code: mapVatToTaxCode(m.vat),
       sku: m.barCode || "",
     })),
     payments:

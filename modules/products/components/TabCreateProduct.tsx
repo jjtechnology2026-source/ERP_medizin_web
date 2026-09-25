@@ -4,7 +4,7 @@ import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { isValidProfit, sellingPrice as calcSellingPrice } from "@/modules/products/lib/pricing";
+import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -187,7 +187,8 @@ export default function CreateProductPage({ setView }: any) {
     presentation: "Tabletas",
     price: "",
     stock: "",
-    vat: "16",
+    // El selector de IVA arranca en el default compartido (0%), no en 16.
+    vat: String(DEFAULT_VAT_PCT),
     minimum: "0",
     basePrice: "",
     profit: "",
@@ -272,7 +273,8 @@ export default function CreateProductPage({ setView }: any) {
     // Precio de venta = costo / (1 - Ganancia%) + IVA (margen sobre precio de venta)
     const cost = parseFloat(formData.price) || 0;
     const profitPct = parseFloat(formData.profit) || 0;
-    const vatPct = parseInt(formData.vat) || 16;
+    // Blank VAT -> undefined -> documented default 0; an explicit "0" survives.
+    const vatPct = effectiveVat(parseVatInput(formData.vat));
     if (formData.profit && !isValidProfit(profitPct)) {
       alert("La utilidad debe ser ≥ 0 y < 100%.");
       return;
@@ -285,7 +287,7 @@ export default function CreateProductPage({ setView }: any) {
       price: sellingPrice > 0 ? String(Number(sellingPrice.toFixed(2))) : "0",
       stock: formData.stock || "0",
       minimum: formData.minimum || "0",
-      vat: parseInt(formData.vat) || 16,
+      vat: parseVatInput(formData.vat),
       controlled: false,
       antibiotic: false,
       basePrice: cost > 0 ? cost : undefined,
@@ -310,7 +312,7 @@ export default function CreateProductPage({ setView }: any) {
         category: payload.category,
         subcategory: payload.subcategory,
         description: payload.description,
-        vat: typeof payload.vat === "number" ? payload.vat : (parseInt(payload.vat) || 16),
+        vat: effectiveVat(parseVatInput(payload.vat)),
         controlled: false,
         antibiotic: false,
         minimum: parseInt(payload.minimum) || 0,
@@ -574,7 +576,6 @@ export default function CreateProductPage({ setView }: any) {
                 />
                 <InputField
                   label="IVA (%)"
-                  placeholder="16"
                   type="number"
                   step="1"
                   value={formData.vat}

@@ -21,6 +21,7 @@ export interface PricingSnapshot {
   discount?: number | null;
   basePrice?: number | null;
   profitPercentage?: number | null;
+  vat?: number | null;
 }
 
 /** The item shape accepted by `productsService.increaseInventory`. */
@@ -32,6 +33,8 @@ export interface InventoryIncreaseItem {
   discount?: number;
   base_price?: number;
   profit_percentage?: number;
+  /** Tri-state: omitted = leave stored, `null` = clear, number = set (explicit `0` is a value). */
+  vat?: number | null;
   lote?: string;
   fecha_vencimiento_lote?: string;
 }
@@ -64,6 +67,7 @@ function hasPricing(submitted: PricingSnapshot): boolean {
   if (normNum(submitted.discount) !== undefined) return true;
   if (normNum(submitted.basePrice) !== undefined) return true;
   if (normNum(submitted.profitPercentage) !== undefined) return true;
+  if (normNum(submitted.vat) !== undefined) return true;
   return false;
 }
 
@@ -74,6 +78,7 @@ function pricingChanged(submitted: PricingSnapshot, existing: PricingSnapshot): 
   if (normNum(submitted.discount) !== normNum(existing.discount)) return true;
   if (normNum(submitted.basePrice) !== normNum(existing.basePrice)) return true;
   if (normNum(submitted.profitPercentage) !== normNum(existing.profitPercentage)) return true;
+  if (normNum(submitted.vat) !== normNum(existing.vat)) return true;
   return false;
 }
 
@@ -109,6 +114,7 @@ export function buildIncreaseItem(
     discount?: number | null;
     basePrice?: number | null;
     profitPercentage?: number | null;
+    vat?: number | null;
     lote?: string;
     fechaVencimiento?: string;
   },
@@ -130,6 +136,15 @@ export function buildIncreaseItem(
 
   const profit = normNum(medicine.profitPercentage);
   if (profit !== undefined) item.profit_percentage = profit;
+
+  // VAT tri-state mirrors the backend DTO: absent = leave stored, `null` = clear,
+  // number = set (an explicit `0` is a value and must be sent).
+  if (medicine.vat === null) {
+    item.vat = null;
+  } else {
+    const vat = normNum(medicine.vat);
+    if (vat !== undefined) item.vat = vat;
+  }
 
   if (delta > 0) {
     const lote = typeof medicine.lote === "string" ? medicine.lote.trim() : "";

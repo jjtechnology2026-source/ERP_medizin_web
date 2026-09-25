@@ -245,6 +245,44 @@ test("a successful write stamps recentMutations and mergeEcho suppresses the ech
   assert.equal(merged.stock, 15, "echo inside the window must not add the delta again");
 });
 
+// ─── 6. VAT is part of the write decision (no silent skip) ────────────────────
+
+test("a VAT-only edit on an existing product is not silently skipped", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  const writes = [];
+  productsService.createProduct = async (m) => m;
+  productsService.increaseInventory = async (pharmacyId, items) => {
+    writes.push({ pharmacyId, items });
+  };
+
+  const result = await useProductsStore.getState().saveMedicine({
+    ...SERVER_EXISTING,
+    vat: 8,
+    stock: 0,
+  });
+
+  assert.equal(result, true);
+  assert.equal(writes.length, 1, "VAT-only edit must fire the write, not skip silently");
+  assert.equal(writes[0].items[0].vat, 8);
+});
+
+test("a pure no-op save does not fire the inventory write (control)", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  let writes = 0;
+  productsService.createProduct = async (m) => m;
+  productsService.increaseInventory = async () => {
+    writes++;
+  };
+
+  const result = await useProductsStore.getState().saveMedicine({
+    ...SERVER_EXISTING,
+    stock: 0,
+  });
+
+  assert.equal(result, true);
+  assert.equal(writes, 0, "an unchanged save must not fire the write");
+});
+
 test("mergeEcho still adds the delta outside the window (control)", async () => {
   stubServerInventory([SERVER_EXISTING]);
   productsService.createProduct = async (m) => m;

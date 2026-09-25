@@ -1,5 +1,6 @@
 import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 
 const cleanImg = (item: any) => ({
   ...item,
@@ -123,8 +124,9 @@ export const productsService = {
       antibiotic: Boolean(medication.antibiotic),
       minimum: Math.round(Number(medication.minimum)) || 0,
       discount: medication.discount !== undefined ? Number(medication.discount) : null,
-      basePrice: medication.basePrice !== undefined ? Number(medication.basePrice) : null,
-      profitPercentage: medication.profitPercentage !== undefined ? Number(medication.profitPercentage) : null,
+      // Catalog create MUST NOT receive basePrice/profitPercentage: the backend
+      // rejects catalog pricing (pricing belongs to the per-pharmacy inventory
+      // write via `increaseInventory`). Sending them now breaks `/Medications/Create`.
       detalle: (medication as any).detalle || "",
     }];
 
@@ -168,7 +170,7 @@ export const productsService = {
           antibiotic: product.antibiotic,
           price: product.price ?? 0,
           stock: product.stock ?? 0,
-          vat: product.vat ?? 16,
+          vat: effectiveVat(product.vat),
           minimum: product.minimum ?? 0,
           basePrice: product.basePrice,
           profitPercentage: product.profitPercentage,
@@ -193,7 +195,7 @@ export const productsService = {
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
-  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; vat?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {
       pharmacy_id: pharmacyId,
       medications,
