@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { Medication, StockFilter } from "@/modules/products/types/products.types";
 import { productsService } from "@/modules/products/api/products.service";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
+import type { PricingSnapshot } from "@/modules/products/lib/inventory-write";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
@@ -38,7 +40,7 @@ interface ProductsActions {
   setPage: (page: number) => Promise<void>;
   searchInventory: (text: string) => Promise<void>;
   refreshCounts: (force?: boolean) => Promise<void>;
-  findInventoryItem: (barCode: string) => Promise<Medication | null>;
+  findInventoryItem: (barCode: string, opts?: { strict?: boolean }) => Promise<Medication | null>;
   fetchCatalog: (force?: boolean) => Promise<void>;
   setFilter: (filter: StockFilter) => void;
   setStockFilter: (stockFilter: "in" | "out" | null) => void;
@@ -207,7 +209,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       }
     },
 
-    findInventoryItem: async (barCode) => {
+    findInventoryItem: async (barCode, opts) => {
       const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
       if (!pharmacyId || !barCode) return null;
       try {
@@ -220,7 +222,10 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
           page.medications[0] ??
           null
         );
-      } catch {
+      } catch (error) {
+        // strict rethrows so the caller can tell a real failure apart from a
+        // genuine miss; the read-only consumers keep the null-on-miss default.
+        if (opts?.strict) throw error;
         return null;
       }
     },
@@ -275,72 +280,96 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     setCurrentMedicine: (currentMedicine) => set({ currentMedicine }),
 
     saveMedicine: async (medicine) => {
-      const { inventory } = get();
-      const existing = inventory.find((m) => m.barCode === medicine.barCode && m.barCode);
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      const barCode = medicine.barCode || "";
+      const stockDelta = typeof medicine.stock === "number" ? medicine.stock : 0;
 
-      if (!existing) {
-        try {
-          await productsService.createProduct(medicine);
-        } catch (error) {
-          console.error("API error while saving medicine:", error);
-          return false;
-        }
-      } else {
-        try {
-          await productsService.createProduct({
-            ...medicine,
-            stock: existing.stock ?? 0,
-            quantity: existing.quantity ?? 0,
-          });
-        } catch (error) {
-          console.error("API error while updating medicine:", error);
-          return false;
-        }
+      // Existence is resolved against the authoritative server source, not the
+      // in-memory page (size 10). A request failure is fatal for this save:
+      // no write, no optimistic update, no success (PERSIST-3).
+      let serverExisting: Medication | null;
+      try {
+        serverExisting = await get().findInventoryItem(barCode, { strict: true });
+      } catch (error) {
+        console.error("[saveMedicine] findInventoryItem error:", error);
+        return false;
       }
 
-      const updatedInventory = existing
-        ? inventory.map((m) => {
-            if (m.barCode === medicine.barCode) {
-              return {
-                ...m,
-                ...medicine,
-                stock: (m.stock ?? 0) + (medicine.stock ?? 0),
-                quantity: (m.quantity ?? 0) + (medicine.quantity ?? 0),
-              };
-            }
-            return m;
-          })
-        : [...inventory.filter((m) => m.barCode !== medicine.barCode), medicine];
-      set({ inventory: updatedInventory });
+      // Catalog upsert. For an existing row keep the server stock/quantity so the
+      // catalog is not rewritten with the stock delta.
+      try {
+        if (serverExisting) {
+          await productsService.createProduct({
+            ...medicine,
+            stock: serverExisting.stock ?? 0,
+            quantity: serverExisting.quantity ?? 0,
+          });
+        } else {
+          await productsService.createProduct(medicine);
+        }
+      } catch (error) {
+        console.error("API error while saving medicine:", error);
+        return false;
+      }
+
+      const submitted: PricingSnapshot = {
+        price: medicine.price,
+        minimum: medicine.minimum,
+        discount: medicine.discount,
+        basePrice: medicine.basePrice,
+        profitPercentage: medicine.profitPercentage,
+      };
+
+      // Decision table (design Decision 3): `found` writes on a stock delta or a
+      // pricing change; `missing` writes on a stock delta or hasPricing. A lot-only
+      // or pure no-op save skips the increase entirely, so no backend propagation
+      // fires (LOT-REQ).
+      const shouldWrite = shouldWriteInventory({
+        stockDelta,
+        submitted,
+        existing: serverExisting,
+      });
+
+      if (!shouldWrite) {
+        void get().refreshCounts(true);
+        return true;
+      }
+
+      const { inventory } = get();
+      const previousInventory = inventory;
+      const localExisting = inventory.find((m) => m.barCode === barCode && m.barCode);
+
+      // Optimistic upsert, rooted on the server-resolved stock when present.
+      const baseStock = serverExisting?.stock ?? localExisting?.stock ?? 0;
+      const baseQuantity =
+        serverExisting?.quantity ?? localExisting?.quantity ?? medicine.quantity ?? 0;
+      const optimistic: Medication = {
+        ...(localExisting ?? serverExisting ?? medicine),
+        ...medicine,
+        stock: baseStock + stockDelta,
+        quantity: baseQuantity,
+      };
+      const optimisticMap = new Map(inventory.map((m) => [m.barCode, m]));
+      optimisticMap.set(barCode, optimistic);
+      set({ inventory: Array.from(optimisticMap.values()) });
 
       try {
-        const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
         if (pharmacyId) {
-          const stockVal = typeof medicine.stock === "number" ? medicine.stock : 0;
-          const priceVal = medicine.price ?? 0;
-          const minVal = Number(medicine.minimum) || 0;
-          const discountVal = medicine.discount !== undefined ? Number(medicine.discount) : undefined;
-          const changed =
-            stockVal !== (existing?.stock ?? 0) ||
-            priceVal !== (existing?.price ?? 0) ||
-            minVal !== (existing?.minimum ?? 0) ||
-            discountVal !== (existing?.discount ?? undefined);
-          if (changed) {
-            await productsService.increaseInventory(pharmacyId, [{
-              bar_code: medicine.barCode || "",
-              stock: stockVal,
-              price: priceVal,
-              minimum: minVal,
-              ...(discountVal !== undefined ? { discount: discountVal } : {}),
-              ...(medicine.basePrice !== undefined ? { base_price: medicine.basePrice } : {}),
-              ...(medicine.profitPercentage !== undefined ? { profit_percentage: medicine.profitPercentage } : {}),
-              ...(medicine.lote?.trim() && stockVal > 0 ? { lote: medicine.lote.trim() } : {}),
-              ...(medicine.fechaVencimiento?.trim() && stockVal > 0 ? { fecha_vencimiento_lote: medicine.fechaVencimiento.trim() } : {}),
-            }]);
-          }
+          await productsService.increaseInventory(pharmacyId, [
+            buildIncreaseItem(medicine, stockDelta),
+          ]);
         }
       } catch (e) {
+        // Revert the optimistic upsert and surface the failure to the caller.
         console.error("[saveMedicine] increaseInventory error:", e);
+        set({ inventory: previousInventory });
+        set({ recentMutations: { ...get().recentMutations, [barCode]: Date.now() } });
+        return false;
+      }
+
+      // Record the optimistic mutation so the MQTT echo is not added twice.
+      if (stockDelta > 0) {
+        set({ recentMutations: { ...get().recentMutations, [barCode]: Date.now() } });
       }
 
       void get().refreshCounts(true);

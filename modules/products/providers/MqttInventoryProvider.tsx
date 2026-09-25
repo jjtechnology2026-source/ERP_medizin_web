@@ -22,6 +22,7 @@ import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
 import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { mergeEcho } from "@/modules/products/lib/inventory-write";
 import type { Medication } from "@/modules/products/types/products.types";
 
 // ─── Context (simple marker so we don't mount twice) ────────────────────────
@@ -113,19 +114,19 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
 
         useProductsStore.setState((state) => {
           const inventoryMap = new Map(state.inventory.map((m) => [m.barCode, m]));
+          const now = Date.now();
           dto.medications.forEach((proto) => {
             const barCode = proto.barCode || "";
-            const existing = inventoryMap.get(barCode);
-            const quantity = (typeof proto.quantity === "number" && proto.quantity > 0)
-              ? proto.quantity
-              : (typeof proto.stock === "number" && proto.stock > 0 ? proto.stock : 0);
-            const med = protoToMedication(proto);
-            inventoryMap.set(barCode, {
-              ...existing,
-              ...med,
-              stock: (existing?.stock ?? 0) + quantity,
-              price: med.price > 0 ? med.price : (existing?.price ?? med.price),
+            const med: Medication = protoToMedication(proto);
+            // An echo within the recent-mutation window applies price/metadata but
+            // must not add the stock delta again (PERSIST-4).
+            const merged = mergeEcho({
+              existing: inventoryMap.get(barCode),
+              incoming: med,
+              lastMutationAt: state.recentMutations[barCode],
+              now,
             });
+            inventoryMap.set(barCode, merged);
           });
           return { inventory: Array.from(inventoryMap.values()) };
         });

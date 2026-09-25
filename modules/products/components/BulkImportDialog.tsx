@@ -5,6 +5,7 @@ import { productsService } from "@/modules/products/api/products.service";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
 import { isValidProfit, bulkSellingPrice } from "@/modules/products/lib/pricing";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
 import { toIsoDate } from "@/modules/products/lib/date";
 
 interface BulkImportDialogProps {
@@ -222,32 +223,45 @@ export default function BulkImportDialog({
     if (!pharmacyId) {
       res.errors.push("Inventario no actualizado: falta pharmacyId en la sesión.");
     } else if (res.created.length > 0) {
-      const itemsWithStock = res.created.filter(
-        (p) => (p.stock ?? 0) > 0 || (p.quantity !== undefined && p.quantity > 0)
+      // Link a row when it has stock OR pricing (PRICING-3), not only stock > 0.
+      const linkable = res.created.filter((p) =>
+        shouldWriteInventory({
+          stockDelta: p.stock ?? 0,
+          submitted: {
+            price: p.price,
+            minimum: p.minimum,
+            discount: p.discount,
+            basePrice: p.basePrice,
+            profitPercentage: p.profitPercentage,
+          },
+          existing: null,
+        })
       );
-      if (itemsWithStock.length === 0) {
-        res.errors.push("Ningún producto con stock > 0: no se ligó inventario a la farmacia.");
+      if (linkable.length === 0) {
+        res.errors.push("Ningún producto con stock o precio: no se ligó inventario a la farmacia.");
       } else {
         try {
           // ponytail: el backend ya no suscribe insert_inventory por MQTT (es HTTP-driven);
           // ligar inventario vía HTTP increase para que la fila aparezca en la farmacia.
           await productsService.increaseInventory(
             pharmacyId,
-            itemsWithStock.map((p) => ({
-              bar_code: p.barCode,
-              stock: p.stock ?? 0,
-              // Sin precio en el Excel se OMITE (no se manda 0) para no borrar el
-              // precio ya guardado del producto.
-              ...(p.price !== undefined ? { price: p.price } : {}),
-              minimum: p.minimum ?? 0,
-              discount: p.discount !== undefined ? Number(p.discount) : null,
-              base_price: p.basePrice !== undefined ? Number(p.basePrice) : null,
-              profit_percentage: p.profitPercentage !== undefined ? Number(p.profitPercentage) : null,
-              ...(p.lote?.trim() ? { lote: p.lote.trim() } : {}),
-              ...(p.fechaVencimiento?.trim() ? { fecha_vencimiento_lote: p.fechaVencimiento.trim() } : {}),
-            }))
+            linkable.map((p) =>
+              buildIncreaseItem(
+                {
+                  barCode: p.barCode,
+                  price: p.price,
+                  minimum: p.minimum,
+                  discount: p.discount,
+                  basePrice: p.basePrice,
+                  profitPercentage: p.profitPercentage,
+                  lote: p.lote,
+                  fechaVencimiento: p.fechaVencimiento,
+                },
+                p.stock ?? 0
+              )
+            )
           );
-          inventoryCount = itemsWithStock.length;
+          inventoryCount = linkable.length;
         } catch (err: any) {
           res.errors.push(
             `Error al ligar inventario: ${err?.response?.data?.message || err?.message || "Error desconocido"}`
