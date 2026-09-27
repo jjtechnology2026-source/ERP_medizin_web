@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { HiX, HiSearch } from "react-icons/hi";
@@ -12,38 +12,61 @@ const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
   { label: "Sin stock", value: "out" },
 ];
 
+// Margen de anticipación para empezar a traer la siguiente sección antes de que
+// el usuario llegue al borde: la lista crece sin pausa perceptible.
+const LOAD_AHEAD_PX = 200;
+
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
-  const {
-    inventory,
-    isLoading,
-    hasMore,
-    page,
-    searchInventory,
-    setPage,
-    stockFilter,
-    setStockFilter,
-  } = useProductsStore();
+  const { searchFeed, searchFeedLoad, searchFeedNext, searchFeedReset } = useProductsStore();
+  const { items, hasMore, isLoading, isLoadingMore, error, nextCursor } = searchFeed;
 
   const { addMedication } = useCurrentOrderStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
   const [query, setQuery] = useState("");
+  // Estado local, no el `stockFilter` del store: ese es compartido con el módulo
+  // Productos y la modal no debe alterarlo.
+  const [stockFilter, setStockFilter] = useState<"in" | "out" | null>(null);
 
-  // Busqueda server-side con debounce (dispara tambien la primera pagina al abrir).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLTableDataCellElement>(null);
+
+  // Busqueda server-side con debounce (dispara tambien la primera seccion al abrir).
   useEffect(() => {
     const t = setTimeout(() => {
-      void searchInventory(query);
+      void searchFeedLoad({ query, stockFilter });
     }, 300);
     return () => clearTimeout(t);
-  }, [query, searchInventory]);
+  }, [query, stockFilter, searchFeedLoad]);
 
-  // Al cerrar se limpia el filtro para no filtrar el inventario de Productos.
+  // Al cerrar se vacia el feed para no dejar resultados de esta busqueda colgados.
   useEffect(() => {
     return () => {
-      setStockFilter(null);
+      searchFeedReset();
     };
-  }, [setStockFilter]);
+  }, [searchFeedReset]);
+
+  // Carga automatica de la siguiente seccion al llegar al final de lo cargado.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        const { hasMore: more, isLoading: loading, isLoadingMore: loadingMore, nextCursor: cursor } =
+          useProductsStore.getState().searchFeed;
+        if (!more || loading || loadingMore || !cursor) return;
+        void searchFeedNext();
+      },
+      { root, rootMargin: `${LOAD_AHEAD_PX}px` },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [searchFeedNext, items.length, hasMore, isLoading, isLoadingMore, nextCursor]);
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -54,6 +77,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
     addMedication(med, 1);
     onClose();
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -94,11 +118,23 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          {inventory.length === 0 ? (
-            <div className="py-12 text-center text-sm font-bold text-slate-300">
-              {isLoading ? "Buscando..." : query ? "Sin resultados" : "Escribe para buscar productos"}
-            </div>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+          {items.length === 0 ? (
+            error ? (
+              <div className="py-12 flex flex-col items-center gap-2">
+                <p className="text-sm font-bold text-red-500">{error}</p>
+                <button
+                  onClick={() => void searchFeedLoad({ query, stockFilter })}
+                  className="px-4 py-1.5 bg-white border border-red-200 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : (
+              <div className="py-12 text-center text-sm font-bold text-slate-300">
+                {isLoading ? "Buscando..." : query ? "Sin resultados" : "Escribe para buscar productos"}
+              </div>
+            )
           ) : (
             <table className="w-full text-left">
               <thead>
@@ -110,7 +146,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {inventory.map((med, i) => (
+                {items.map((med, i) => (
                   <tr
                     key={med.barCode || i}
                     onClick={() => handleSelect(med)}
@@ -140,32 +176,39 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
                     </td>
                   </tr>
                 ))}
+
+                {isLoadingMore && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center">
+                      <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-blue-500" />
+                    </td>
+                  </tr>
+                )}
+
+                {error && (
+                  <tr>
+                    <td colSpan={4} className="py-4">
+                      <div className="flex items-center justify-center gap-2 text-xs font-bold text-red-500">
+                        <span>{error}</span>
+                        <button
+                          onClick={() => void searchFeedNext()}
+                          className="px-3 py-1.5 bg-white border border-red-200 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all"
+                        >
+                          Reintentar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Sentinel: al entrar en viewport pide la siguiente seccion. */}
+                <tr>
+                  <td colSpan={4} ref={sentinelRef} className="h-px p-0" aria-hidden />
+                </tr>
               </tbody>
             </table>
           )}
         </div>
-
-        {inventory.length > 0 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400">Página {page}</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setPage(page - 1)}
-                disabled={page <= 1 || isLoading}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
-                disabled={!hasMore || isLoading}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
