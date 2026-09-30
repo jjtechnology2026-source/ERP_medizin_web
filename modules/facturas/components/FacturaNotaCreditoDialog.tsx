@@ -19,6 +19,13 @@ import type { TicketHeader } from "@/modules/cash-register/lib/pos58-ticket";
 import {
   decideNotaCreditoOutcome,
   type NotaCreditoDecision,
+  type NotaCreditoDetallePayload,
+  type NotaCreditoLineSelection,
+  buildNotaCreditoLineSelection,
+  validateNotaCreditoLine,
+  validateNotaCreditoLineSelection,
+  computeNotaCreditoLineTotal,
+  computeNotaCreditoSelectionTotals,
 } from "../lib/nota-credito-flow";
 import type { FacturaListItem, FacturaDetail } from "../types";
 
@@ -59,15 +66,24 @@ function formatTicketDate(input: string): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): Promise<void> {
+async function emitirNotaCreditoFiscal(
+  detail: FacturaDetail,
+  motivo: string,
+  detalles: NotaCreditoDetallePayload[],
+  lineas: NotaCreditoLineSelection[],
+  totalVes: number,
+): Promise<void> {
   const rif = parseRif(detail.cliente_rif || "");
+  const productoPorDetalle = new Map(lineas.map((l) => [l.detalleFacturaId, l.productoId]));
   const payload = {
     customer: {
       name: detail.cliente_nombre,
       document: `${rif.tipo}${rif.numero}`,
       address: detail.cliente_direccion || "",
     },
-    items: detail.detalles.map((d) => ({
+    // Solo las lineas seleccionadas: el comprobante fiscal tambien acredita lo
+    // elegido, nunca la factura completa.
+    items: detalles.map((d) => ({
       description: d.descripcion,
       quantity: d.cantidad,
       // precio_unitario_ves viene como BASE sin IVA desde la BD: lo llevamos a
@@ -75,7 +91,7 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
       unit_price: toBs2(d.precio_unitario_ves * (1 + (d.iva_porcentaje || 0) / 100)),
       // Un IVA nulo/ausente de la BD cae al default 0 -> EXENTO (y un 0 explícito también).
       tax_code: mapVatToTaxCode(d.iva_porcentaje),
-      sku: d.producto_id || "",
+      sku: productoPorDetalle.get(d.detalle_factura_id) || "",
     })),
     payments: detail.transacciones?.length
       ? detail.transacciones.map((t) => ({
@@ -84,7 +100,7 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
           currency: (t.moneda === "USD" ? "USD" : "VES") as "VES" | "USD",
           ...(t.moneda === "USD" && t.tasa_cambio ? { exchange_rate: t.tasa_cambio } : {}),
         }))
-      : [{ method: "cash" as const, amount: toBs2(detail.total_ves), currency: "VES" as const }],
+      : [{ method: "cash" as const, amount: toBs2(totalVes), currency: "VES" as const }],
     prices_include_tax: true,
     dry_run: false,
     affected_fiscal_number: detail.numero_control,
@@ -104,6 +120,7 @@ async function emitirNotaCreditoFiscal(detail: FacturaDetail, motivo: string): P
 export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, mode = "legacy" }: FacturaNotaCreditoDialogProps) {
   const [step, setStep] = useState<Step>("loading");
   const [detail, setDetail] = useState<FacturaDetail | null>(null);
+  const [lineas, setLineas] = useState<NotaCreditoLineSelection[]>([]);
   const [motivo, setMotivo] = useState("");
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [moneda, setMoneda] = useState("VES");
@@ -117,8 +134,11 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
   useEffect(() => {
     facturasService.detail(factura.id)
-      .then(setDetail)
-      .then(() => setStep("form"))
+      .then((d) => {
+        setDetail(d);
+        setLineas(buildNotaCreditoLineSelection(d.detalles));
+        setStep("form");
+      })
       .catch(() => {
         setErrorMsg("No se pudo cargar el detalle de la factura");
         setErrorHint("");
@@ -159,22 +179,34 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     setTimeout(onSuccess, 1500);
   };
 
+  const toggleLinea = (index: number) => {
+    setLineas((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, seleccionada: !l.seleccionada } : l)),
+    );
+  };
+
+  const setCantidadLinea = (index: number, cantidad: string) => {
+    setLineas((prev) => prev.map((l, i) => (i === index ? { ...l, cantidad } : l)));
+  };
+
   const handleEmit = async () => {
     if (!detail) return;
     if (!motivo.trim()) {
       setErrorMsg("El motivo es obligatorio");
       return;
     }
+    // Con la seleccion invalida el boton ya esta deshabilitado y los motivos se
+    // muestran al lado; este guard es defensa extra y no imprime nada.
+    if (validateNotaCreditoLineSelection(lineas).length > 0) return;
+
+    const seleccion = computeNotaCreditoSelectionTotals(lineas);
 
     // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
     await prepairPrinter();
     setStep("submitting");
 
-    const ncTotalVes = (detail.detalles ?? []).reduce((sum, d) => {
-      const base = (d.cantidad || 0) * (d.precio_unitario_ves || 0);
-      return sum + base * (1 + (d.iva_porcentaje || 0) / 100);
-    }, 0);
-    const totalVes = Math.round(ncTotalVes * 100) / 100;
+    // Total a acreditar = SOLO las lineas seleccionadas, nunca la factura completa.
+    const totalVes = seleccion.totalVes;
     const tasa = detail.tasa_cambio > 0 ? detail.tasa_cambio : 1;
     const montoOriginal = moneda === "USD" ? Math.round((totalVes / tasa) * 100) / 100 : totalVes;
     const movimiento = {
@@ -192,6 +224,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
     if (mode === "tfhka") {
       const rif = parseRif(detail.cliente_rif || "");
+      const detallePorId = new Map(detail.detalles.map((d) => [d.id, d]));
       const authProfile = useAuthStore.getState().profile;
       const rifEmisor = (authProfile as any)?.rif || (authProfile as any)?.rifPharmacy || "J-00000000-0";
 
@@ -216,9 +249,9 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
           monto_total: totalVes,
           motivo: motivo.trim(),
         },
-        items: detail.detalles.map((d) => ({
+        items: seleccion.detalles.map((d) => ({
           descripcion: d.descripcion,
-          codigo_plu: d.producto_id || "000",
+          codigo_plu: detallePorId.get(d.detalle_factura_id)?.producto_id || "000",
           cantidad: d.cantidad,
           precio_unitario: d.precio_unitario_ves,
           vat: d.iva_porcentaje,
@@ -226,13 +259,13 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
         })),
         sesion_caja_id: detail.sesion_caja_id,
         factura_id: detail.id,
-        detalles_persist: detail.detalles.map((d) => ({
-          detalle_factura_id: d.id,
+        detalles_persist: seleccion.detalles.map((d) => ({
+          detalle_factura_id: d.detalle_factura_id,
           descripcion: d.descripcion,
           cantidad: d.cantidad,
           precio_unitario_ves: d.precio_unitario_ves,
           iva_porcentaje: d.iva_porcentaje,
-          subtotal_ves: d.subtotal_ves,
+          subtotal_ves: toBs2(d.cantidad * d.precio_unitario_ves),
         })),
         movimientos_persist: [movimiento],
       };
@@ -264,13 +297,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
       motivo: motivo.trim(),
       tasa_cambio: detail.tasa_cambio,
       observaciones: undefined,
-      detalles: detail.detalles.map((d) => ({
-        detalle_factura_id: d.id,
-        descripcion: d.descripcion,
-        cantidad: d.cantidad,
-        precio_unitario_ves: d.precio_unitario_ves,
-        iva_porcentaje: d.iva_porcentaje,
-      })),
+      detalles: seleccion.detalles,
       movimientos_caja: [movimiento],
     };
 
@@ -287,7 +314,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     // nota queda guardada (y el stock devuelto) y se ofrece el "No Fiscal" bajo
     // demanda con un click explícito; nunca se imprime solo.
     try {
-      await emitirNotaCreditoFiscal(detail, motivo.trim());
+      await emitirNotaCreditoFiscal(detail, motivo.trim(), seleccion.detalles, lineas, totalVes);
     } catch (e) {
       console.error("❌ [FacturaNotaCreditoDialog] Impresión fiscal de la NC falló:", e);
       applyDecision(
@@ -337,6 +364,15 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
   };
 
   const formatMoney = (n: number) => n.toFixed(2);
+
+  // Derivados de la seleccion: el renderer solo muestra, la matematica vive en
+  // el modulo puro (modules/facturas/lib/nota-credito-flow.ts).
+  const seleccion = computeNotaCreditoSelectionTotals(lineas);
+  const problemasSeleccion = validateNotaCreditoLineSelection(lineas);
+  const razones = [
+    ...(motivo.trim() ? [] : ["Ingresá el motivo de la nota de crédito."]),
+    ...problemasSeleccion,
+  ];
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
@@ -520,35 +556,87 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             </div>
 
             <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E4E7EB]">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <HiOutlineCash size={14} />
-                Ítems de la factura original ({detail.detalles.length})
-              </h3>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <HiOutlineCash size={14} />
+                  Ítems a acreditar
+                </h3>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {seleccion.seleccionadas} de {seleccion.totalLineas} seleccionados
+                </span>
+              </div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {detail.detalles.map((d, i) => (
-                  <div key={d.id || i} className="flex justify-between items-center text-xs bg-white p-3 rounded-xl border border-[#E4E7EB]/50">
-                    <span className="font-semibold text-slate-700 truncate flex-1">{d.descripcion}</span>
-                    <span className="font-mono text-slate-400 mx-3">x{d.cantidad}</span>
-                    <span className="font-bold text-[#1E3A5F]">Bs {formatMoney(d.subtotal_ves)}</span>
-                  </div>
-                ))}
+                {lineas.map((l, i) => {
+                  const problema = validateNotaCreditoLine(l);
+                  return (
+                    <div
+                      key={l.detalleFacturaId || i}
+                      className={`flex flex-wrap items-center gap-3 text-xs bg-white p-3 rounded-xl border transition-all duration-200 ${l.seleccionada ? "border-[#E4E7EB]/50" : "border-[#E4E7EB]/30 opacity-60"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={l.seleccionada}
+                        onChange={() => toggleLinea(i)}
+                        aria-label={`Acreditar ${l.descripcion}`}
+                        className="h-4 w-4 shrink-0 accent-[#1E3A5F]"
+                      />
+                      <span className="font-semibold text-slate-700 truncate flex-1 min-w-[120px]">{l.descripcion}</span>
+                      <span className="font-mono text-slate-400 text-[11px]">facturado x{l.cantidadFacturada}</span>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Acreditar</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={l.cantidad}
+                          onChange={(e) => setCantidadLinea(i, e.target.value)}
+                          disabled={!l.seleccionada}
+                          className="w-20 p-2 text-xs font-mono font-semibold bg-[#F8FAFC] border border-[#E4E7EB] rounded-lg outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 disabled:opacity-50"
+                        />
+                      </div>
+                      <span className="font-bold text-[#1E3A5F] font-mono w-24 text-right">
+                        Bs {formatMoney(computeNotaCreditoLineTotal(l))}
+                      </span>
+                      {problema && (
+                        <span className="w-full text-[10px] font-bold text-red-500">{problema}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end pt-2">
-              <button
-                onClick={onClose}
-                className="px-5 py-2.5 bg-[#F8FAFC] hover:bg-[#F1F3F5] text-slate-600 rounded-xl font-bold text-xs transition-all duration-200 border border-[#E4E7EB]"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleEmit}
-                disabled={!motivo.trim() || step === "submitting"}
-                className="px-5 py-2.5 bg-[#059669] hover:bg-[#047857] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm disabled:opacity-50 disabled:hover:bg-[#059669]"
-              >
-                {step === "submitting" ? "Emitiendo..." : "Emitir nota de crédito"}
-              </button>
+            <div className="rounded-2xl px-4 py-3 bg-[#1E3A5F] text-white flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-white/60">Total a acreditar</span>
+                <span className="text-lg font-black font-mono">Bs {formatMoney(seleccion.totalVes)}</span>
+              </div>
+              <div className="text-right">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-white/60">Ítems seleccionados</span>
+                <span className="text-sm font-bold font-mono">{seleccion.seleccionadas} de {seleccion.totalLineas}</span>
+              </div>
+            </div>
+
+            <div className="flex items-end justify-between gap-3 pt-2">
+              <ul className="flex-1 space-y-1">
+                {razones.map((razon) => (
+                  <li key={razon} className="text-[10px] font-bold text-amber-600">• {razon}</li>
+                ))}
+              </ul>
+              <div className="flex gap-3 shrink-0">
+                <button
+                  onClick={onClose}
+                  className="px-5 py-2.5 bg-[#F8FAFC] hover:bg-[#F1F3F5] text-slate-600 rounded-xl font-bold text-xs transition-all duration-200 border border-[#E4E7EB]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEmit}
+                  disabled={razones.length > 0 || step === "submitting"}
+                  className="px-5 py-2.5 bg-[#059669] hover:bg-[#047857] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm disabled:opacity-50 disabled:hover:bg-[#059669]"
+                >
+                  {step === "submitting" ? "Emitiendo..." : "Emitir nota de crédito"}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -6,10 +6,16 @@ import {
   NOTA_CREDITO_STORED_NOT_PRINTED,
   NOTA_CREDITO_SUCCESS,
   NOTA_CREDITO_EMITTED_NOT_PERSISTED,
+  NOTA_CREDITO_SIN_SELECCION,
   decideNotaCreditoOutcome,
   normalizeNotaCreditoError,
   normalizeNotaCreditoPersistOutcome,
   extractNotaCreditoReason,
+  buildNotaCreditoLineSelection,
+  validateNotaCreditoLine,
+  validateNotaCreditoLineSelection,
+  computeNotaCreditoLineTotal,
+  computeNotaCreditoSelectionTotals,
 } from "../modules/facturas/lib/nota-credito-flow.ts";
 
 // --- Persistencia fallida: nunca exito, nunca impresion ---
@@ -220,4 +226,166 @@ test("normaliza defensivamente un persisted ausente o no booleano como no persis
     persisted: false,
     persistError: null,
   });
+});
+
+// ---------------------------------------------------------------------------
+// Seleccion parcial de lineas a acreditar (caso real de produccion).
+//
+// Factura de 4 productos por 43.183,21 Bs de la que el cliente devuelve solo
+// los dos LEVOTIROXINA (18.375,95 Bs). Antes el dialogo mandaba la factura
+// entera; ahora el operador elige. Estas lineas son un fixture construido para
+// clavar esos totales, no datos reales del cliente.
+// ---------------------------------------------------------------------------
+
+const FACTURA_4_LINEAS = [
+  { id: "l-levo-50", producto_id: "P-LEVO-50", descripcion: "LEVOTIROXINA 50 MCG", cantidad: 2, precio_unitario_ves: 5000.0, iva_porcentaje: 16 },
+  { id: "l-levo-100", producto_id: "P-LEVO-100", descripcion: "LEVOTIROXINA 100 MCG", cantidad: 1, precio_unitario_ves: 6775.95, iva_porcentaje: 0 },
+  { id: "l-ome-20", producto_id: "P-OME-20", descripcion: "OMEPRAZOL 20 MG", cantidad: 3, precio_unitario_ves: 6000.0, iva_porcentaje: 16 },
+  { id: "l-ibu-400", producto_id: "P-IBU-400", descripcion: "IBUPROFENO 400 MG", cantidad: 1, precio_unitario_ves: 3927.26, iva_porcentaje: 0 },
+];
+
+function conCantidad(lineas, detalleFacturaId, cantidad) {
+  return lineas.map((l) => (l.detalleFacturaId === detalleFacturaId ? { ...l, cantidad } : l));
+}
+
+function conSeleccion(lineas, ids) {
+  const set = new Set(ids);
+  return lineas.map((l) => ({ ...l, seleccionada: set.has(l.detalleFacturaId) }));
+}
+
+// --- Estado inicial: todo seleccionado con la cantidad completa ---
+
+test("estado inicial: todas las lineas seleccionadas con su cantidad facturada completa", () => {
+  const lineas = buildNotaCreditoLineSelection(FACTURA_4_LINEAS);
+
+  assert.equal(lineas.length, 4);
+  assert.ok(lineas.every((l) => l.seleccionada === true));
+  assert.deepEqual(
+    lineas.map((l) => l.cantidad),
+    FACTURA_4_LINEAS.map((d) => String(d.cantidad)),
+  );
+  assert.deepEqual(
+    lineas.map((l) => l.cantidadFacturada),
+    FACTURA_4_LINEAS.map((d) => d.cantidad),
+  );
+
+  // El caso "devolucion total" sigue siendo un solo click: total = factura completa.
+  const totales = computeNotaCreditoSelectionTotals(lineas);
+  assert.equal(totales.totalVes, 43183.21);
+  assert.equal(totales.seleccionadas, 4);
+  assert.equal(totales.totalLineas, 4);
+  assert.equal(totales.detalles.length, 4);
+});
+
+test("estado inicial defensivo: sin detalles o detalles nulos -> lista vacia", () => {
+  assert.deepEqual(buildNotaCreditoLineSelection(null), []);
+  assert.deepEqual(buildNotaCreditoLineSelection(undefined), []);
+  assert.deepEqual(buildNotaCreditoLineSelection([]), []);
+});
+
+// --- Subset: solo los dos LEVOTIROXINA ---
+
+test("subconjunto: acreditar solo los dos LEVOTIROXINA da 18.375,95 y solo esas lineas", () => {
+  const lineas = conSeleccion(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), ["l-levo-50", "l-levo-100"]);
+
+  const totales = computeNotaCreditoSelectionTotals(lineas);
+
+  assert.equal(totales.totalVes, 18375.95);
+  assert.equal(totales.seleccionadas, 2);
+  assert.equal(totales.totalLineas, 4);
+  assert.deepEqual(
+    totales.detalles.map((d) => d.detalle_factura_id),
+    ["l-levo-50", "l-levo-100"],
+  );
+  // El payload lleva SOLO las lineas elegidas, con la cantidad elegida.
+  assert.deepEqual(
+    totales.detalles.map((d) => d.cantidad),
+    [2, 1],
+  );
+  // El total NUNCA es el de la factura completa.
+  assert.notEqual(totales.totalVes, 43183.21);
+  assert.deepEqual(validateNotaCreditoLineSelection(lineas), []);
+});
+
+// --- Validaciones de cantidad por linea ---
+
+test("cantidad por encima de lo facturado: se rechaza con motivo explicito", () => {
+  const lineas = conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-levo-50", "3");
+
+  const problemas = validateNotaCreditoLineSelection(lineas);
+  assert.equal(problemas.length, 1);
+  assert.ok(problemas[0].includes("LEVOTIROXINA 50 MCG"));
+  assert.ok(problemas[0].includes("no puede superar lo facturado"));
+  assert.ok(problemas[0].includes("2"), "el motivo debe decir el tope facturado");
+});
+
+test("cantidad cero o negativa: se rechaza con motivo explicito", () => {
+  for (const cantidad of ["0", "-1", "-0.5"]) {
+    const lineas = conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-levo-100", cantidad);
+    const problemas = validateNotaCreditoLineSelection(lineas);
+    assert.equal(problemas.length, 1, `cantidad ${cantidad} debe dar un problema`);
+    assert.ok(problemas[0].includes("LEVOTIROXINA 100 MCG"));
+    assert.ok(problemas[0].includes("mayor a cero"));
+  }
+});
+
+test("cantidad no numerica: se rechaza defensivamente con motivo explicito", () => {
+  for (const cantidad of ["", "  ", "abc", "1e3", "2,5,5"]) {
+    const lineas = conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-ome-20", cantidad);
+    const problemas = validateNotaCreditoLineSelection(lineas);
+    assert.equal(problemas.length, 1, `cantidad ${JSON.stringify(cantidad)} debe dar un problema`);
+    assert.ok(problemas[0].includes("no es un número válido"));
+  }
+});
+
+test("nada seleccionado: se rechaza con motivo explicito en espanol", () => {
+  const lineas = conSeleccion(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), []);
+
+  assert.deepEqual(validateNotaCreditoLineSelection(lineas), [NOTA_CREDITO_SIN_SELECCION]);
+  assert.ok(NOTA_CREDITO_SIN_SELECCION.includes("al menos un ítem"));
+});
+
+test("una linea no seleccionada no se valida aunque su cantidad sea basura", () => {
+  const lineas = conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-ome-20", "xxx");
+  const soloLevo = conSeleccion(lineas, ["l-levo-50", "l-levo-100"]);
+
+  assert.deepEqual(validateNotaCreditoLineSelection(soloLevo), []);
+});
+
+// --- Cantidad parcial y redondeo ---
+
+test("cantidad parcial (1 de 2): total correcto para esa linea", () => {
+  const lineas = conSeleccion(
+    conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-levo-50", "1"),
+    ["l-levo-50"],
+  );
+
+  const totales = computeNotaCreditoSelectionTotals(lineas);
+  assert.equal(computeNotaCreditoLineTotal(lineas[0]), 5800.0);
+  assert.equal(totales.totalVes, 5800.0);
+  assert.deepEqual(totales.detalles.map((d) => d.cantidad), [1]);
+});
+
+test("redondeo: el total queda a 2 decimales", () => {
+  const lineas = buildNotaCreditoLineSelection([
+    { id: "r1", descripcion: "LINEA REDONDEO", cantidad: 3, precio_unitario_ves: 0.335, iva_porcentaje: 8 },
+  ]);
+
+  const totales = computeNotaCreditoSelectionTotals(lineas);
+  // 3 * 0.335 * 1.08 = 1.0854 -> 1.09
+  assert.equal(totales.totalVes, 1.09);
+  assert.equal(Math.round(totales.totalVes * 100) / 100, totales.totalVes);
+  assert.ok(Math.abs(totales.totalVes - 1.09) < 1e-9);
+});
+
+test("el total ignora las lineas seleccionadas con cantidad invalida", () => {
+  const lineas = conCantidad(buildNotaCreditoLineSelection(FACTURA_4_LINEAS), "l-levo-50", "99");
+
+  const totales = computeNotaCreditoSelectionTotals(lineas);
+  // l-levo-50 queda fuera del payload y del total; las otras tres siguen
+  // seleccionadas y validas, asi que suman su importe completo.
+  assert.ok(!totales.detalles.some((d) => d.detalle_factura_id === "l-levo-50"));
+  assert.equal(totales.totalVes, 6775.95 + 20880.0 + 3927.26);
+  assert.notEqual(validateNotaCreditoLine(lineas[0]), null);
+  assert.equal(validateNotaCreditoLine(lineas[1]), null);
 });

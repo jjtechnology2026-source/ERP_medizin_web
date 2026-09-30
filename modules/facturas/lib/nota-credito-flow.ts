@@ -222,3 +222,189 @@ export function decideNotaCreditoOutcome(
     canPrintOnDemand: false,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Seleccion PARCIAL de lineas a acreditar.
+//
+// El backend ya acepta `detalles` parciales (valida 0 < cantidad <= cantidad
+// facturada contra el detalle persistido). Este bloque concentra TODA la
+// aritmetica de la seleccion para que el dialogo quede como un renderer delgado
+// y para que el total del movimiento NUNCA se calcule sobre la factura completa.
+// Sigue siendo puro: sin React, sin DOM, sin red.
+// ---------------------------------------------------------------------------
+
+/** Campos del detalle de factura que necesita la seleccion. */
+export interface NotaCreditoDetalleSource {
+  id: string;
+  producto_id?: string | null;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario_ves: number;
+  iva_porcentaje: number;
+}
+
+/** Estado editable de UNA linea del dialogo. */
+export interface NotaCreditoLineSelection {
+  detalleFacturaId: string;
+  productoId: string;
+  descripcion: string;
+  /** Cantidad facturada en la factura original: tope maximo acreditable. */
+  cantidadFacturada: number;
+  precioUnitarioVes: number;
+  ivaPorcentaje: number;
+  /** true cuando la linea se incluye en la nota de credito. */
+  seleccionada: boolean;
+  /** Cantidad a acreditar tal como la escribio el operador (string crudo). */
+  cantidad: string;
+}
+
+/** Entrada de `detalles` del payload local (misma forma que espera el backend). */
+export interface NotaCreditoDetallePayload {
+  detalle_factura_id: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario_ves: number;
+  iva_porcentaje: number;
+}
+
+/** Resultado de la seleccion: total a acreditar + detalles a enviar. */
+export interface NotaCreditoSelectionTotals {
+  /** Total (base + IVA) de las lineas seleccionadas y validas, a 2 decimales. */
+  totalVes: number;
+  /** Cuantas lineas estan tildadas (aunque tengan una cantidad invalida). */
+  seleccionadas: number;
+  /** Cuantas lineas tiene la factura. */
+  totalLineas: number;
+  /** Solo las lineas seleccionadas y validas, con la cantidad elegida. */
+  detalles: NotaCreditoDetallePayload[];
+}
+
+export const NOTA_CREDITO_SIN_SELECCION =
+  "Seleccioná al menos un ítem para acreditar.";
+
+// Espeja toBs2 de modules/cash-register/lib/money.ts. Se reimplementa aqui a
+// proposito para que este modulo siga siendo puro y sin dependencias, y pueda
+// correr directo con `node --experimental-strip-types`.
+function round2(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Parsea la cantidad cruda del input. Devuelve null cuando no es un numero
+ * usable, de modo que la validacion pueda distinguir "no numerico" de
+ * "cero/negativo" (que si se parsea pero se rechaza con otro motivo).
+ */
+function parseCantidad(raw: string): number | null {
+  const normalized = String(raw ?? "")
+    .trim()
+    .replace(",", ".");
+  if (!/^[-+]?\d+(\.\d+)?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Construye el estado inicial: TODAS las lineas seleccionadas con su cantidad
+ * facturada completa, para que el caso habitual (devolucion total) siga siendo
+ * un solo click.
+ */
+export function buildNotaCreditoLineSelection(
+  detalles: readonly NotaCreditoDetalleSource[] | null | undefined,
+): NotaCreditoLineSelection[] {
+  if (!Array.isArray(detalles)) return [];
+  return detalles.map((d) => ({
+    detalleFacturaId: String(d.id ?? ""),
+    productoId: String(d.producto_id ?? ""),
+    descripcion: String(d.descripcion ?? ""),
+    cantidadFacturada: Number(d.cantidad ?? 0),
+    precioUnitarioVes: Number(d.precio_unitario_ves ?? 0),
+    ivaPorcentaje: Number(d.iva_porcentaje ?? 0),
+    seleccionada: true,
+    cantidad: String(d.cantidad ?? 0),
+  }));
+}
+
+/**
+ * Valida UNA linea seleccionada. Devuelve el motivo en espanol, o null si esta
+ * bien (o si la linea no esta seleccionada: una linea no usada no se valida).
+ */
+export function validateNotaCreditoLine(
+  linea: NotaCreditoLineSelection,
+): string | null {
+  if (!linea.seleccionada) return null;
+  const nombre = linea.descripcion || "Ítem sin descripción";
+  const cantidad = parseCantidad(linea.cantidad);
+  if (cantidad === null) {
+    return `La cantidad de "${nombre}" no es un número válido.`;
+  }
+  if (cantidad <= 0) {
+    return `La cantidad de "${nombre}" debe ser mayor a cero.`;
+  }
+  if (cantidad > linea.cantidadFacturada) {
+    return `La cantidad de "${nombre}" no puede superar lo facturado (${linea.cantidadFacturada}).`;
+  }
+  return null;
+}
+
+/**
+ * Devuelve TODOS los problemas de la seleccion, en espanol. Lista vacia = se
+ * puede emitir. Nunca devuelve null: el dialogo muestra los motivos junto al
+ * boton en vez de deshabilitarlo en silencio.
+ */
+export function validateNotaCreditoLineSelection(
+  lineas: readonly NotaCreditoLineSelection[],
+): string[] {
+  const seleccionadas = lineas.filter((l) => l.seleccionada);
+  if (seleccionadas.length === 0) return [NOTA_CREDITO_SIN_SELECCION];
+  return lineas
+    .map((l) => validateNotaCreditoLine(l))
+    .filter((motivo): motivo is string => motivo !== null);
+}
+
+/** Total (base + IVA) de una linea para la cantidad elegida, a 2 decimales. */
+export function computeNotaCreditoLineTotal(
+  linea: NotaCreditoLineSelection,
+): number {
+  if (!linea.seleccionada) return 0;
+  const cantidad = parseCantidad(linea.cantidad);
+  if (cantidad === null || cantidad <= 0 || cantidad > linea.cantidadFacturada) {
+    return 0;
+  }
+  const base = cantidad * linea.precioUnitarioVes;
+  return round2(base * (1 + (linea.ivaPorcentaje || 0) / 100));
+}
+
+/**
+ * Calcula el total a acreditar y el payload `detalles` usando SOLO las lineas
+ * seleccionadas y validas. Cada linea se redondea a 2 decimales y luego se
+ * redondea el acumulado; jamas se usa la factura completa.
+ */
+export function computeNotaCreditoSelectionTotals(
+  lineas: readonly NotaCreditoLineSelection[],
+): NotaCreditoSelectionTotals {
+  const seleccionadas = lineas.filter((l) => l.seleccionada);
+  const detalles: NotaCreditoDetallePayload[] = [];
+  let total = 0;
+
+  for (const linea of seleccionadas) {
+    const motivo = validateNotaCreditoLine(linea);
+    if (motivo) continue;
+    const cantidad = parseCantidad(linea.cantidad) as number;
+    total += computeNotaCreditoLineTotal(linea);
+    detalles.push({
+      detalle_factura_id: linea.detalleFacturaId,
+      descripcion: linea.descripcion,
+      cantidad,
+      precio_unitario_ves: linea.precioUnitarioVes,
+      iva_porcentaje: linea.ivaPorcentaje,
+    });
+  }
+
+  return {
+    totalVes: round2(total),
+    seleccionadas: seleccionadas.length,
+    totalLineas: lineas.length,
+    detalles,
+  };
+}
