@@ -127,6 +127,16 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
   }, [factura.id]);
 
   const applyDecision = (decision: NotaCreditoDecision, context: StoredPrintContext) => {
+    if (decision.step === "emitted-not-persisted") {
+      // El documento fiscal ya existe pero nada se guardo: no se imprime, no se
+      // ofrece "No Fiscal" y no se refresca la tabla como si se hubiera guardado.
+      setErrorMsg(decision.message);
+      setErrorHint(
+        "El comprobante fiscal ya existe: no vuelva a emitir la nota. Contacte a soporte para regularizar la persistencia y la devolución del stock.",
+      );
+      setStep("error");
+      return;
+    }
     if (decision.step === "error") {
       setErrorMsg(decision.message);
       setErrorHint("No se guardó la nota de crédito ni se imprimió ningún comprobante.");
@@ -228,14 +238,22 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
       };
 
       try {
-        await facturasService.createCreditNoteTFHKA(tfhkaPayload);
+        const outcome = await facturasService.createCreditNoteTFHKA(tfhkaPayload);
+        applyDecision(
+          decideNotaCreditoOutcome({
+            persisted: outcome.persisted,
+            persistError: outcome.persistError,
+            fiscallyEmitted: true,
+            printed: true,
+          }),
+          context,
+        );
       } catch (e) {
-        // Nada se emitió ni se persistió: error real del backend, sin imprimir.
+        // Fallo de transporte/HTTP: nada se emitio ni se persistio; error real
+        // del backend, sin imprimir.
         console.error("❌ [FacturaNotaCreditoDialog] Persistencia TFHKA de la NC falló:", e);
         applyDecision(decideNotaCreditoOutcome({ persisted: false, persistError: e }), context);
-        return;
       }
-      applyDecision(decideNotaCreditoOutcome({ persisted: true, printed: true }), context);
       return;
     }
 

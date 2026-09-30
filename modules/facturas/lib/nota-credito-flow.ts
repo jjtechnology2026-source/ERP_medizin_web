@@ -7,17 +7,41 @@
 //
 // Sin React, sin DOM y sin red: testeable con `node --test`.
 
-export type NotaCreditoStep = "success" | "stored-not-printed" | "error";
+export type NotaCreditoStep =
+  | "success"
+  | "stored-not-printed"
+  | "emitted-not-persisted"
+  | "error";
 
 export interface NotaCreditoOutcomeInput {
-  /** true cuando la NC quedo persistida en el backend (y el stock se devolvio). */
-  persisted: boolean;
-  /** Error de persistencia cuando `persisted` es false. */
+  /**
+   * true SOLO cuando el backend confirma que la NC quedo persistida (y el stock
+   * se devolvio). Cualquier otro valor (`false`, `undefined`, no booleano) se
+   * lee como "no confirmado" y NUNCA se reporta como exito.
+   */
+  persisted?: boolean;
+  /** Motivo/error de persistencia cuando `persisted` no es true. */
   persistError?: unknown;
   /** true cuando la impresion fiscal termino bien. Se ignora si no persistio. */
   printed?: boolean;
   /** Error de la impresora fiscal cuando `persisted` es true y `printed` false. */
   printError?: unknown;
+  /**
+   * true cuando el comprobante fiscal YA fue emitido aunque la persistencia
+   * falle (camino digital/TFHKA). Cambia el mensaje: existe documento fiscal,
+   * no se debe reintentar la emision, y el stock no quedo guardado.
+   */
+  fiscallyEmitted?: boolean;
+}
+
+/**
+ * Cuerpo (ya desenvuelto) del 200 del camino digital/TFHKA.
+ * `persisted` ausente o no booleano se normaliza a `false`: desconocido NO es
+ * exito confirmado. `persist_error` (snake_case) se expone como `persistError`.
+ */
+export interface NotaCreditoPersistOutcome {
+  persisted: boolean;
+  persistError: string | null;
 }
 
 export interface NotaCreditoDecision {
@@ -38,6 +62,35 @@ export const NOTA_CREDITO_GENERIC_ERROR =
 export const NOTA_CREDITO_SUCCESS = "Nota de crédito emitida correctamente";
 export const NOTA_CREDITO_STORED_NOT_PRINTED =
   "La nota de crédito se guardó y el stock fue devuelto, pero no se pudo imprimir en la impresora fiscal. Puede imprimir el comprobante No Fiscal cuando lo necesite.";
+export const NOTA_CREDITO_EMITTED_NOT_PERSISTED =
+  "La nota de crédito ya fue emitida ante la autoridad fiscal, pero no se guardó en el sistema y el stock no fue devuelto. No vuelva a emitir la nota para no duplicar el documento fiscal.";
+
+/** Mensaje honesto para "fiscal emitida pero NO persistida", con el motivo del backend. */
+export function buildEmittedNotPersistedMessage(reason?: string | null): string {
+  return reason
+    ? `${NOTA_CREDITO_EMITTED_NOT_PERSISTED} Motivo informado: ${reason}`
+    : NOTA_CREDITO_EMITTED_NOT_PERSISTED;
+}
+
+/**
+ * Normaliza el cuerpo de la respuesta TFHKA. Solo `persisted === true` confirma
+ * la persistencia; un valor ausente o no booleano se lee como desconocido y cae
+ * a `false` para que la UI nunca lo presente como exito confirmado.
+ */
+export function normalizeNotaCreditoPersistOutcome(
+  raw: unknown,
+): NotaCreditoPersistOutcome {
+  if (raw == null || typeof raw !== "object") {
+    return { persisted: false, persistError: null };
+  }
+  const body = raw as Record<string, unknown>;
+  const rawError = body.persist_error ?? body.persistError;
+  return {
+    persisted: body.persisted === true,
+    persistError:
+      typeof rawError === "string" && rawError.trim() ? rawError.trim() : null,
+  };
+}
 
 // El backend Rust puede responder el motivo en `message`, `error` o `detail`
 // (es la convencion que ya usan los servicios del repo), envuelto o no en
@@ -129,8 +182,19 @@ export function normalizeNotaCreditoError(
 export function decideNotaCreditoOutcome(
   input: NotaCreditoOutcomeInput,
 ): NotaCreditoDecision {
-  if (!input.persisted) {
+  if (input.persisted !== true) {
     const reason = extractNotaCreditoReason(input.persistError);
+    if (input.fiscallyEmitted) {
+      // El documento fiscal ya existe: no se puede reportar exito ni imprimir, y
+      // el operador no debe reintentar la emision (duplicaria el comprobante).
+      return {
+        step: "emitted-not-persisted",
+        message: buildEmittedNotPersistedMessage(reason),
+        reason: reason ?? undefined,
+        shouldPrint: false,
+        canPrintOnDemand: false,
+      };
+    }
     return {
       step: "error",
       message: normalizeNotaCreditoError(input.persistError),

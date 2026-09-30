@@ -1,5 +1,9 @@
 import api from "@/modules/core/api/client";
 import type { FacturaListItem, FacturaDetail, FacturaTransaccion, NotaCreditoResumen, FacturaFilters } from "../types";
+import {
+  normalizeNotaCreditoPersistOutcome,
+  type NotaCreditoPersistOutcome,
+} from "../lib/nota-credito-flow";
 
 export const facturasService = {
   async list(filtros: FacturaFilters): Promise<FacturaListItem[]> {
@@ -113,8 +117,12 @@ export const facturasService = {
       metodo_pago: string;
       descripcion?: string;
     }[];
-  }): Promise<void> {
-    await api.post("/admin/Facturacion/nota_credito", payload);
+  }): Promise<NotaCreditoPersistOutcome> {
+    const response = await api.post("/admin/Facturacion/nota_credito", payload);
+    // El backend responde 200 aunque la persistencia falle (el documento fiscal
+    // ya existe). El unico canal honesto es el cuerpo: lo normalizamos aqui.
+    const body = response.data?.data ?? response.data;
+    return normalizeNotaCreditoPersistOutcome(body);
   },
 };
 
