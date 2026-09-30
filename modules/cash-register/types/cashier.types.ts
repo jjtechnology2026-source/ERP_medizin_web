@@ -38,6 +38,10 @@ export interface CashierInvoice {
   clientName: string;
   clientRif: string;
   totalVes: number;
+  baseImponibleVes: number;
+  totalExentoVes: number;
+  ivaPorcentaje: number;
+  ivaMontoVes: number;
   exchangeRate: number;
   emittedAt: string | null;
   pdfUrl: string;
