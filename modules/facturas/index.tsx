@@ -2,27 +2,21 @@
 import { useState, useCallback } from "react";
 import { HiOutlineDocumentText, HiOutlineSearch, HiOutlineCalendar } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { daysAgoStr } from "@/modules/core/utils/date";
 import { useFacturas } from "./hooks/useFacturas";
 import FacturasTable from "./components/FacturasTable";
 import type { FacturaFilters } from "./types";
-
-function todayStr() {
-  const d = new Date();
-  return d.toISOString().split("T")[0];
-}
-function monthAgoStr() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().split("T")[0];
-}
 
 export default function FacturasFeature() {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || "";
 
   const [search, setSearch] = useState("");
-  const [fechaDesde, setFechaDesde] = useState(monthAgoStr());
-  const [fechaHasta, setFechaHasta] = useState(todayStr());
+  const [fechaDesde, setFechaDesde] = useState(() => daysAgoStr(30));
+  // Sin "hasta" por defecto: el backend no aplica límite superior cuando la fecha
+  // no viene, así que las facturas recién emitidas se ven siempre. Un "hasta"
+  // calculado con el reloj de la PC las escondería si ese reloj está atrasado.
+  const [fechaHasta, setFechaHasta] = useState("");
 
   const filtros: FacturaFilters = {
     pharmacy_id: pharmacyId,
@@ -70,8 +64,12 @@ export default function FacturasFeature() {
               type="date"
               value={fechaHasta}
               onChange={(e) => setFechaHasta(e.target.value)}
+              title="Sin fecha: se listan todas las facturas posteriores a la fecha inicial"
               className="px-3 py-2.5 text-xs font-semibold bg-[#F8FAFC] border border-[#E4E7EB] rounded-xl outline-none transition-all duration-200 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10"
             />
+            {!fechaHasta && (
+              <span className="text-[10px] font-bold text-slate-400">sin tope</span>
+            )}
           </div>
         </div>
       </div>
