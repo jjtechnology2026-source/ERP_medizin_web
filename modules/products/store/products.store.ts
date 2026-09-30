@@ -12,9 +12,81 @@ import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 // página a la vez con offset; NO se precarga todo el inventario.
 export const INVENTORY_PAGE_SIZE = 10;
 
+// Tamaño de cada sección del `searchFeed`: la modal de búsqueda de Caja va
+// acumulando secciones a medida que el usuario scrollea, así que se piden más
+// productos por request que en la paginación de pantalla.
+export const SEARCH_FEED_PAGE_SIZE = 20;
+
+/**
+ * Feed acumulado de la modal de búsqueda de Caja. Vive aparte de `inventory` a
+ * propósito: `inventory` sigue siendo "la página actual" y la comparten
+ * TabInventory y el marketplace, que collinean con paginación y con upserts
+ * optimistas. Acumular ahí los rompería.
+ */
+export interface SearchFeed {
+  items: Medication[];
+  /** Cursor devuelto por el backend para pedir la sección siguiente. */
+  nextCursor: string | null;
+  hasMore: boolean;
+  /** Primera sección: reemplaza la lista. */
+  isLoading: boolean;
+  /** Secciones siguientes: se agregan al final. */
+  isLoadingMore: boolean;
+  error: string | null;
+  query: string;
+  stockFilter: "in" | "out" | null;
+}
+
+const emptySearchFeed = (): SearchFeed => ({
+  items: [],
+  nextCursor: null,
+  hasMore: false,
+  isLoading: false,
+  isLoadingMore: false,
+  error: null,
+  query: "",
+  stockFilter: null,
+});
+
+/**
+ * Agrega una sección al feed descartando las filas cuyo barCode ya está
+ * cargado, para no repetir productos ni claves de React.
+ */
+const mergeByBarCode = (prev: Medication[], next: Medication[]): Medication[] => {
+  if (next.length === 0) return prev;
+  const seen = new Set(prev.map((m) => m.barCode).filter(Boolean));
+  const fresh = next.filter((m) => {
+    if (!m.barCode) return true;
+    if (seen.has(m.barCode)) return false;
+    seen.add(m.barCode);
+    return true;
+  });
+  return fresh.length > 0 ? [...prev, ...fresh] : prev;
+};
+
+/**
+ * ¿Quedan páginas después de la recién cargada?
+ *
+ * El backend solo manda `has_more` cuando la paginación es por cursor; en las
+ * peticiones por `offset` devuelve `total` pero no el flag, así que tomarlo
+ * tal cual dejaba el botón "Siguiente" siempre deshabilitado (con 22 productos
+ * el pie decía "Página 1 de 3" pero no había forma de avanzar). Cuando el flag
+ * no dice nada, se deriva del total.
+ */
+const resolveHasMore = (
+  res: { has_more: boolean; total: number | null; medications: Medication[] },
+  offset: number,
+): boolean => {
+  if (res.has_more) return true;
+  if (res.total == null) return false;
+  return offset + res.medications.length < res.total;
+};
+
 interface ProductsState {
   /** Solo la página actual del inventario. */
   inventory: Medication[];
+  /** Feed acumulado y autocargado de la modal de búsqueda de Caja. */
+  searchFeed: SearchFeed;
   catalog: Medication[];
   isLoading: boolean;
   isInitialLoad: boolean;
@@ -39,6 +111,9 @@ interface ProductsActions {
   fetchInventory: (force?: boolean) => Promise<void>;
   setPage: (page: number) => Promise<void>;
   searchInventory: (text: string) => Promise<void>;
+  searchFeedLoad: (opts: { query: string; stockFilter: "in" | "out" | null }) => Promise<void>;
+  searchFeedNext: () => Promise<void>;
+  searchFeedReset: () => void;
   refreshCounts: (force?: boolean) => Promise<void>;
   findInventoryItem: (barCode: string, opts?: { strict?: boolean }) => Promise<Medication | null>;
   fetchCatalog: (force?: boolean) => Promise<void>;
@@ -72,6 +147,12 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
   // pagina a la vez, comparten una sola peticion.
   let pageInflight: { key: string; promise: Promise<void> } | null = null;
 
+  // Generacion del searchFeed. Cada busqueda nueva (o un reset) la incrementa, de
+  // modo que la respuesta de una peticion que quedo en vuelo se descarta si ya no
+  // es la mas reciente: sin esto, una respuesta lenta de "aspi" puede pintar
+  // resultados de "aspirina".
+  let feedSeq = 0;
+
   /** Carga una pagina concreta (page-based, offset). */
   const loadPage = async (page: number) => {
     const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
@@ -98,7 +179,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         });
         set({
           inventory: res.medications,
-          hasMore: res.has_more,
+          hasMore: resolveHasMore(res, offset),
           page: safePage,
           isLoading: false,
           isInitialLoad: false,
@@ -126,6 +207,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
 
   return {
     inventory: [],
+    searchFeed: emptySearchFeed(),
     catalog: [],
     isLoading: true,
     isInitialLoad: true,
@@ -141,8 +223,10 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     recentMutations: {},
 
     clearStorage: () => {
+      feedSeq++;
       set({
         inventory: [],
+        searchFeed: emptySearchFeed(),
         catalog: [],
         isLoading: false,
         isInitialLoad: true,
@@ -187,6 +271,107 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     searchInventory: async (text) => {
       set({ searchQuery: text });
       await loadPage(1);
+    },
+
+    searchFeedLoad: async ({ query, stockFilter }) => {
+      const seq = ++feedSeq;
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+
+      // Limpia de entrada: la seccion anterior no debe quedar visible mientras
+      // llega la nueva busqueda.
+      set({ searchFeed: { ...emptySearchFeed(), isLoading: true, query, stockFilter } });
+      if (!pharmacyId) {
+        if (seq === feedSeq) set({ searchFeed: { ...emptySearchFeed(), query, stockFilter } });
+        return;
+      }
+
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          limit: SEARCH_FEED_PAGE_SIZE,
+          query: query || undefined,
+          stockFilter: stockFilter ?? undefined,
+        });
+        if (seq !== feedSeq) return;
+        set({
+          searchFeed: {
+            items: res.medications,
+            // Si el backend dice que hay mas pero no manda cursor, se trata como
+            // fin de lista: sin cursor no hay forma de seguir, y reintentarlo
+            // solo repetiria la ultima pagina.
+            nextCursor: res.next_cursor,
+            hasMore: res.has_more && !!res.next_cursor,
+            isLoading: false,
+            isLoadingMore: false,
+            error: null,
+            query,
+            stockFilter,
+          },
+        });
+      } catch {
+        if (seq !== feedSeq) return;
+        set({
+          searchFeed: {
+            ...emptySearchFeed(),
+            error: "No se pudieron cargar los productos",
+            query,
+            stockFilter,
+          },
+        });
+      }
+    },
+
+    searchFeedNext: async () => {
+      const feed = get().searchFeed;
+      if (!feed.hasMore || feed.isLoading || feed.isLoadingMore || !feed.nextCursor) return;
+
+      const seq = feedSeq;
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      set({ searchFeed: { ...feed, isLoadingMore: true, error: null } });
+      if (!pharmacyId) {
+        if (seq === feedSeq) set({ searchFeed: { ...get().searchFeed, isLoadingMore: false } });
+        return;
+      }
+
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          limit: SEARCH_FEED_PAGE_SIZE,
+          cursor: feed.nextCursor,
+          query: feed.query || undefined,
+          stockFilter: feed.stockFilter ?? undefined,
+        });
+        if (seq !== feedSeq) return;
+        const current = get().searchFeed;
+        const items = mergeByBarCode(current.items, res.medications);
+        set({
+          searchFeed: {
+            ...current,
+            items,
+            nextCursor: res.next_cursor,
+            // Una seccion que no aporta ninguna fila nueva significa que el
+            // backend se quedo sin datos: seguir pidiendo solo repetiria la
+            // ultima pagina indefinidamente.
+            hasMore: res.has_more && !!res.next_cursor && items.length > current.items.length,
+            isLoadingMore: false,
+            error: null,
+          },
+        });
+      } catch {
+        if (seq !== feedSeq) return;
+        // Lo ya cargado se conserva y hasMore sigue en true: el boton de
+        // reintentar vuelve a disparar searchFeedNext con el mismo cursor.
+        set({
+          searchFeed: {
+            ...get().searchFeed,
+            isLoadingMore: false,
+            error: "No se pudo cargar más productos",
+          },
+        });
+      }
+    },
+
+    searchFeedReset: () => {
+      feedSeq++;
+      set({ searchFeed: emptySearchFeed() });
     },
 
     refreshCounts: async (force = false) => {
