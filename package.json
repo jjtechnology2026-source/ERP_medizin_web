@@ -11,6 +11,7 @@
     "lint": "eslint",
     "test:fiscal": "node --experimental-strip-types --test test/fiscal-concordance.test.mjs test/fiscal-fallback.test.mjs test/z-report.test.mjs",
     "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs",
+    "test:nota-credito": "node --experimental-strip-types --test test/nota-credito-flow.test.mjs",
     "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
     "test:inventory": "node --experimental-strip-types --test test/inventory-write.test.mjs",
     "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs"
