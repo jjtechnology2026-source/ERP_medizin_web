@@ -3,6 +3,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import {
+  buildCierreBalances,
+  buildFiscalResumen,
+  computeDifference,
+} from "@/modules/cash-register/lib/cierre-caja";
+import {
   HiOutlineDownload,
   HiOutlineLockClosed,
   HiOutlineCash,
@@ -85,31 +90,37 @@ export default function CashClosurePage() {
     biopago_ves: 0,
   });
 
-  const totalsByMethod = sessionTransactions.reduce(
-    (acc, tx) => {
-      if (tx.voided) return acc;
-      const method = mapTransactionToMethod(tx);
-      if (method) {
-        acc[method] = (acc[method] || 0) + tx.amountVes;
-      }
-      return acc;
-    },
-    { efectivo: 0, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0 } as Record<PaymentMethodKey, number>
+  // La clasificacion por metodo vive en el componente; la matematica del
+  // cierre (neto, saldo teorico y diferencia) vive en el modulo puro.
+  const transactionsWithMethod = useMemo(
+    () => sessionTransactions.map((tx) => ({ ...tx, method: mapTransactionToMethod(tx) })),
+    [sessionTransactions]
   );
 
-  const theoreticalTotalVes = Object.values(totalsByMethod).reduce((a, b) => a + b, 0);
-  const theoreticalTotalUsd = sessionTransactions
-    .filter((tx) => tx.currency === "USD" && !tx.voided)
-    .reduce((sum, tx) => sum + tx.originalAmount, 0);
+  const balances = useMemo(
+    () =>
+      buildCierreBalances({
+        transactions: transactionsWithMethod,
+        openingAmountVes: activeSession?.openingAmountVes ?? 0,
+        openingAmountUsd: activeSession?.openingAmountUsd ?? 0,
+        // El backend ya envia el saldo teorico neto (resta las notas de credito)
+        // y es lo que el cierre persiste como base de la diferencia: por
+        // contrato del backend, no se recalcula aca.
+        authoritativeVes: activeSession?.theoreticalAmountVes,
+        authoritativeUsd: activeSession?.theoreticalAmountUsd,
+      }),
+    [transactionsWithMethod, activeSession]
+  );
 
-  const theoreticalBalanceVes = (activeSession?.openingAmountVes ?? 0) + theoreticalTotalVes;
-  const theoreticalBalanceUsd = (activeSession?.openingAmountUsd ?? 0) + theoreticalTotalUsd;
+  const totalsByMethod = balances.methodTotals;
+  const theoreticalBalanceVes = balances.theoreticalBalanceVes;
+  const theoreticalBalanceUsd = balances.theoreticalBalanceUsd;
 
   const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves;
   const physicalTotalUsd = physicalCount.efectivo_usd;
 
-  const differenceVes = physicalTotalVes - theoreticalBalanceVes;
-  const differenceUsd = physicalTotalUsd - theoreticalBalanceUsd;
+  const differenceVes = computeDifference(physicalTotalVes, theoreticalBalanceVes);
+  const differenceUsd = computeDifference(physicalTotalUsd, theoreticalBalanceUsd);
 
   const formatPrice = (amount: number) => `Bs ${amount.toFixed(2)}`;
   const formatUsd = (amount: number) => `$ ${amount.toFixed(2)}`;
@@ -148,33 +159,7 @@ export default function CashClosurePage() {
     bg: METHOD_BG[method],
   }));
 
-  const fiscalResumen = useMemo(() => {
-    const result = sessionInvoices.flatMap((inv) => inv.lines).reduce(
-      (acc, line) => {
-        const lineTotal = line.unitPriceVes * line.quantity;
-        const taxAmount =
-          line.vatPercentage > 0
-            ? lineTotal * line.vatPercentage / (100 + line.vatPercentage)
-            : 0;
-        if (line.vatPercentage === 0) {
-          acc.exemptTotal += lineTotal;
-        } else {
-          acc.taxableBase += lineTotal - taxAmount;
-          acc.vatByRate[line.vatPercentage] = r2(
-            (acc.vatByRate[line.vatPercentage] || 0) + taxAmount
-          );
-        }
-        acc.grandTotal += lineTotal;
-        return acc;
-      },
-      { taxableBase: 0, exemptTotal: 0, vatByRate: {} as Record<number, number>, grandTotal: 0 }
-    );
-    return {
-      ...result,
-      taxableBase: r2(result.taxableBase),
-      exemptTotal: r2(result.exemptTotal),
-    };
-  }, [sessionInvoices]);
+  const fiscalResumen = useMemo(() => buildFiscalResumen(sessionInvoices), [sessionInvoices]);
 
   useEffect(() => {
     if (!activeSession) {
