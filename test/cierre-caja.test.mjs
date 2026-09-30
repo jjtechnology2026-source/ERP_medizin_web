@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCierreBalances,
   buildFiscalResumen,
+  buildMethodBreakdown,
   buildMethodTotals,
   buildUsdTotal,
   computeDifference,
@@ -135,4 +136,104 @@ test("fiscalResumen: una factura sin datos fiscales aporta cero sin romper la su
   assert.equal(res.exemptTotal, 0);
   assert.equal(res.grandTotal, 116);
   assert.deepEqual(res.vatByRate, { 16: 16 });
+});
+
+// --- Desglose por metodo de pago ---
+
+test("desglose: un metodo por encima/debajo de su esperado da la diferencia por metodo", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: { efectivo: 100, dolares: 50, tarjeta: 0, pagomovil: 0, biopago: 0 },
+    countedByMethod: { efectivo: 120, dolares: 40, tarjeta: 0, pagomovil: 0, biopago: 0 },
+    authoritativeTotal: 150,
+  });
+
+  const efectivo = res.rows.find((row) => row.key === "efectivo");
+  const dolares = res.rows.find((row) => row.key === "dolares");
+
+  assert.equal(efectivo.expected, 100);
+  assert.equal(efectivo.counted, 120);
+  assert.equal(efectivo.difference, 20);
+  assert.equal(dolares.expected, 50);
+  assert.equal(dolares.counted, 40);
+  assert.equal(dolares.difference, -10);
+});
+
+test("desglose: caso real, la diferencia total se explica por metodo", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: {
+      efectivo: 601.34,
+      dolares: 0,
+      tarjeta: 79609.66,
+      pagomovil: 1314.36,
+      biopago: 0,
+    },
+    countedByMethod: {
+      efectivo: 600,
+      dolares: 0,
+      tarjeta: 52949.78,
+      pagomovil: 1315,
+      biopago: 0,
+    },
+    authoritativeTotal: 81525.36,
+  });
+
+  const byKey = Object.fromEntries(res.rows.map((row) => [row.key, row]));
+
+  assert.equal(byKey.tarjeta.expected, 79609.66);
+  assert.equal(byKey.tarjeta.counted, 52949.78);
+  assert.equal(byKey.tarjeta.difference, -26659.88);
+  assert.equal(byKey.pagomovil.difference, 0.64);
+  assert.equal(byKey.efectivo.difference, -1.34);
+  assert.equal(
+    byKey.tarjeta.difference + byKey.pagomovil.difference + byKey.efectivo.difference,
+    -26660.58,
+  );
+  assert.equal(res.divergence, 0);
+});
+
+test("desglose: si el esperado local suma el total fiscal, la divergencia es 0", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: { efectivo: 500, dolares: 0, tarjeta: 1500, pagomovil: 0, biopago: 0 },
+    countedByMethod: { efectivo: 500, dolares: 0, tarjeta: 1500, pagomovil: 0, biopago: 0 },
+    authoritativeTotal: 2000,
+  });
+
+  assert.equal(res.expectedLocalTotal, 2000);
+  assert.equal(res.authoritativeTotal, 2000);
+  assert.equal(res.divergence, 0);
+});
+
+test("desglose: si el esperado local difiere del total fiscal, la divergencia es la brecha", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: { efectivo: 500, dolares: 0, tarjeta: 1500, pagomovil: 0, biopago: 0 },
+    countedByMethod: { efectivo: 500, dolares: 0, tarjeta: 1500, pagomovil: 0, biopago: 0 },
+    authoritativeTotal: 2010.5,
+  });
+
+  assert.equal(res.expectedLocalTotal, 2000);
+  assert.equal(res.divergence, 10.5);
+});
+
+test("desglose: un metodo sin movimiento ni conteo no aporta fila", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: { efectivo: 100, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0 },
+    countedByMethod: { efectivo: 100, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0 },
+    authoritativeTotal: 100,
+  });
+
+  assert.equal(res.rows.length, 1);
+  assert.equal(res.rows[0].key, "efectivo");
+  assert.ok(!res.rows.some((row) => row.key === "biopago"));
+});
+
+test("desglose: un metodo sin movimiento pero con conteo si aporta fila (sobrante)", () => {
+  const res = buildMethodBreakdown({
+    expectedByMethod: { efectivo: 0, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0 },
+    countedByMethod: { efectivo: 0, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 20 },
+    authoritativeTotal: 0,
+  });
+
+  assert.equal(res.rows.length, 1);
+  assert.equal(res.rows[0].key, "biopago");
+  assert.equal(res.rows[0].difference, 20);
 });

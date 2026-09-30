@@ -5,6 +5,7 @@ import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-w
 import {
   buildCierreBalances,
   buildFiscalResumen,
+  buildMethodBreakdown,
   computeDifference,
 } from "@/modules/cash-register/lib/cierre-caja";
 import {
@@ -67,6 +68,16 @@ const METHOD_BG: Record<PaymentMethodKey, string> = {
   biopago: "bg-orange-50",
 };
 
+// Cada metodo del desglose lee su monto del campo correspondiente del conteo
+// fisico (el nombre de campo no coincide con la clave de metodo).
+const COUNTED_FIELD_BY_METHOD: Record<PaymentMethodKey, keyof PhysicalCount> = {
+  efectivo: "efectivo_ves",
+  dolares: "efectivo_usd",
+  tarjeta: "tarjeta_ves",
+  pagomovil: "pagomovil_ves",
+  biopago: "biopago_ves",
+};
+
 export default function CashClosurePage() {
   const router = useRouter();
   const {
@@ -121,6 +132,29 @@ export default function CashClosurePage() {
 
   const differenceVes = computeDifference(physicalTotalVes, theoreticalBalanceVes);
   const differenceUsd = computeDifference(physicalTotalUsd, theoreticalBalanceUsd);
+
+  const countedByMethod = useMemo(() => {
+    const counts = {} as Record<PaymentMethodKey, number>;
+    for (const method of Object.keys(METHOD_LABELS) as PaymentMethodKey[]) {
+      counts[method] = physicalCount[COUNTED_FIELD_BY_METHOD[method]];
+    }
+    return counts;
+  }, [physicalCount]);
+
+  // El esperado por metodo sale de los movimientos locales; el saldo teorico
+  // autoritativo del backend es un TOTAL fiscal, no un dato por metodo. Si la
+  // suma local no coincide con ese total, `methodBreakdown.divergence` lo
+  // muestra en su propia fila: no es un bug de render, es un descuadre real
+  // entre los movimientos de caja y los documentos fiscales.
+  const methodBreakdown = useMemo(
+    () =>
+      buildMethodBreakdown({
+        expectedByMethod: totalsByMethod,
+        countedByMethod,
+        authoritativeTotal: theoreticalBalanceVes,
+      }),
+    [totalsByMethod, countedByMethod, theoreticalBalanceVes]
+  );
 
   const formatPrice = (amount: number) => `Bs ${amount.toFixed(2)}`;
   const formatUsd = (amount: number) => `$ ${amount.toFixed(2)}`;
@@ -339,6 +373,79 @@ export default function CashClosurePage() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-slate-200">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                  <HiOutlineCalculator size={24} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Desglose por Método</h2>
+              </div>
+              <p className="text-slate-500 text-sm mb-6">
+                Compare lo esperado por los movimientos contra lo contado. La diferencia total puede venir de un solo método.
+              </p>
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <div className="grid grid-cols-4 gap-2 px-4 py-3 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <span>Método</span>
+                  <span className="text-right">Esperado</span>
+                  <span className="text-right">Contado</span>
+                  <span className="text-right">Diferencia</span>
+                </div>
+                {methodBreakdown.rows.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">
+                    Sin movimientos ni conteo registrados.
+                  </div>
+                ) : (
+                  methodBreakdown.rows.map((row) => (
+                    <div
+                      key={row.key}
+                      className="grid grid-cols-4 gap-2 px-4 py-3 items-center border-t border-slate-100"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`p-1.5 rounded-lg ${METHOD_BG[row.key]} ${METHOD_COLORS[row.key]}`}>
+                          {METHOD_ICONS[row.key]}
+                        </span>
+                        <span className="font-bold text-slate-600 text-xs truncate">{METHOD_LABELS[row.key]}</span>
+                      </div>
+                      <span className="text-right font-mono text-xs text-slate-600">{row.expected.toFixed(2)}</span>
+                      <span className="text-right font-mono text-xs font-bold text-slate-800">{row.counted.toFixed(2)}</span>
+                      <span
+                        className={`text-right font-mono text-xs font-black ${
+                          row.difference === 0 ? "text-emerald-500" : "text-red-500"
+                        }`}
+                      >
+                        {row.difference >= 0 ? "+" : ""}
+                        {row.difference.toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                )}
+                <div className="grid grid-cols-4 gap-2 px-4 py-3 items-center border-t border-slate-200 bg-white">
+                  <span className="col-span-3 text-xs font-bold text-slate-500">Total esperado fiscal</span>
+                  <span className="text-right font-mono text-sm font-black text-slate-800">
+                    {methodBreakdown.authoritativeTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              {methodBreakdown.divergence !== 0 && (
+                <div className="mt-3 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl">
+                  <HiOutlineInformationCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-amber-700">
+                      Diferencia entre el esperado fiscal y los movimientos
+                    </p>
+                    <p className="text-[11px] text-amber-700/80 mt-0.5">
+                      El esperado por método suma {methodBreakdown.expectedLocalTotal.toFixed(2)} Bs y el saldo
+                      teórico del backend es {methodBreakdown.authoritativeTotal.toFixed(2)} Bs.
+                    </p>
+                  </div>
+                  <span className="font-mono text-sm font-black text-amber-700">
+                    {methodBreakdown.divergence >= 0 ? "+" : ""}
+                    {methodBreakdown.divergence.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </section>
 
