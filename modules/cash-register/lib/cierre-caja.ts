@@ -184,6 +184,62 @@ export function computeDifference(
   return toBs2((Number(physicalTotal) || 0) - (Number(theoreticalBalance) || 0));
 }
 
+export interface CierreMethodBreakdownRow {
+  key: CierreMethodKey;
+  /** Esperado local por metodo (ventas − devoluciones). */
+  expected: number;
+  /** Monto contado fisicamente para el metodo. */
+  counted: number;
+  /** Contado − esperado: positivo sobra, negativo falta. */
+  difference: number;
+}
+
+export interface CierreMethodBreakdown {
+  /** Filas con movimiento o conteo, en orden canonico de metodos. */
+  rows: CierreMethodBreakdownRow[];
+  /** Suma de los esperados locales (los que salen de los movimientos). */
+  expectedLocalTotal: number;
+  /** Saldo teorico autoritativo del backend (total fiscal). */
+  authoritativeTotal: number;
+  /** Autoritativo − esperado local. Distinto de cero = movimientos ≠ fiscales. */
+  divergence: number;
+}
+
+/**
+ * Desglose por metodo de pago del cierre.
+ *
+ * El esperado por metodo solo puede salir de los movimientos locales; el saldo
+ * teorico autoritativo del backend es un TOTAL fiscal, no un dato por metodo.
+ * Por eso `divergence` mide explicitamente la brecha entre ambos: si no es
+ * cero, los movimientos de caja registrados no cuadran con los documentos
+ * fiscales y la pantalla debe mostrarlo, no esconderlo.
+ */
+export function buildMethodBreakdown(input: {
+  expectedByMethod: Record<CierreMethodKey, number>;
+  countedByMethod: Record<CierreMethodKey, number>;
+  authoritativeTotal: number;
+}): CierreMethodBreakdown {
+  const rows: CierreMethodBreakdownRow[] = [];
+
+  for (const key of METHOD_KEYS) {
+    const expected = toBs2(input.expectedByMethod?.[key] ?? 0);
+    const counted = toBs2(input.countedByMethod?.[key] ?? 0);
+    // Un metodo sin movimiento ni conteo no aporta nada al desglose.
+    if (expected === 0 && counted === 0) continue;
+    rows.push({ key, expected, counted, difference: toBs2(counted - expected) });
+  }
+
+  const expectedLocalTotal = sumMethodTotals(input.expectedByMethod);
+  const authoritativeTotal = toBs2(input.authoritativeTotal);
+
+  return {
+    rows,
+    expectedLocalTotal,
+    authoritativeTotal,
+    divergence: toBs2(authoritativeTotal - expectedLocalTotal),
+  };
+}
+
 export interface FiscalResumenInput {
   baseImponibleVes?: number;
   totalExentoVes?: number;
