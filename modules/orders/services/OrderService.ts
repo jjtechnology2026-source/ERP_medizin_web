@@ -39,10 +39,26 @@ export interface OrderStats {
   completedOrders: number;
   failedOrders: number;
   pendingOrders: number;
+  paidOrders: number;
   cancelledOrders: number;
   deliveryOrders: number;
   localOrders: number;
 }
+
+/**
+ * Shape carrying the order status: the backend sends `saleStatus` (camelCase) but
+ * legacy rows may still carry `sale_status`.
+ *
+ * `OrderListTable.statusKey` normalizes the exact same pair to render each row's
+ * status chip. These two must stay in agreement: the stats cards and the table
+ * describe the same orders, so a spelling the table renders but the stats ignore
+ * would make the list and the counters disagree (an order could be shown as
+ * "Completado" while landing in no bucket at all).
+ */
+type StatusCarrier = { saleStatus?: string | null; sale_status?: string | null };
+
+const normalizeSaleStatus = (order: StatusCarrier | null | undefined): string =>
+  String(order?.saleStatus ?? order?.sale_status ?? "").trim().toLowerCase();
 
 export class OrderService {
   /**
@@ -77,10 +93,23 @@ export class OrderService {
         stats.totalSales += total;
         stats.totalOrders += 1;
 
-        if (order.saleStatus === "Completed") stats.completedOrders += 1;
-        else if (order.saleStatus === "Pending") stats.pendingOrders += 1;
-        else if (order.saleStatus === "Cancelled") stats.cancelledOrders += 1;
-        else if (order.saleStatus === "PipelineFailed") stats.failedOrders += 1;
+        // Normalize exactly like OrderListTable.statusKey, including the legacy
+        // `sale_status` fallback, so the counters match the rows the operator sees.
+        // Spellings accepted: completed / completada / entregada / pending / pendiente /
+        // paid / cancelled / cancelada / canceled / pipelinefailed.
+        //
+        // The five backend statuses (Pending, Paid, Cancelled, Completed,
+        // PipelineFailed) map one-to-one onto five row buckets so each card's count
+        // equals what its matching list filter shows. `paid` deliberately does NOT
+        // fold into `pendingOrders`: a paid order is money already collected with the
+        // sale not yet finished, so it must stay individually visible -- that is the
+        // state where losing sight of an order costs actual money.
+        const status = normalizeSaleStatus(order);
+        if (status === "completed" || status === "completada" || status === "entregada") stats.completedOrders += 1;
+        else if (status === "pending" || status === "pendiente") stats.pendingOrders += 1;
+        else if (status === "paid") stats.paidOrders += 1;
+        else if (status === "cancelled" || status === "cancelada" || status === "canceled") stats.cancelledOrders += 1;
+        else if (status === "pipelinefailed") stats.failedOrders += 1;
 
         const saleType = order.saleType?.toLowerCase();
         if (saleType === "delivery") stats.deliveryOrders += 1;
@@ -94,6 +123,7 @@ export class OrderService {
         completedOrders: 0,
         failedOrders: 0,
         pendingOrders: 0,
+        paidOrders: 0,
         cancelledOrders: 0,
         deliveryOrders: 0,
         localOrders: 0,
