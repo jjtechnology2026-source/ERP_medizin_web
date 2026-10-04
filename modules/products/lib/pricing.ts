@@ -1,5 +1,3 @@
-export const MAX_PROFIT_EXCLUSIVE = 100;
-
 /**
  * Fallback VAT percent used only when no explicit value is available.
  * Mirrors the backend `shape::pricing::DEFAULT_VAT_PCT` (explicit inventory VAT
@@ -8,21 +6,21 @@ export const MAX_PROFIT_EXCLUSIVE = 100;
 export const DEFAULT_VAT_PCT = 0;
 
 export function isValidProfit(profitPct: number): boolean {
-  return Number.isFinite(profitPct) && profitPct >= 0 && profitPct < MAX_PROFIT_EXCLUSIVE;
+  return Number.isFinite(profitPct) && profitPct >= 0;
 }
 
 export function sellingPrice(cost: number, profitPct: number, vatPct: number): number {
   if (!Number.isFinite(cost) || !isValidProfit(profitPct) || !Number.isFinite(vatPct)) {
     return NaN;
   }
-  return (cost / (1 - profitPct / 100)) * (1 + vatPct / 100);
+  return cost * (1 + profitPct / 100) * (1 + vatPct / 100);
 }
 
 export function costFromPrice(price: number, profitPct: number, vatPct: number): number {
   if (!Number.isFinite(price) || !isValidProfit(profitPct) || !Number.isFinite(vatPct)) {
     return price;
   }
-  return (price * (1 - profitPct / 100)) / (1 + vatPct / 100);
+  return price / ((1 + profitPct / 100) * (1 + vatPct / 100));
 }
 
 export interface TaxBreakdown {
@@ -63,7 +61,7 @@ export function parseVatInput(raw: string | number | null | undefined): number |
 
 /**
  * Single authoritative FE derivation, parity-checked against the backend
- * `shape::pricing::derive`: `round2(base / (1 - profit/100) * (1 + vat/100) * (1 - discount/100))`.
+ * `shape::pricing::derive`: `round2(base * (1 + profit/100) * (1 + vat/100) * (1 - discount/100))`.
  * Absent profit/discount -> 0; absent VAT -> {@link effectiveVat}.
  * Returns `undefined` when the base is absent (nothing to derive).
  */

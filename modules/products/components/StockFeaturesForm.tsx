@@ -88,7 +88,7 @@ export default function StockFeaturesForm({
   const base = parseInput(priceWithoutVat);
   const profitPct = parseInput(profit);
   const discountPct = hasDiscount ? discountPercent : 0;
-  const priceWithProfit = isValidProfit(profitPct) ? base / (1 - profitPct / 100) : NaN;
+  const priceWithProfit = isValidProfit(profitPct) ? base * (1 + profitPct / 100) : NaN;
   const ganancia = priceWithProfit - base;
   const subtotal = priceWithProfit * (1 - discountPct / 100);
   const iva = subtotal * selectedVat / 100;
@@ -96,7 +96,7 @@ export default function StockFeaturesForm({
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
     if (profitInvalid) {
-      setFeedback({ type: "error", message: "La utilidad debe ser ≥ 0 y < 100%." });
+      setFeedback({ type: "error", message: "La utilidad debe ser mayor o igual a 0%." });
       return;
     }
     setIsSaving(true);
@@ -372,7 +372,7 @@ export default function StockFeaturesForm({
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
                     {profitInvalid && (
-                      <p className="text-[10px] font-bold text-rose-600 ml-1">La utilidad debe ser ≥ 0 y &lt; 100%.</p>
+                      <p className="text-[10px] font-bold text-rose-600 ml-1">La utilidad debe ser mayor o igual a 0%.</p>
                     )}
                   </div>
                   <div className="space-y-2">
