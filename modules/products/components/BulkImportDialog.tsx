@@ -157,10 +157,10 @@ export default function BulkImportDialog({
         const vatPct = vatRaw ? parseInt(vatRaw, 10) : undefined;
         const effectiveProfit = profitPct ?? 0;
         if (!isValidProfit(effectiveProfit)) {
-          errs.push(`Fila ${line} (${name}): la utilidad debe ser ≥ 0%.`);
+          errs.push(`Fila ${line} (${name}): la utilidad debe ser ≥ 0 y < 100%.`);
           return;
         }
-        // Precio de venta = costo * (1 + utilidad) * (1 + IVA) (recargo sobre costo)
+        // Precio de venta = costo / (1 - utilidad) + IVA (margen sobre precio de venta)
         const sellingPrice = bulkSellingPrice(base, effectiveProfit, vatPct);
 
         parsed.push({

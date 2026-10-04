@@ -270,13 +270,13 @@ export default function CreateProductPage({ setView }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Precio de venta = costo * (1 + Ganancia%) * (1 + IVA%) (recargo sobre costo)
+    // Precio de venta = costo / (1 - Ganancia%) + IVA (margen sobre precio de venta)
     const cost = parseFloat(formData.price) || 0;
     const profitPct = parseFloat(formData.profit) || 0;
     // Blank VAT -> undefined -> documented default 0; an explicit "0" survives.
     const vatPct = effectiveVat(parseVatInput(formData.vat));
     if (formData.profit && !isValidProfit(profitPct)) {
-      alert("La utilidad debe ser mayor o igual a 0%.");
+      alert("La utilidad debe ser ≥ 0 y < 100%.");
       return;
     }
     const sellingPrice = calcSellingPrice(cost, profitPct, vatPct);
