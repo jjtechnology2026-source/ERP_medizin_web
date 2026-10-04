@@ -41,6 +41,9 @@ export default function OrderFilters({ filters, onFiltersChange, onReset }: Filt
         <option value="">Estado del pedido</option>
         <option value="Completed">Completado</option>
         <option value="Pending">Pendiente</option>
+        <option value="Paid">Pagado</option>
+        <option value="Cancelled">Cancelado</option>
+        <option value="PipelineFailed">Falló el proceso</option>
       </select>
 
       <button

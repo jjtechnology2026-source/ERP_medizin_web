@@ -46,6 +46,7 @@ export type Payment =
 export interface Facturacion {
   success: boolean;
   numero_control: string | null;
+  numeroControl?: string | null;
   resp: {
     numerointerno: string;
     numerocontrol: string;
@@ -55,6 +56,33 @@ export interface Facturacion {
     serie: string | null;
   } | null;
   error: any;
+}
+
+export interface PipelineFailure {
+  stage: string;
+  reasonCode: string;
+  applied: number;
+  compensated: boolean;
+  diverged: boolean;
+  attempts: number;
+  attemptedAt: string;
+  /** The failed attempt could not be resolved: stock may or may not be applied. */
+  outcomeUnknown?: boolean;
+}
+
+/** Machine codes the backend returns in the `refusal` field of a 404/409. */
+export type ReprocessRefusalCode =
+  | "order_not_found"
+  | "evidence_absent"
+  | "partial_application"
+  | "sale_movement_exists"
+  | "application_unverifiable"
+  | "application_proven_applied"
+  | "outcome_unknown";
+
+export interface ReprocessRefusalBody {
+  error: string;
+  refusal: ReprocessRefusalCode;
 }
 
 export interface Order {
@@ -73,7 +101,9 @@ export interface Order {
   payments: Payment[];
   rate: number;
   gender: string;
-  saleStatus: "Completed" | "Pending" | "Cancelled";
+  saleStatus: "Pending" | "Paid" | "Completed" | "Cancelled" | "PipelineFailed";
+  numeroControlInterno?: string | null;
+  pipelineFailure?: PipelineFailure | null;
   isControlled: boolean;
   saleType: string;
   address: string;

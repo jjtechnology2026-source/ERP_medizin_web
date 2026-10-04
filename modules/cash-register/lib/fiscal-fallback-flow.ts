@@ -69,7 +69,7 @@ interface FallbackOrderShape {
     fecha?: string;
     resp?: { numerocontrol?: string; fecha?: string } | null;
   } | null;
-  numeroControlInterno?: string;
+  numeroControlInterno?: string | null;
   date?: string;
   id?: string;
 }
