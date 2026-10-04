@@ -4,6 +4,7 @@ export interface OrderStats {
   totalSales: number;
   totalOrders: number;
   completedOrders: number;
+  failedOrders: number;
   pendingOrders: number;
   cancelledOrders: number;
   deliveryOrders: number;
@@ -46,6 +47,7 @@ export class OrderService {
         if (order.saleStatus === "Completed") stats.completedOrders += 1;
         else if (order.saleStatus === "Pending") stats.pendingOrders += 1;
         else if (order.saleStatus === "Cancelled") stats.cancelledOrders += 1;
+        else if (order.saleStatus === "PipelineFailed") stats.failedOrders += 1;
 
         const saleType = order.saleType?.toLowerCase();
         if (saleType === "delivery") stats.deliveryOrders += 1;
@@ -57,6 +59,7 @@ export class OrderService {
         totalSales: 0,
         totalOrders: 0,
         completedOrders: 0,
+        failedOrders: 0,
         pendingOrders: 0,
         cancelledOrders: 0,
         deliveryOrders: 0,

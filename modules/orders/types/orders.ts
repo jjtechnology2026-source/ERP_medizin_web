@@ -46,6 +46,7 @@ export type Payment =
 export interface Facturacion {
   success: boolean;
   numero_control: string | null;
+  numeroControl?: string | null;
   resp: {
     numerointerno: string;
     numerocontrol: string;
@@ -55,6 +56,16 @@ export interface Facturacion {
     serie: string | null;
   } | null;
   error: any;
+}
+
+export interface PipelineFailure {
+  stage: string;
+  reasonCode: string;
+  applied: number;
+  compensated: boolean;
+  diverged: boolean;
+  attempts: number;
+  attemptedAt: string;
 }
 
 export interface Order {
@@ -73,7 +84,9 @@ export interface Order {
   payments: Payment[];
   rate: number;
   gender: string;
-  saleStatus: "Completed" | "Pending" | "Cancelled";
+  saleStatus: "Pending" | "Paid" | "Completed" | "Cancelled" | "PipelineFailed";
+  numeroControlInterno?: string | null;
+  pipelineFailure?: PipelineFailure | null;
   isControlled: boolean;
   saleType: string;
   address: string;

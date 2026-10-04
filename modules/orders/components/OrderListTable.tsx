@@ -8,6 +8,51 @@ import OrderDetailModal from "./OrderDetailModal";
 import OrderFilters from "./OrderFilters";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
+/** Shape carrying the order status: the backend may send `saleStatus` or (legacy) `sale_status`. */
+type StatusCarrier = { saleStatus?: string | null; sale_status?: string | null };
+
+const statusKey = (order: StatusCarrier | null | undefined): string =>
+  String(order?.saleStatus ?? order?.sale_status ?? "").trim().toLowerCase();
+
+const statusLabel = (key: string): string => {
+  switch (key) {
+    case "completed":
+    case "completada":
+    case "entregada":
+      return "Completado";
+    case "cancelled":
+    case "cancelada":
+      return "Cancelado";
+    case "pending":
+    case "pendiente":
+      return "Pendiente";
+    case "paid":
+      return "Pagado";
+    case "pipelinefailed":
+      return "Falló el proceso";
+    default:
+      return key || "Pendiente";
+  }
+};
+
+const statusClass = (key: string): string => {
+  switch (key) {
+    case "completed":
+    case "completada":
+    case "entregada":
+      return "bg-emerald-100 text-emerald-600";
+    case "cancelled":
+    case "cancelada":
+      return "bg-rose-100 text-rose-600";
+    case "paid":
+      return "bg-sky-100 text-sky-600";
+    case "pipelinefailed":
+      return "bg-red-600 text-white";
+    default:
+      return "bg-amber-100 text-amber-600";
+  }
+};
+
 interface OrdersPageProps {
   orders: Order[];
   loading: boolean;
@@ -72,11 +117,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   // 2. Filtrar por status localmente
   const filteredOrders = useMemo(() => {
     if (!filters.status) return sortedOrders;
-    return sortedOrders.filter(order => {
-      const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
-      const filterStatus = String(filters.status).trim().toLowerCase();
-      return status === filterStatus;
-    });
+    return sortedOrders.filter(order => statusKey(order) === String(filters.status).trim().toLowerCase());
   }, [sortedOrders, filters.status]);
 
   // 3. Pagination — reset on filter changes via key or explicit effect
@@ -96,7 +137,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   const getNoDataMessage = () => {
     const messages = [];
     if (filters.type_sale) messages.push(`tipo "${filters.type_sale}"`);
-    if (filters.status) messages.push(`estado "${filters.status === 'Completed' ? 'Completado' : 'Pendiente'}"`);
+    if (filters.status) messages.push(`estado "${statusLabel(String(filters.status).trim().toLowerCase())}"`);
     if (filters.date_start || filters.date_end) messages.push('rango de fechas seleccionado');
     return messages.length > 0 ? `No hay órdenes para ${messages.join(', ')}.` : 'No hay órdenes disponibles.';
   };
@@ -147,21 +188,8 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                     {formatOrderTotal(Number(order.totalreal !== undefined ? order.totalreal : (order as any).total_real) || 0)}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-[10px] font-black rounded-md uppercase ${
-                      (() => {
-                        const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
-                        if (status === "completed" || status === "completada" || status === "entregada") return "bg-emerald-100 text-emerald-600";
-                        if (status === "cancelled" || status === "cancelada") return "bg-rose-100 text-rose-600";
-                        return "bg-amber-100 text-amber-600";
-                      })()
-                    }`}>
-                      {(() => {
-                        const status = String(order.saleStatus || (order as any).sale_status || "").trim().toLowerCase();
-                        if (status === "completed" || status === "completada" || status === "entregada") return "Completado";
-                        if (status === "cancelled" || status === "cancelada") return "Cancelado";
-                        if (status === "pending" || status === "pendiente") return "Pendiente";
-                        return status || "Pendiente";
-                      })()}
+                    <span className={`px-3 py-1 text-[10px] font-black rounded-md uppercase ${statusClass(statusKey(order))}`}>
+                      {statusLabel(statusKey(order))}
                     </span>
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>

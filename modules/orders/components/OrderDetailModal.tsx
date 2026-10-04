@@ -18,6 +18,21 @@ const PAYMENT_LABELS: Record<string, string> = {
   mobile: "Pago Móvil", biopago: "Biopago",
 };
 
+const FAILURE_STAGE_LABELS: Record<string, string> = {
+  stock: "Inventario (stock)",
+  sealing: "Sellado por lote",
+  mqtt: "Notificación MQTT",
+  movement: "Movimiento de inventario",
+  facturacion: "Facturación",
+};
+
+const FAILURE_REASON_LABELS: Record<string, string> = {
+  rejected_no_stock: "Sin stock suficiente",
+  not_found: "Producto no encontrado",
+  internal: "Error interno / timeout",
+  diverged: "Inventario divergente",
+};
+
 const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: string, value: any, isSmall?: boolean, isFull?: boolean }) => (
   <div className={`flex flex-col ${isFull ? 'col-span-2' : ''}`}>
     <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter mb-0.5">{label}</span>
@@ -74,6 +89,9 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
 
   if (!visibleOrder) return null;
 
+  const isPipelineFailed = String(visibleOrder.saleStatus ?? "").trim().toLowerCase() === "pipelinefailed";
+  const failure = visibleOrder.pipelineFailure;
+
   return (
     <ModalWrapper isOpen={isOpen} onClose={handleClose} zIndex={100}>
       <div className="w-full max-w-4xl overflow-hidden flex flex-col">
@@ -117,12 +135,38 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
             <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-8 space-y-5">
               <h4 className="font-black text-slate-900 text-xs uppercase tracking-widest">Información fiscal</h4>
               <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                <DetailItem label="Origen" value="Facturación digital" />
-                <DetailItem label="Estado" value="Procesada digitalmente" />
-                <DetailItem label="Nro Interno Fiscal" value="00001306" />
-                <DetailItem label="Control Fiscal" value="00-00001325" />
-                <DetailItem label="Tracking / Serial" value={visibleOrder.id} isSmall isFull />
-                <DetailItem label="Fecha Fiscal" value={new Date(visibleOrder.date).toISOString()} isSmall isFull />
+                <DetailItem label="Origen" value={visibleOrder.facturacion?.success ? "Facturación digital" : ""} />
+                <DetailItem
+                  label="Estado"
+                  value={
+                    visibleOrder.facturacion?.success
+                      ? "Procesada digitalmente"
+                      : visibleOrder.facturacion?.error
+                        ? `Error: ${String(visibleOrder.facturacion.error)}`
+                        : "Sin facturación registrada"
+                  }
+                />
+                <DetailItem
+                  label="Nro Interno Fiscal"
+                  value={visibleOrder.facturacion?.resp?.numerointerno || visibleOrder.numeroControlInterno}
+                />
+                <DetailItem label="Control Fiscal" value={visibleOrder.facturacion?.resp?.numerocontrol} />
+                <DetailItem
+                  label="Tracking / Serial"
+                  value={visibleOrder.facturacion?.resp?.trackingid || visibleOrder.id}
+                  isSmall
+                  isFull
+                />
+                <DetailItem
+                  label="Fecha Fiscal"
+                  value={
+                    visibleOrder.facturacion?.resp?.fecha
+                      ? new Date(visibleOrder.facturacion.resp.fecha).toLocaleString("es-VE")
+                      : ""
+                  }
+                  isSmall
+                  isFull
+                />
               </div>
               {/* Sección corregida del PDF fiscal */}
               <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -151,6 +195,40 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 </button>
               </div>
             </div>
+
+            {isPipelineFailed && (
+              <div className="bg-red-50 border border-red-100 rounded-[32px] p-8 space-y-5">
+                <h4 className="font-black text-red-700 text-xs uppercase tracking-widest">Fallo del proceso de venta</h4>
+                <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                  <DetailItem
+                    label="Etapa"
+                    value={failure ? FAILURE_STAGE_LABELS[failure.stage] || failure.stage : ""}
+                  />
+                  <DetailItem
+                    label="Motivo"
+                    value={failure ? FAILURE_REASON_LABELS[failure.reasonCode] || failure.reasonCode : ""}
+                  />
+                  <DetailItem label="Unidades aplicadas" value={failure ? String(failure.applied) : ""} />
+                  <DetailItem label="Compensado" value={failure ? (failure.compensated ? "Sí" : "No") : ""} />
+                  <DetailItem label="Divergencia" value={failure ? (failure.diverged ? "Sí" : "No") : ""} />
+                  <DetailItem label="Intentos" value={failure ? String(failure.attempts) : ""} />
+                  <DetailItem
+                    label="Ocurrió"
+                    value={failure?.attemptedAt ? new Date(failure.attemptedAt).toLocaleString("es-VE") : ""}
+                    isFull
+                  />
+                </div>
+                {!failure && (
+                  <p className="text-[11px] text-red-700 leading-snug">
+                    Sin evidencia persistida para esta orden (fila anterior a que existiera el registro del fallo).
+                  </p>
+                )}
+                <p className="text-[11px] text-red-700 leading-snug">
+                  El corte de 10 s del pipeline es del lado del cliente: el inventario pudo descontarse igual.
+                  Verificar el stock antes de reintentar la venta.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Columna Derecha */}
