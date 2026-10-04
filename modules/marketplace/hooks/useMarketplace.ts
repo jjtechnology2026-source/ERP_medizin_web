@@ -189,25 +189,6 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
     });
   }, [orders, filters]);
 
-  // --- Estadísticas ---
-  const stats = useMemo(() => {
-    const pendingOrders = orders.filter((o) => {
-      const status = (o.saleStatus || (o as any).sale_status || "") as any;
-      return status === "Pending" || status === "PENDIENTE" || status === "pendiente";
-    });
-    const completedOrders = orders.filter((o) => {
-      const status = (o.saleStatus || (o as any).sale_status || "") as any;
-      return status === "Completed" || status === "COMPLETADA" || status === "completada" ||
-             status === "Cancelled" || status === "CANCELADA" || status === "cancelada" ||
-             status === "Canceled" || status === "CANCELED" || status === "canceled";
-    });
-    return {
-      total: orders.length,
-      pending: pendingOrders.length,
-      completed: completedOrders.length,
-    };
-  }, [orders]);
-
   useEffect(() => {
     if (!initialSelectedOrderId || initialOrderHandled) return;
     if (orders.length === 0) return;
@@ -245,7 +226,6 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
     unfilteredOrdersCount: orders.length,
     isLoading,
     refetch,
-    stats,
     activeTab,
     setActiveTab,
     filters,

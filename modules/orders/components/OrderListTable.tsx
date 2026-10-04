@@ -22,6 +22,7 @@ const statusLabel = (key: string): string => {
       return "Completado";
     case "cancelled":
     case "cancelada":
+    case "canceled":
       return "Cancelado";
     case "pending":
     case "pendiente":
@@ -43,6 +44,7 @@ const statusClass = (key: string): string => {
       return "bg-emerald-100 text-emerald-600";
     case "cancelled":
     case "cancelada":
+    case "canceled":
       return "bg-rose-100 text-rose-600";
     case "paid":
       return "bg-sky-100 text-sky-600";

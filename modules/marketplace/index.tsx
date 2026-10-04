@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { HiOutlineRefresh } from "react-icons/hi";
 import { useSearchParams } from "next/navigation";
-import MarketplaceStats from "./components/MarketplaceStats";
 import MarketplaceFilters from "./components/MarketplaceFilters";
 import MarketplaceTable from "./components/MarketplaceTable";
 import MarketplaceDetailModal from "./components/MarketplaceDetailModal";
@@ -18,7 +17,6 @@ export default function MarketplaceOrdersFeature() {
     orders,
     isLoading,
     refetch,
-    stats,
     activeTab,
     setActiveTab,
     filters,
