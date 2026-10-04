@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { HiOutlineExternalLink, HiOutlinePrinter } from "react-icons/hi";
-import { Order } from "../types/orders";
+import { Order, ReprocessRefusalCode } from "../types/orders";
+import { OrderService, REPROCESS_REFUSAL_LABELS } from "../services/OrderService";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
@@ -46,6 +47,13 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
   const [visibleOrder, setVisibleOrder] = useState<Order | null>(order);
   const [isOpen, setIsOpen] = useState(!!order);
   const [isReprinting, setIsReprinting] = useState(false);
+  const [isReprocessing, setIsReprocessing] = useState(false);
+  const [isReprocessConfirming, setIsReprocessConfirming] = useState(false);
+  const [reprocessResult, setReprocessResult] = useState<
+    | { ok: true }
+    | { ok: false; code: ReprocessRefusalCode | "unknown"; message: string }
+    | null
+  >(null);
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -53,6 +61,9 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     if (order) {
       setVisibleOrder(order);
       setIsOpen(true);
+      // A different order is a new attempt: never carry over a previous result.
+      setIsReprocessConfirming(false);
+      setReprocessResult(null);
       return;
     }
     setIsOpen(false);
@@ -87,10 +98,37 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     }
   };
 
+  const handleReprocess = async () => {
+    // A successful re-run must never be re-submitted. The success branch already
+    // stops rendering the control, but this makes it handler-enforced too: a future
+    // refactor, a new entry point or a test harness cannot bypass it. A second
+    // submission would be a second stock decrement for the same order.
+    if (reprocessResult?.ok) return;
+    if (!visibleOrder) return;
+    setIsReprocessing(true);
+    try {
+      const result = await OrderService.reprocessOrder(visibleOrder.id);
+      setReprocessResult(result);
+      setIsReprocessConfirming(false);
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
+
   if (!visibleOrder) return null;
 
   const isPipelineFailed = String(visibleOrder.saleStatus ?? "").trim().toLowerCase() === "pipelinefailed";
   const failure = visibleOrder.pipelineFailure;
+  // `applied === 0` and "the outcome is known" are exactly the two facts the
+  // client can read from the evidence it already has. Everything else (a Venta
+  // movement, the inventory stamp, the touch window) can only be answered by
+  // the backend, so the button is offered and the backend's typed 409 is relayed.
+  const canReprocess = isPipelineFailed && !!failure && failure.applied === 0 && !failure.outcomeUnknown;
+  const reprocessSucceeded = reprocessResult?.ok === true;
+  const reprocessTerminal =
+    reprocessResult !== null &&
+    !reprocessResult.ok &&
+    reprocessResult.code === "application_proven_applied";
 
   return (
     <ModalWrapper isOpen={isOpen} onClose={handleClose} zIndex={100}>
@@ -227,6 +265,62 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                   El corte de 10 s del pipeline es del lado del cliente: el inventario pudo descontarse igual.
                   Verificar el stock antes de reintentar la venta.
                 </p>
+                {failure && (
+                  <div className="pt-4 border-t border-red-200 space-y-3">
+                    {reprocessSucceeded ? (
+                      <p className="text-[11px] font-black text-[#059669] leading-snug">
+                        Reproceso iniciado. El pipeline corre en segundo plano.
+                      </p>
+                    ) : canReprocess && !reprocessTerminal ? (
+                      <>
+                        <p className="text-[11px] text-red-700 leading-snug">
+                          Reprocesar vuelve a ejecutar el descuento de stock y las escrituras
+                          fiscales y de movimiento de esta única orden. No lo hagas si no estás seguro.
+                        </p>
+                        {isReprocessConfirming ? (
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              onClick={handleReprocess}
+                              disabled={isReprocessing}
+                              className="px-6 py-2.5 bg-[#FF3B30] text-white font-black rounded-2xl hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isReprocessing ? "Reprocesando…" : "Confirmar reproceso"}
+                            </button>
+                            <button
+                              onClick={() => setIsReprocessConfirming(false)}
+                              disabled={isReprocessing}
+                              className="px-6 py-2.5 bg-white text-slate-600 font-black rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setIsReprocessConfirming(true)}
+                            className="px-6 py-2.5 bg-[#FF3B30] text-white font-black rounded-2xl hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95"
+                          >
+                            Reprocesar venta
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-red-700 leading-snug">
+                        {reprocessTerminal
+                          ? REPROCESS_REFUSAL_LABELS.application_proven_applied
+                          : failure.outcomeUnknown
+                            ? "El intento fallido no pudo resolverse: verificar el stock antes de reintentar."
+                            : `La orden todavía tiene ${failure.applied} unidades aplicadas: no se puede reprocesar.`}
+                      </p>
+                    )}
+                    {reprocessResult !== null && !reprocessResult.ok && !reprocessTerminal && (
+                      <p className="text-[11px] font-black text-red-700 leading-snug">
+                        {reprocessResult.code === "unknown"
+                          ? reprocessResult.message
+                          : REPROCESS_REFUSAL_LABELS[reprocessResult.code]}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

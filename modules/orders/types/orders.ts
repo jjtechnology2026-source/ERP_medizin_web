@@ -66,6 +66,23 @@ export interface PipelineFailure {
   diverged: boolean;
   attempts: number;
   attemptedAt: string;
+  /** The failed attempt could not be resolved: stock may or may not be applied. */
+  outcomeUnknown?: boolean;
+}
+
+/** Machine codes the backend returns in the `refusal` field of a 404/409. */
+export type ReprocessRefusalCode =
+  | "order_not_found"
+  | "evidence_absent"
+  | "partial_application"
+  | "sale_movement_exists"
+  | "application_unverifiable"
+  | "application_proven_applied"
+  | "outcome_unknown";
+
+export interface ReprocessRefusalBody {
+  error: string;
+  refusal: ReprocessRefusalCode;
 }
 
 export interface Order {
