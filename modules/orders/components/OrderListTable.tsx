@@ -68,6 +68,7 @@ interface OrdersPageProps {
   };
   setFilters: React.Dispatch<React.SetStateAction<any>>;
   onRefresh: () => void;
+  isRefreshing?: boolean;
   total: number;
   fetchNextPage?: () => void;
   hasNextPage?: boolean;
@@ -91,7 +92,7 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
 
 // --- COMPONENTE PRINCIPAL ---
 
-export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
+export default function OrdersPage({ orders, loading, isRefreshing, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -124,10 +125,15 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
 
   // 3. Pagination — reset on filter changes via key or explicit effect
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  // The loaded page window can shrink on a refetch (an intermediate cursor that no longer exists
+  // ends the replay early), and the 60 s interval makes that reachable with no operator action.
+  // The index is clamped at render time instead of synced by an effect: no extra render, no state
+  // written from an effect, and the table can never sit past the end of the data.
+  const safePage = Math.min(currentPage, totalPages);
   const currentOrders = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
+    const start = (safePage - 1) * itemsPerPage;
     return filteredOrders.slice(start, start + itemsPerPage);
-  }, [filteredOrders, currentPage]);
+  }, [filteredOrders, safePage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -204,11 +210,20 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
         {/* --- PAGINATION --- */}
         <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
           <p className="text-xs font-bold text-slate-400">
-            Mostrando {currentOrders.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
+            Mostrando {currentOrders.length > 0 ? (safePage - 1) * itemsPerPage + 1 : 0} - {Math.min(safePage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
           </p>
+          <button
+            onClick={onRefresh}
+            disabled={loading || isRefreshing}
+            aria-label="Actualizar"
+            title="Actualizar"
+            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95 disabled:opacity-30"
+          >
+            <HiOutlineRefresh className={`w-5 h-5 text-slate-600${isRefreshing ? " animate-spin" : ""}`} />
+          </button>
           <div className="flex items-center gap-4">
             <button 
-              disabled={currentPage === 1} 
+              disabled={safePage === 1} 
               onClick={() => setCurrentPage(p => p - 1)} 
               className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
             >
@@ -218,7 +233,7 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
             </button>
             <div className="flex items-center gap-1 font-bold text-xs">
               <span className="bg-[#4A69BD] text-white px-3 py-1.5 rounded-lg shadow-md shadow-blue-100 min-w-[32px] text-center">
-                {currentPage}
+                {safePage}
               </span>
               <span className="text-slate-400 px-1 text-[10px] uppercase">de</span>
               <span className="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg min-w-[32px] text-center">
@@ -226,11 +241,11 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
               </span>
             </div>
             <button 
-              disabled={currentPage === totalPages} 
+              disabled={safePage === totalPages} 
               onClick={() => {
-                setCurrentPage(p => p + 1);
+                setCurrentPage(safePage + 1);
                 // ponytail: pre-fetch when approaching the edge of loaded data (2 pages ahead)
-                const next = currentPage + 1;
+                const next = safePage + 1;
                 if ((next + 1) * itemsPerPage > orders.length && hasNextPage && fetchNextPage) {
                   fetchNextPage();
                 }

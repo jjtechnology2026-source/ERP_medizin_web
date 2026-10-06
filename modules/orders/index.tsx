@@ -10,7 +10,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 export default function OrdersFeature() {
   const { profile } = useAuthStore();
 
-  const { orders, loading, filters, setFilters, total, refresh, fetchNextPage, hasNextPage } = useOrders(profile?.id_group || "", profile?.pharmacyId || "");
+  const { orders, loading, isRefetching, filters, setFilters, total, refresh, fetchNextPage, hasNextPage } = useOrders(profile?.id_group || "", profile?.pharmacyId || "");
 
   // `orders` is the flattened list of already-fetched infinite-query pages, so the cards
   // describe the loaded window, not the whole history. We compute them from that same
@@ -23,7 +23,7 @@ export default function OrdersFeature() {
   return (
     <div className="flex flex-col gap-8 p-3 min-h-full">
       <OrderStatsCards stats={stats} loading={loading} />
-      <OrdersPage orders={orders} loading={loading} filters={filters} setFilters={setFilters} onRefresh={refresh} total={total} fetchNextPage={fetchNextPage} hasNextPage={hasNextPage} />
+      <OrdersPage orders={orders} loading={loading} isRefreshing={isRefetching} filters={filters} setFilters={setFilters} onRefresh={refresh} total={total} fetchNextPage={fetchNextPage} hasNextPage={hasNextPage} />
     </div>
   );
 }

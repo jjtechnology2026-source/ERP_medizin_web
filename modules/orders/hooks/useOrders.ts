@@ -80,6 +80,11 @@ export function useOrders(idGroup: string, idPharmacy: string) {
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     initialPageParam: null as string | null,
     staleTime: 30_000,
+    refetchInterval: 60_000,
+    // The global QueryClient disables refetch-on-focus (modules/core/providers/index.tsx:34) and a
+    // hidden tab pauses the interval, so coming back to an open screen would keep showing the last
+    // snapshot until the next tick. Opting in here is what makes "look at the screen" refresh it.
+    refetchOnWindowFocus: true,
   });
 
   // Reset pre-fetch counter when filters change (triggers new query)
@@ -115,6 +120,11 @@ export function useOrders(idGroup: string, idPharmacy: string) {
   return {
     orders,
     loading: query.isLoading,
+    // `isLoading` is only true on the first load: during any refetch it is false, so it cannot be
+    // used to show progress or to lock the refresh control. `isRefetching` is the narrow one: true
+    // while a refresh (manual or the 60 s interval) is in flight, false while only a next page is
+    // being prefetched.
+    isRefetching: query.isRefetching,
     total,
     setFilters,
     filters,
