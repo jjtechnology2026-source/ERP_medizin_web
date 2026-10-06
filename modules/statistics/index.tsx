@@ -5,6 +5,7 @@ import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { Order } from "@/modules/orders/types/orders";
+import type { SearchOrdersReturn } from "@/modules/orders/hooks/useOrders";
 
 interface StatProduct {
   id: string;
@@ -49,6 +50,76 @@ const aggregateProductStats = (orders: Order[]): StatProduct[] => {
   });
 
   return Array.from(map.values()).sort((a, b) => b.total - a.total);
+};
+
+const toFiniteNumber = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = typeof value === "string" ? parseFloat(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/**
+ * Nets the backend's whole-scope, per-product return totals against the
+ * aggregated sale rows. The backend already excludes voided notes and reports
+ * `amount_usd` in the same USD unit as `price * quantity`, so this only
+ * subtracts: it never re-derives or re-scales.
+ *
+ * A return whose product has no sale row in the current window is kept as a
+ * negative row instead of being dropped, so the refund stays visible and the
+ * quantity/money totals still add up. Without `returns` (older backend) the
+ * rows are returned untouched (gross), never zeroed.
+ */
+export const applyProductReturns = (
+  products: StatProduct[],
+  returns?: SearchOrdersReturn[] | null,
+): StatProduct[] => {
+  if (!returns || returns.length === 0) return products;
+
+  const returnsByName = new Map<string, { quantity: number; amount: number }>();
+  returns.forEach((item) => {
+    const name = item.name?.trim() || "Sin nombre";
+    const quantity = toFiniteNumber(item.quantity);
+    const amount = toFiniteNumber(item.amount_usd);
+    const existing = returnsByName.get(name);
+    if (existing) {
+      existing.quantity += quantity;
+      existing.amount += amount;
+    } else {
+      returnsByName.set(name, { quantity, amount });
+    }
+  });
+
+  const applied = new Set<string>();
+
+  const netted = products.map((product) => {
+    const returned = returnsByName.get(product.name);
+    // Subtract once per name: the table is keyed by name|category|controlled, so a
+    // duplicate name would otherwise be discounted as many times as it has rows.
+    if (!returned || applied.has(product.name)) return product;
+    applied.add(product.name);
+    return {
+      ...product,
+      quantity: product.quantity - returned.quantity,
+      total: product.total - returned.amount,
+    };
+  });
+
+  returnsByName.forEach((returned, name) => {
+    if (applied.has(name)) return;
+    if (returned.quantity === 0 && returned.amount === 0) return;
+    netted.push({
+      id: `${name}|Sin categoría|false`,
+      name,
+      category: "Sin categoría",
+      controlled: false,
+      // Unit price of the refunded item; unknowable when quantity is 0.
+      cost: returned.quantity !== 0 ? returned.amount / returned.quantity : 0,
+      quantity: -returned.quantity,
+      total: -returned.amount,
+    });
+  });
+
+  return netted.sort((a, b) => b.total - a.total);
 };
 
 export default function StatisticsPage() {
@@ -102,13 +173,16 @@ export default function StatisticsPage() {
 
   const orders = response?.orders ?? [];
 
-  // The only figure that can be net: the backend computes it over the whole filtered
-  // set and subtracts the valid credit notes. Returns cannot be attributed to a
-  // product, so the per-product table below stays gross.
+  // The backend computes the net scope total over the whole filtered set and
+  // subtracts the valid credit notes. The per-product table below applies the
+  // same returns, name by name.
   const netSales =
     typeof response?.totals?.sales === "number" ? response.totals.sales : null;
 
-  const products = useMemo(() => aggregateProductStats(orders), [orders]);
+  const products = useMemo(
+    () => applyProductReturns(aggregateProductStats(orders), response?.totals?.returns),
+    [orders, response?.totals?.returns],
+  );
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -123,10 +197,8 @@ export default function StatisticsPage() {
   const currentItems = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const totalQuantity = filteredProducts.reduce((sum, item) => sum + item.quantity, 0);
-  // Gross "vendido": suma de price x quantity de los productos listados. No descuenta
-  // El detalle por producto todavia NO descuenta las lineas de las notas, por eso se
-  // rotula como bruto. El dato existe (`detalle_nota_credito` guarda cantidad, precio y
-  // subtotal por linea): falta agregarlo, no falta registrarlo.
+  // Net "vendido": suma de price x quantity de los productos listados menos las
+  // devoluciones por producto que reporta el backend (ya expresadas en USD).
   const totalRevenue = filteredProducts.reduce((sum, item) => sum + item.total, 0);
 
   const resetFilters = () => {
@@ -154,7 +226,7 @@ export default function StatisticsPage() {
             <p className="mt-2 text-2xl font-black text-slate-900">{filteredProducts.length}</p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Cantidad total</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Cantidad total (neta)</p>
             <p className="mt-2 text-2xl font-black text-slate-900">{totalQuantity}</p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -229,9 +301,10 @@ export default function StatisticsPage() {
         </div>
 
         <p className="mt-6 text-xs text-slate-500">
-          Las devoluciones se descuentan solo en el total general (neto) del encabezado. Este
-          detalle muestra lo vendido en bruto: el sistema <b>sí</b> registra qué producto devuelve
-          cada nota, pero esta tabla todavía no descuenta esas líneas.
+          Las devoluciones (notas de crédito) se descuentan por producto con los totales que el
+          backend reporta para todo el rango filtrado, así que la cantidad y el total de cada fila
+          ya son netos. Un producto devuelto sin venta en el rango aparece con cantidad y total
+          negativos para que la devolución siga siendo visible.
         </p>
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
@@ -239,7 +312,7 @@ export default function StatisticsPage() {
             <table className="min-w-225 w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-white text-slate-500 uppercase tracking-[0.3em] text-[11px]">
-                  {["Producto", "Categoría", "Cantidad", "Controlado", "Costo", "Total vendido"].map((title) => (
+                  {["Producto", "Categoría", "Cantidad", "Controlado", "Costo", "Total vendido (neto)"].map((title) => (
                     <th key={title} className="px-6 py-5 font-semibold">
                       {title}
                     </th>
@@ -276,7 +349,7 @@ export default function StatisticsPage() {
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-white">
                     <td colSpan={5} className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
-                      Total vendido (bruto)
+                      Total vendido (neto)
                     </td>
                     <td className="px-6 py-4 font-black text-slate-900">{formatCurrencyLocal(totalRevenue)}</td>
                   </tr>

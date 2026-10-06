@@ -3,6 +3,20 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/modules/core/api/client";
 
 /**
+ * Whole-scope return totals, broken down per product. `name` is
+ * `detalle_nota_credito.descripcion`, the same string the UI sees as
+ * `medications[].name`; `quantity` is exact and `amount_usd` is in the same
+ * USD unit as `medications[].price * quantity`. Voided notes and orders outside
+ * the sale scope are already excluded, and the rows sum to `sales_returned`, so
+ * consumers only subtract: they must not re-derive or re-scale.
+ */
+export interface SearchOrdersReturn {
+  name: string;
+  quantity: number;
+  amount_usd: number;
+}
+
+/**
  * Whole-scope money totals returned alongside the first page. They describe the
  * entire filtered set (per the backend's `search_orders_scope_sql`), not the
  * pages loaded so far, and are expressed in USD.
@@ -18,6 +32,8 @@ export interface SearchOrdersTotals {
   sales: number;
   sales_gross: number;
   sales_returned: number;
+  /** Per-product returns; absent on older backends, in which case totals are gross. */
+  returns?: SearchOrdersReturn[] | null;
 }
 
 export interface SearchOrdersResponse {
