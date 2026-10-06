@@ -10,19 +10,19 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 export default function OrdersFeature() {
   const { profile } = useAuthStore();
 
-  const { orders, loading, filters, setFilters, total, refresh, fetchNextPage, hasNextPage } = useOrders(profile?.id_group || "", profile?.pharmacyId || "");
+  const { orders, loading, filters, setFilters, total, totals, refresh, fetchNextPage, hasNextPage } = useOrders(profile?.id_group || "", profile?.pharmacyId || "");
 
-  // `orders` is the flattened list of already-fetched infinite-query pages, so the cards
-  // describe the loaded window, not the whole history. We compute them from that same
-  // in-memory list (never from `/api/orders/stats`) so the counters are exactly consistent
-  // with the rows below them. `total` (the server's full count) is intentionally not used
-  // for the bucket cards: it would make them look like global totals they are not. The
-  // cards' own "Órdenes Cargadas" label states what it counts.
+  // The per-status counters come from the flattened list of already-fetched
+  // infinite-query pages, so they describe the loaded window, not the whole
+  // history; the cards' own labels state what they count. The sales card is
+  // different: it renders the hook's scope `totals`, which the backend computes
+  // over the whole filtered set (net of returns), so it no longer depends on how
+  // many pages have loaded.
   const stats = useMemo(() => OrderService.calculateStats(orders), [orders]);
 
   return (
     <div className="flex flex-col gap-8 p-3 min-h-full">
-      <OrderStatsCards stats={stats} loading={loading} />
+      <OrderStatsCards stats={stats} scopeTotals={totals} loading={loading} />
       <OrdersPage orders={orders} loading={loading} filters={filters} setFilters={setFilters} onRefresh={refresh} total={total} fetchNextPage={fetchNextPage} hasNextPage={hasNextPage} />
     </div>
   );

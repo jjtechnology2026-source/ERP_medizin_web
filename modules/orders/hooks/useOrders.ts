@@ -2,11 +2,30 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/modules/core/api/client";
 
+/**
+ * Whole-scope money totals returned alongside the first page. They describe the
+ * entire filtered set (per the backend's `search_orders_scope_sql`), not the
+ * pages loaded so far, and are expressed in USD.
+ *
+ * `sales` is already net: `sales_gross - sales_returned`. `sales_gross` sums
+ * `totalreal` over Completed/Paid orders; `sales_returned` is the sum of the
+ * valid credit notes of those same orders.
+ */
+export interface SearchOrdersTotals {
+  orders: number;
+  products: number;
+  units: number;
+  sales: number;
+  sales_gross: number;
+  sales_returned: number;
+}
+
 export interface SearchOrdersResponse {
   orders: any[];
   next_cursor: string | null;
   has_more: boolean;
   total: number;
+  totals?: SearchOrdersTotals | null;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -112,10 +131,16 @@ export function useOrders(idGroup: string, idPharmacy: string) {
 
   const total = query.data?.pages[0]?.total ?? 0;
 
+  // Scope totals only need the first page: every page carries the same
+  // whole-filter-set figures, so reading page 0 keeps them stable while the
+  // infinite list keeps loading more rows.
+  const totals = query.data?.pages[0]?.totals ?? null;
+
   return {
     orders,
     loading: query.isLoading,
     total,
+    totals,
     setFilters,
     filters,
     refresh: () => query.refetch(),

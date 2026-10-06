@@ -102,6 +102,12 @@ export default function StatisticsPage() {
 
   const orders = response?.orders ?? [];
 
+  // The only figure that can be net: the backend computes it over the whole filtered
+  // set and subtracts the valid credit notes. Returns cannot be attributed to a
+  // product, so the per-product table below stays gross.
+  const netSales =
+    typeof response?.totals?.sales === "number" ? response.totals.sales : null;
+
   const products = useMemo(() => aggregateProductStats(orders), [orders]);
 
   const filteredProducts = useMemo(() => {
@@ -117,6 +123,8 @@ export default function StatisticsPage() {
   const currentItems = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const totalQuantity = filteredProducts.reduce((sum, item) => sum + item.quantity, 0);
+  // Gross "vendido": suma de price x quantity de los productos listados. No descuenta
+  // devoluciones (no se guardan por producto), por eso se rotula como bruto.
   const totalRevenue = filteredProducts.reduce((sum, item) => sum + item.total, 0);
 
   const resetFilters = () => {
@@ -148,8 +156,10 @@ export default function StatisticsPage() {
             <p className="mt-2 text-2xl font-black text-slate-900">{totalQuantity}</p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Total ventas</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{formatCurrencyLocal(totalRevenue)}</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Total ventas (neto)</p>
+            <p className="mt-2 text-2xl font-black text-slate-900">
+              {netSales === null ? "---" : formatCurrencyLocal(netSales)}
+            </p>
           </div>
         </div>
       </div>
@@ -216,12 +226,18 @@ export default function StatisticsPage() {
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+        <p className="mt-6 text-xs text-slate-500">
+          Las devoluciones (notas de crédito) se descuentan solo en el total general (neto) del
+          encabezado. El detalle por producto siempre es bruto («total vendido»): el sistema no
+          guarda qué producto devuelve cada nota, así que no se reparte la devolución entre productos.
+        </p>
+
+        <div className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
           <div className="overflow-x-auto">
             <table className="min-w-225 w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-white text-slate-500 uppercase tracking-[0.3em] text-[11px]">
-                  {["Producto", "Categoría", "Cantidad", "Controlado", "Costo", "Total"].map((title) => (
+                  {["Producto", "Categoría", "Cantidad", "Controlado", "Costo", "Total vendido"].map((title) => (
                     <th key={title} className="px-6 py-5 font-semibold">
                       {title}
                     </th>
@@ -254,6 +270,16 @@ export default function StatisticsPage() {
                   ))
                 )}
               </tbody>
+              {!isLoading && filteredProducts.length > 0 ? (
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-white">
+                    <td colSpan={5} className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                      Total vendido (bruto)
+                    </td>
+                    <td className="px-6 py-4 font-black text-slate-900">{formatCurrencyLocal(totalRevenue)}</td>
+                  </tr>
+                </tfoot>
+              ) : null}
             </table>
           </div>
 
