@@ -124,7 +124,9 @@ export default function StatisticsPage() {
 
   const totalQuantity = filteredProducts.reduce((sum, item) => sum + item.quantity, 0);
   // Gross "vendido": suma de price x quantity de los productos listados. No descuenta
-  // devoluciones (no se guardan por producto), por eso se rotula como bruto.
+  // El detalle por producto todavia NO descuenta las lineas de las notas, por eso se
+  // rotula como bruto. El dato existe (`detalle_nota_credito` guarda cantidad, precio y
+  // subtotal por linea): falta agregarlo, no falta registrarlo.
   const totalRevenue = filteredProducts.reduce((sum, item) => sum + item.total, 0);
 
   const resetFilters = () => {
@@ -227,9 +229,9 @@ export default function StatisticsPage() {
         </div>
 
         <p className="mt-6 text-xs text-slate-500">
-          Las devoluciones (notas de crédito) se descuentan solo en el total general (neto) del
-          encabezado. El detalle por producto siempre es bruto («total vendido»): el sistema no
-          guarda qué producto devuelve cada nota, así que no se reparte la devolución entre productos.
+          Las devoluciones se descuentan solo en el total general (neto) del encabezado. Este
+          detalle muestra lo vendido en bruto: el sistema <b>sí</b> registra qué producto devuelve
+          cada nota, pero esta tabla todavía no descuenta esas líneas.
         </p>
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
