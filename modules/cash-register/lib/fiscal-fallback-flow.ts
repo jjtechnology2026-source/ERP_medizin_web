@@ -314,7 +314,9 @@ export async function runZReportFallback<
       z_number: fallback.z_number,
       fiscal_serial: fallback.fiscal_serial,
       fiscal_date: fallback.fiscal_date,
-      invoices: fallback.invoices,
+      // ponytail: sin `invoices`, el backend deriva el bloque documental y el
+      // rango `(cierre anterior, ahora]` de las facturas reales. Enviarlo lo
+      // sobreescribiria con los datos de sesion del POS.
     });
     if (retry.success && retry.report) report = retry.report;
   } catch {
