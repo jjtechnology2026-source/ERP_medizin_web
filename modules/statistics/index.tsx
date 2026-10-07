@@ -6,6 +6,10 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { Order } from "@/modules/orders/types/orders";
 import type { SearchOrdersReturn } from "@/modules/orders/hooks/useOrders";
+import {
+  businessDayStartIso,
+  businessDayEndIso,
+} from "@/modules/core/utils/date";
 
 interface StatProduct {
   id: string;
@@ -152,10 +156,10 @@ export default function StatisticsPage() {
       cleanParams.id_pharmacy = profile.pharmacyId;
     }
     if (dateStart) {
-      cleanParams["date.start"] = new Date(dateStart).toISOString();
+      cleanParams["date.start"] = businessDayStartIso(dateStart);
     }
     if (dateEnd) {
-      cleanParams["date.end"] = new Date(dateEnd).toISOString();
+      cleanParams["date.end"] = businessDayEndIso(dateEnd);
     }
     return new URLSearchParams(cleanParams).toString();
   }, [profile?.id_group, profile?.pharmacyId, dateStart, dateEnd]);

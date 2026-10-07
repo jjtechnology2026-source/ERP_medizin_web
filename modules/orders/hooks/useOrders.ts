@@ -1,6 +1,10 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/modules/core/api/client";
+import {
+  businessDayStartIso,
+  businessDayEndIso,
+} from "@/modules/core/utils/date";
 
 /**
  * Whole-scope return totals, broken down per product. `name` is
@@ -86,10 +90,10 @@ export function useOrders(idGroup: string, idPharmacy: string) {
         cleanParams.id_pharmacy = filters.id_pharmacy;
       }
       if (filters.date_start) {
-        cleanParams["date.start"] = new Date(filters.date_start).toISOString();
+        cleanParams["date.start"] = businessDayStartIso(filters.date_start);
       }
       if (filters.date_end) {
-        cleanParams["date.end"] = new Date(filters.date_end).toISOString();
+        cleanParams["date.end"] = businessDayEndIso(filters.date_end);
       }
       if (filters.type_sale) {
         cleanParams.type_sale = filters.type_sale;
