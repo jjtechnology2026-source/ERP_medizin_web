@@ -94,4 +94,39 @@ para probar REQ-7.
 
 ## Outcome
 
-_(se completa al cerrar)_
+### Estado
+
+| Work unit | Estado |
+| --- | --- |
+| T-01 helper día comercial (ERP) | done |
+| T-02 call sites ERP (orders, marketplace, statistics, audit) | done |
+| T-03 admin (`dateFilters.ts`, `ventasTotales`) | done |
+
+### Commits
+
+| Repo | Rama | Commit |
+| --- | --- | --- |
+| `ERP_medizin_web` | `fix/orders-business-day-filter` (desde `origin/master` `fa81f40`) | `038dfc6` |
+| `pharmacy-administrator-medizin` | `fix/orders-business-day-filter` (desde `origin/main` `3ec31be`) | `04478ec` |
+
+### Evidencia
+
+- `npm run test:date-utils` (ERP, `TZ=America/Caracas`): **13 passed, 0 failed**.
+- Los 5 tests nuevos (`businessDay*`) pasan también con **`TZ=UTC`**: son
+  deterministas, no dependen del reloj del proceso (REQ-7). Los 3 rojos con
+  `TZ=UTC` son los tests viejos de `localDateStr`/`daysAgoStr`, TZ-dependientes
+  por diseño.
+- `npx --no-install tsc --noEmit`: **exit 0** en ERP y en admin.
+- Salida del helper (ERP), verificada a mano:
+  `businessDayStartIso("2026-10-06") = 2026-10-06T04:00:00.000Z`,
+  `businessDayEndIso("2026-10-06") = 2026-10-07T03:59:59.999Z`.
+
+### Pendiente
+
+1. **Push / deploy.** Los commits están locales en worktrees; no se
+   pushearon. ERP deploya desde `master` y admin desde `main`.
+2. **Smoke en vivo.** Repetir el filtro 06/10→07/10 en `registro-ordenes` y
+   confirmar que ya no aparecen las órdenes con FECHA 5/10, y que
+   *Ventas Netas* cierra con el libro de ventas.
+3. Otros campos de fecha que se muestran (columna FECHA) se dejan como están:
+   con el filtro correcto, una orden del 5/10 local ya no entra en el rango del 6.
