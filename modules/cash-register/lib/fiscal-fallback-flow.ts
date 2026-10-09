@@ -49,14 +49,18 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 export function paymentLabel(method?: string, currency?: string): string {
   const m = (method || "").toLowerCase();
-  if (m === "dollars" || m === "dolares" || currency === "USD") return "Efectivo USD";
-  // Normaliza por subcadena las variantes del backend (Rust enums:
-  // TarjetaDebito, TarjetaCredito, Transferencia, PagoMovil, PuntoDeVenta,
-  // Biopago, Cheque, Efectivo...), igual que mapTransactionToMethod del cierre.
-  if (m.includes("tarjeta") || m.includes("debito") || m.includes("credito") || m.includes("punto")) {
+  if (m === "dollars" || m === "dolares" || m === "usd" || currency === "USD") return "Efectivo USD";
+  // Normaliza por subcadena los valores reales del backend (EFECTIVO,
+  // TRANSFERENCIA, PUNTO_DE_VENTA, PAGOMOVIL, ZELLE) y las variantes de enum
+  // (TarjetaDebito, TarjetaCredito, PuntoDeVenta, PagoMovil, Biopago, Cheque...).
+  if (m.includes("punto") || m.includes("tarjeta") || m.includes("debito") || m.includes("credito")) {
     return "Punto de Venta";
   }
-  if (m.includes("movil") || m.includes("transferencia")) return "Pago Movil";
+  if (m.includes("pagomovil") || m.includes("pago_movil") || m.includes("movil") || m === "mobile") {
+    return "Pago Movil";
+  }
+  if (m.includes("transferencia") || m.includes("transfer")) return "Transferencia";
+  if (m.includes("zelle")) return "Zelle";
   if (m.includes("biopago")) return "Biopago";
   if (m.includes("efectivo") || m === "cash") return "Efectivo Bs";
   if (m.includes("cheque")) return "Cheque";
