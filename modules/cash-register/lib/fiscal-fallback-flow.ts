@@ -49,7 +49,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 export function paymentLabel(method?: string, currency?: string): string {
   const m = (method || "").toLowerCase();
-  if (m === "dollars" || m === "dolares" || m === "usd" || currency === "USD") return "Divisas";
+  if (m === "dollars" || m === "dolares" || m === "usd" || currency === "USD") return "Dolares";
   // Normaliza por subcadena los valores reales del backend (EFECTIVO,
   // TRANSFERENCIA, PUNTO_DE_VENTA, PAGOMOVIL, ZELLE) y las variantes de enum
   // (TarjetaDebito, TarjetaCredito, PuntoDeVenta, PagoMovil, Biopago, Cheque...).
