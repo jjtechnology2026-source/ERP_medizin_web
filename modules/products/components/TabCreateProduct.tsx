@@ -5,6 +5,8 @@ import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
+import { useApiQuery } from "@/modules/core/hooks/useApi";
+import { resolveCategoryOptions, resolveSubcategoryOptions } from "@/modules/products/lib/catalog";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -326,7 +328,30 @@ export default function CreateProductPage({ setView }: any) {
     }
   };
 
-  const subcategoryOptions = CATEGORY_MAP[formData.category] || [];
+  const { data: categoriesResponse } = useApiQuery<{ categories: string[] }>(
+    ["products", "categories"],
+    "/admin/products/categories",
+    { staleTime: 5 * 60 * 1000 },
+  );
+
+  const { data: subcategoriesResponse } = useApiQuery<{
+    category: string;
+    subcategories: string[];
+  }>(
+    ["products", "subcategories", formData.category],
+    "/admin/products/subcategories",
+    {
+      params: { category: formData.category },
+      enabled: !!formData.category,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+
+  const categoryOptions = resolveCategoryOptions(categoriesResponse?.categories, CATEGORY_KEYS);
+  const subcategoryOptions = resolveSubcategoryOptions(
+    subcategoriesResponse,
+    CATEGORY_MAP[formData.category] ?? [],
+  );
 
   return (
     <div className="w-full max-w-[1600px] flex flex-col space-y-4">
@@ -541,7 +566,7 @@ export default function CreateProductPage({ setView }: any) {
                 placeholder="Seleccione una categoría"
                 required
                 value={formData.category}
-                options={CATEGORY_KEYS}
+                options={categoryOptions}
                 onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
               />
               <SearchableSelect
