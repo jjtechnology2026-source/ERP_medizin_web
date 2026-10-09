@@ -33,15 +33,30 @@ const FISCAL_SUPPORT_DATA = [
 const FISCAL_PORT_STORAGE_KEY = "fiscal-serial-port";
 
 // Puerto persistido en localStorage: sobrevive al refresh aunque el
-// servicio fiscal no responda en ese momento.
+// servicio fiscal no responda en ese momento. Sin valor guardado queda vacio
+// (no "99", que en Windows se normaliza a COM99 y falla al guardar); un efecto
+// lo completa con el primer puerto disponible/real.
 function getStoredPort(): string {
-  if (typeof window === "undefined") return "99";
-  return window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY) ?? "99";
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY) ?? "";
 }
 
 function persistPort(serialPort: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(FISCAL_PORT_STORAGE_KEY, serialPort);
+}
+
+// Elige el puerto mas probable para la maquina fiscal: el marcado por el
+// servicio (fiscal:true), luego uno USB real, evitando Bluetooth/virtuales.
+function pickBestPort(ports: FiscalSerialPort[]): string {
+  const nonBluetooth = ports.filter((p) => !/bluetooth/i.test(p.description ?? ""));
+  const pool = nonBluetooth.length > 0 ? nonBluetooth : ports;
+  return (
+    pool.find((p) => p.fiscal)?.device ??
+    pool.find((p) => p.interface === "usb")?.device ??
+    pool[0]?.device ??
+    ""
+  );
 }
 
 export default function FiscalConfigCard() {
@@ -138,6 +153,19 @@ export default function FiscalConfigCard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [implementation]);
+
+  // Mantiene el selector apuntando a un puerto real: si el valor guardado no
+  // esta en la lista (p.ej. un "99" viejo o un COM desconectado), se elige el
+  // mejor candidato (fiscal/USB, como COM9) para no enviar un puerto invalido.
+  useEffect(() => {
+    if (availablePorts.length === 0) return;
+    if (availablePorts.some((p) => p.device === port)) return;
+    const next = pickBestPort(availablePorts);
+    if (next && next !== port) {
+      setPort(next);
+      persistPort(next);
+    }
+  }, [availablePorts, port]);
 
   const handleAction = (action: string) => {
     console.log(`Ejecutando acción: ${action}`);
