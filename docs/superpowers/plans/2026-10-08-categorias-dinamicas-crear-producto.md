@@ -35,7 +35,7 @@
   - `resolveCategoryOptions(fetched: string[] | undefined, fallback: string[]): string[]`
   - `resolveSubcategoryOptions(fetched: { category: string; subcategories: string[] } | undefined, fallback: string[]): string[]`
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Crear `test/catalog.test.mjs`:
 
@@ -72,12 +72,12 @@ test("subcategorias: cae al respaldo mientras carga o si fallo la query", () => 
 });
 ```
 
-- [ ] **Step 2: Correr el test y verificar que falla**
+- [x] **Step 2: Correr el test y verificar que falla**
 
 Run: `node --experimental-strip-types --test test/catalog.test.mjs`
 Expected: FAIL — `Cannot find module '.../modules/products/lib/catalog.ts'`.
 
-- [ ] **Step 3: Crear el módulo mínimo**
+- [x] **Step 3: Crear el módulo mínimo**
 
 Crear `modules/products/lib/catalog.ts`:
 
@@ -102,12 +102,12 @@ export function resolveSubcategoryOptions(
 }
 ```
 
-- [ ] **Step 4: Correr el test y verificar que pasa**
+- [x] **Step 4: Correr el test y verificar que pasa**
 
 Run: `node --experimental-strip-types --test test/catalog.test.mjs`
 Expected: PASS — 5 tests, 0 fallos.
 
-- [ ] **Step 5: Registrar el script en `package.json`**
+- [x] **Step 5: Registrar el script en `package.json`**
 
 En el bloque `scripts`, después de `"test:store": ...`, agregar:
 
@@ -115,12 +115,12 @@ En el bloque `scripts`, después de `"test:store": ...`, agregar:
 "test:catalog": "node --experimental-strip-types --test test/catalog.test.mjs"
 ```
 
-- [ ] **Step 6: Correr vía pnpm**
+- [x] **Step 6: Correr vía pnpm**
 
 Run: `pnpm test:catalog`
 Expected: PASS — 5 tests, 0 fallos.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add modules/products/lib/catalog.ts test/catalog.test.mjs package.json
@@ -138,7 +138,7 @@ git commit -m "feat(products): resolucion pura de opciones de categoria con resp
 - Consumes: `useApiQuery<T>(key, endpoint, options)` de `@/modules/core/hooks/useApi`; `resolveCategoryOptions` / `resolveSubcategoryOptions` de `@/modules/products/lib/catalog`.
 - Produces: nada nuevo hacia otros módulos (cambio local del componente).
 
-- [ ] **Step 1: Agregar imports**
+- [x] **Step 1: Agregar imports**
 
 Tras la línea de import de `useAuthStore` (o junto a los imports existentes), agregar:
 
@@ -147,7 +147,7 @@ import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { resolveCategoryOptions, resolveSubcategoryOptions } from "@/modules/products/lib/catalog";
 ```
 
-- [ ] **Step 2: Agregar las dos queries**
+- [x] **Step 2: Agregar las dos queries**
 
 Justo después de `const subcategoryOptions = CATEGORY_MAP[formData.category] || [];` (línea 329), **reemplazar** esa línea por:
 
@@ -178,7 +178,7 @@ const subcategoryOptions = resolveSubcategoryOptions(
 );
 ```
 
-- [ ] **Step 3: Usar `categoryOptions` en el select de categoría**
+- [x] **Step 3: Usar `categoryOptions` en el select de categoría**
 
 En el `SearchableSelect` de categoría (líneas ~539-546), cambiar:
 
@@ -194,7 +194,7 @@ options={categoryOptions}
 
 (No cambiar `label`, `placeholder`, `required`, `value` ni el `onChange`.)
 
-- [ ] **Step 4: Usar `subcategoryOptions` en el select de subcategoría**
+- [x] **Step 4: Usar `subcategoryOptions` en el select de subcategoría**
 
 El select de subcategoría (líneas ~547-554) ya usa `options={subcategoryOptions}`; con el Step 2 ahora `subcategoryOptions` es la versión reactiva. No requiere más cambios, pero **verificar que sigue presente**:
 
@@ -202,17 +202,17 @@ El select de subcategoría (líneas ~547-554) ya usa `options={subcategoryOption
 options={subcategoryOptions}
 ```
 
-- [ ] **Step 5: Lint**
+- [x] **Step 5: Lint**
 
 Run: `pnpm lint`
 Expected: sin errores nuevos en `modules/products/components/TabCreateProduct.tsx` ni `modules/products/lib/catalog.ts`. (Los warnings preexistentes de otros archivos no son de este cambio.)
 
-- [ ] **Step 6: Build (typecheck + compilación)**
+- [x] **Step 6: Build (typecheck + compilación)**
 
 Run: `pnpm build`
 Expected: `Compiled successfully` (Next.js). Si falla por tipado, corregir los tipos de las respuestas (`categoriesResponse?.categories`, `subcategoriesResponse?.subcategories`) hasta compilar.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add modules/products/components/TabCreateProduct.tsx
@@ -257,3 +257,11 @@ Expected: los selects siguen mostrando los valores del `CATEGORY_MAP` (respaldo)
 - **Cobertura del spec:** endpoints → Task 2 (Step 2) y Task 3; respaldo ante fallo → Task 1 (funciones puras) + Task 2; cache 5 min → Task 2; sin cambios de payload/`SearchableSelect` → constraints + Task 2 Steps 3-4; plantilla Excel intacta → constraints; verificación (tipos+build+en vivo) → Task 2 Step 6 y Task 3. Solo se descartó el "Archivo 1" (service) por redundancia, documentado arriba.
 - **Placeholders:** ninguno; cada step tiene código o comando exacto.
 - **Consistencia de tipos:** `categoryOptions: string[]`, `subcategoryOptions: string[]`; `resolveSubcategoryOptions` recibe `{ category, subcategories } | undefined`, que es lo que devuelve `useApiQuery` (envelope del backend). Coincide con `SubcategoriesResponse`.
+
+---
+
+## Estado de verificación (2026-10-09)
+
+- **Task 1 y 2 ejecutadas y verificadas:** `npm run test:catalog` → 5/5 pass; `npm run lint` → sin errores nuevos en `catalog.ts` ni en las líneas tocadas de `TabCreateProduct.tsx` (los problemas reportados en otros archivos/líneas son preexistentes); `npm run build` → `Compiled successfully` + TypeScript OK.
+- **Nota:** el plan menciona pnpm, pero en esta máquina pnpm está roto por un mismatch de llaves de corepack; se verificó con npm (mismos scripts).
+- **Task 3 (verificación en vivo) pendiente:** en curso por el usuario contra `https://medizins.com` (curl con token + prueba del formulario + prueba de respaldo).
