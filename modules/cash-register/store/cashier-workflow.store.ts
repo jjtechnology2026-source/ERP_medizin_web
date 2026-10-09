@@ -217,6 +217,15 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         if (recon) {
           order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
         }
+        // El total que imprime la maquina (neto x cantidad x (1+tasa)) puede
+        // diferir del de la suma con-IVA por el redondeo del desglose. Se toma
+        // el total fiscal como fuente de verdad del pedido (en Bs -> USD) para
+        // que lo almacenado en el backend cuadre con lo impreso.
+        if (typeof fiscalResult.total === "number" && order.rate > 0) {
+          const totalUsd = Math.round((fiscalResult.total / order.rate) * 100) / 100;
+          order.totalreal = totalUsd;
+          order.totalsystem = totalUsd;
+        }
         order.numeroControlInterno = fiscalResult.fiscal_number;
         const result = await cashierAccountantService.submitOrder(order, "local", activeSession.id);
         set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
