@@ -71,6 +71,7 @@ export default function FiscalConfigCard() {
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
   const [pos58Status, setPos58Status] = useState<"idle" | "pairing" | "done" | "error">("idle");
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
+  const [serviceVersion, setServiceVersion] = useState<string | null>(null);
   const [showZReport, setShowZReport] = useState(false);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -85,8 +86,14 @@ export default function FiscalConfigCard() {
     const checkService = () => {
       fiscalPrinterClient
         .getHealth()
-        .then(() => setServiceInstalled(true))
-        .catch(() => setServiceInstalled(false));
+        .then((health) => {
+          setServiceInstalled(true);
+          setServiceVersion(health?.version ? String(health.version) : null);
+        })
+        .catch(() => {
+          setServiceInstalled(false);
+          setServiceVersion(null);
+        });
     };
 
     checkService();
@@ -444,6 +451,20 @@ export default function FiscalConfigCard() {
 
           {/* Acciones */}
           <div className="flex flex-col gap-5 mt-2">
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <span
+                className={`inline-block w-2.5 h-2.5 rounded-full ${
+                  serviceInstalled ? "bg-emerald-500" : serviceInstalled === null ? "bg-slate-300" : "bg-red-500"
+                }`}
+              />
+              <span className="text-slate-500">
+                {serviceInstalled === null
+                  ? "Comprobando servicio fiscal…"
+                  : serviceInstalled
+                    ? `Servicio fiscal conectado — versión ${serviceVersion ?? "desconocida"}`
+                    : "Servicio fiscal no conectado"}
+              </span>
+            </div>
             <div className="flex flex-wrap items-center gap-4">
               <button
                 onClick={handleInstallService}
