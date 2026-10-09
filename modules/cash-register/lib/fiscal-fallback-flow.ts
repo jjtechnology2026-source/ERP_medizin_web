@@ -48,8 +48,19 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export function paymentLabel(method?: string, currency?: string): string {
-  if (method === "dollars" || currency === "USD") return "Efectivo USD";
-  return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
+  const m = (method || "").toLowerCase();
+  if (m === "dollars" || m === "dolares" || currency === "USD") return "Efectivo USD";
+  // Normaliza por subcadena las variantes del backend (Rust enums:
+  // TarjetaDebito, TarjetaCredito, Transferencia, PagoMovil, PuntoDeVenta,
+  // Biopago, Cheque, Efectivo...), igual que mapTransactionToMethod del cierre.
+  if (m.includes("tarjeta") || m.includes("debito") || m.includes("credito") || m.includes("punto")) {
+    return "Punto de Venta";
+  }
+  if (m.includes("movil") || m.includes("transferencia")) return "Pago Movil";
+  if (m.includes("biopago")) return "Biopago";
+  if (m.includes("efectivo") || m === "cash") return "Efectivo Bs";
+  if (m.includes("cheque")) return "Cheque";
+  return PAYMENT_LABELS[m] || "Otro";
 }
 
 interface FallbackOrderShape {
