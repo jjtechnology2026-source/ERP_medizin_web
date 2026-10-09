@@ -25,6 +25,8 @@ export interface ZSummaryInput {
 export interface ZSummary {
   /** Total facturado (bruto) antes de devoluciones. */
   grossTotal: number;
+  /** Total cobrado (bruto) por ventas, antes de devoluciones. */
+  grossSales: number;
   totalDeviations: number;
   /** Lo vendido neto = bruto − devoluciones. */
   netTotal: number;
@@ -73,6 +75,7 @@ export function buildZSummary(input: ZSummaryInput): ZSummary {
 
   return {
     grossTotal,
+    grossSales: salesSum,
     totalDeviations,
     netTotal,
     payments,

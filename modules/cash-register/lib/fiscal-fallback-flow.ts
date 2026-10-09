@@ -48,8 +48,23 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export function paymentLabel(method?: string, currency?: string): string {
-  if (method === "dollars" || currency === "USD") return "Efectivo USD";
-  return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
+  const m = (method || "").toLowerCase();
+  if (m === "dollars" || m === "dolares" || m === "usd" || currency === "USD") return "Efectivo USD";
+  // Normaliza por subcadena los valores reales del backend (EFECTIVO,
+  // TRANSFERENCIA, PUNTO_DE_VENTA, PAGOMOVIL, ZELLE) y las variantes de enum
+  // (TarjetaDebito, TarjetaCredito, PuntoDeVenta, PagoMovil, Biopago, Cheque...).
+  if (m.includes("punto") || m.includes("tarjeta") || m.includes("debito") || m.includes("credito")) {
+    return "Punto de Venta";
+  }
+  if (m.includes("pagomovil") || m.includes("pago_movil") || m.includes("movil") || m === "mobile") {
+    return "Pago Movil";
+  }
+  if (m.includes("transferencia") || m.includes("transfer")) return "Transferencia";
+  if (m.includes("zelle")) return "Zelle";
+  if (m.includes("biopago")) return "Biopago";
+  if (m.includes("efectivo") || m === "cash") return "Efectivo Bs";
+  if (m.includes("cheque")) return "Cheque";
+  return PAYMENT_LABELS[m] || "Otro";
 }
 
 interface FallbackOrderShape {
