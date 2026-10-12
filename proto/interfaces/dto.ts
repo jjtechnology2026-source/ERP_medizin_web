@@ -39,9 +39,10 @@ export interface MedicationProto {
   vat: number;
   antibiotic: boolean;
   minimum: number;
-  discount?: number;
-  lote?: string;
-  fechaVencimientoLote?: string;
+  /** Nullable inventory pricing fields (proto fields 19/20, wire snake_case base_price/profit_percentage) */
+  basePrice?: number;
+  /** Stored as a fraction 0.0-1.0 (0.20 == 20%) */
+  profitPercentage?: number;
 }
 
 export interface OrderContactAndItems {
@@ -182,9 +183,8 @@ function createBaseMedicationProto(): MedicationProto {
     vat: 0,
     antibiotic: false,
     minimum: 0,
-    discount: undefined,
-    lote: undefined,
-    fechaVencimientoLote: undefined,
+    basePrice: undefined,
+    profitPercentage: undefined,
   };
 }
 
@@ -241,14 +241,11 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     if (message.minimum !== 0) {
       writer.uint32(137).double(message.minimum);
     }
-    if (message.discount !== undefined) {
-      writer.uint32(145).double(message.discount);
+    if (message.basePrice !== undefined) {
+      writer.uint32(153).double(message.basePrice);
     }
-    if (message.lote !== undefined) {
-      writer.uint32(154).string(message.lote);
-    }
-    if (message.fechaVencimientoLote !== undefined) {
-      writer.uint32(162).string(message.fechaVencimientoLote);
+    if (message.profitPercentage !== undefined) {
+      writer.uint32(161).double(message.profitPercentage);
     }
     return writer;
   },
@@ -396,28 +393,20 @@ export const MedicationProto: MessageFns<MedicationProto> = {
           message.minimum = reader.double();
           continue;
         }
-        case 18: {
-          if (tag !== 145) {
-            break;
-          }
-
-          message.discount = reader.double();
-          continue;
-        }
         case 19: {
-          if (tag !== 154) {
+          if (tag !== 153) {
             break;
           }
 
-          message.lote = reader.string();
+          message.basePrice = reader.double();
           continue;
         }
         case 20: {
-          if (tag !== 162) {
+          if (tag !== 161) {
             break;
           }
 
-          message.fechaVencimientoLote = reader.string();
+          message.profitPercentage = reader.double();
           continue;
         }
       }
@@ -456,12 +445,15 @@ export const MedicationProto: MessageFns<MedicationProto> = {
       vat: isSet(object.vat) ? globalThis.Number(object.vat) : 0,
       antibiotic: isSet(object.antibiotic) ? globalThis.Boolean(object.antibiotic) : false,
       minimum: isSet(object.minimum) ? globalThis.Number(object.minimum) : 0,
-      discount: isSet(object.discount) ? globalThis.Number(object.discount) : undefined,
-      lote: isSet(object.lote) ? globalThis.String(object.lote) : undefined,
-      fechaVencimientoLote: isSet(object.fechaVencimientoLote)
-        ? globalThis.String(object.fechaVencimientoLote)
-        : isSet(object.fecha_vencimiento_lote)
-        ? globalThis.String(object.fecha_vencimiento_lote)
+      basePrice: isSet(object.basePrice)
+        ? globalThis.Number(object.basePrice)
+        : isSet(object.base_price)
+        ? globalThis.Number(object.base_price)
+        : undefined,
+      profitPercentage: isSet(object.profitPercentage)
+        ? globalThis.Number(object.profitPercentage)
+        : isSet(object.profit_percentage)
+        ? globalThis.Number(object.profit_percentage)
         : undefined,
     };
   },
@@ -519,14 +511,11 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     if (message.minimum !== 0) {
       obj.minimum = message.minimum;
     }
-    if (message.discount !== undefined) {
-      obj.discount = message.discount;
+    if (message.basePrice !== undefined) {
+      obj.basePrice = message.basePrice;
     }
-    if (message.lote !== undefined) {
-      obj.lote = message.lote;
-    }
-    if (message.fechaVencimientoLote !== undefined) {
-      obj.fechaVencimientoLote = message.fechaVencimientoLote;
+    if (message.profitPercentage !== undefined) {
+      obj.profitPercentage = message.profitPercentage;
     }
     return obj;
   },
@@ -553,9 +542,8 @@ export const MedicationProto: MessageFns<MedicationProto> = {
     message.vat = object.vat ?? 0;
     message.antibiotic = object.antibiotic ?? false;
     message.minimum = object.minimum ?? 0;
-    message.discount = object.discount ?? undefined;
-    message.lote = object.lote ?? undefined;
-    message.fechaVencimientoLote = object.fechaVencimientoLote ?? undefined;
+    message.basePrice = object.basePrice ?? undefined;
+    message.profitPercentage = object.profitPercentage ?? undefined;
     return message;
   },
 };

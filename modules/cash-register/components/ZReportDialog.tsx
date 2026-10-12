@@ -1,0 +1,717 @@
+"use client";
+import { useState, useCallback, useEffect, useMemo, FormEvent } from "react";
+import {
+  HiOutlineXCircle,
+  HiOutlineDocumentReport,
+  HiOutlineExclamationCircle,
+  HiOutlineReceiptRefund,
+  HiOutlineOfficeBuilding,
+} from "react-icons/hi";
+import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
+import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import {
+  NO_FISCAL_LEGEND,
+  isFiscalFailure,
+  recordFallbackZ,
+  type FallbackZReport,
+} from "@/modules/cash-register/lib/fiscal-fallback";
+import { runZReportFallback, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { buildZSummary } from "@/modules/cash-register/lib/z-report";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
+
+interface ZReportDialogProps {
+  onClose: () => void;
+}
+
+function todayUtcDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function formatMoney(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `Bs ${value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export default function ZReportDialog({ onClose }: ZReportDialogProps) {
+  const profile = useAuthStore((s) => s.profile);
+  const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
+  const sessionInvoices = useCashierWorkflowStore((s) => s.sessionInvoices);
+  const sessionTransactions = useCashierWorkflowStore((s) => s.sessionTransactions);
+  const { getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
+  const header = useMemo(
+    () => ({
+      name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+      rif: String(profile?.rif || ""),
+      address: String(profile?.pharmacyAddress || ""),
+      phone: String(profile?.pharmacyPhone || ""),
+    }),
+    [profile],
+  );
+  // Desglose por metodo de pago, YA en Bs (amountVes viene convertido de la BD).
+  const paymentBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    const tx = (sessionTransactions || []) as Array<{
+      type?: string;
+      paymentMethod?: string;
+      amountVes?: number;
+    }>;
+    for (const t of tx) {
+      if (t.type !== "sale") continue;
+      const label = paymentLabel(t.paymentMethod);
+      map.set(label, (map.get(label) ?? 0) + (Number(t.amountVes) || 0));
+    }
+    return [...map.entries()].map(([label, amount]) => ({ label, amount }));
+  }, [sessionTransactions]);
+
+  // Devoluciones (notas de credito) por metodo, en Bs.
+  const deviationsByMethod = useMemo(() => {
+    const map = new Map<string, number>();
+    const tx = (sessionTransactions || []) as Array<{
+      type?: string;
+      paymentMethod?: string;
+      amountVes?: number;
+    }>;
+    for (const t of tx) {
+      if (t.type !== "devolucion" && t.type !== "refund") continue;
+      const label = paymentLabel(t.paymentMethod);
+      map.set(label, (map.get(label) ?? 0) + (Number(t.amountVes) || 0));
+    }
+    return [...map.entries()].map(([label, amount]) => ({ label, amount }));
+  }, [sessionTransactions]);
+
+  // Cuadre del Z: bruto (facturas) vs cobros por metodo − devoluciones.
+  const zSummary = useMemo(() => {
+    const invoicedTotalVes = (sessionInvoices || []).reduce(
+      (sum, inv) => sum + (Number((inv as { totalVes?: number }).totalVes) || 0),
+      0,
+    );
+    return buildZSummary({ invoicedTotalVes, salesByMethod: paymentBreakdown, deviationsByMethod });
+  }, [sessionInvoices, paymentBreakdown, deviationsByMethod]);
+
+  const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
+  const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
+  const [report, setReport] = useState<CreatedZReport | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [fiscalFallback, setFiscalFallback] = useState(false);
+  const [fallbackZ, setFallbackZ] = useState<FallbackZReport | null>(null);
+  // El Z lee del store de la sesion: hay que cargarla aca mismo, porque este
+  // dialogo tambien se abre desde Configuracion (sin pasar por la caja).
+  const loadSession = useCashierWorkflowStore((s) => s.load);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadSession(pharmacyId || undefined);
+      } finally {
+        if (!cancelled) setDataLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSession, pharmacyId]);
+
+  const runFallback = useCallback(
+    async (initialResult: { success: boolean; report?: CreatedZReport | null }) => {
+      const { fallback, report: persisted } = await runZReportFallback({
+        header,
+        pharmacyId,
+        sessionInvoices,
+        paymentBreakdown: zSummary.payments,
+        deviations: deviationsByMethod,
+        netTotal: zSummary.netTotal,
+        reconciliation: zSummary.reconciliation,
+        rate,
+        initialResult,
+        createZReport: fiscalZReportService.createZReport,
+        print: printNoFiscalTicket,
+        record: recordFallbackZ,
+      });
+      setFallbackZ(fallback);
+      setFiscalFallback(true);
+      if (persisted) setReport(persisted);
+      setStep("result");
+    },
+    [header, pharmacyId, sessionInvoices, zSummary, deviationsByMethod, rate],
+  );
+
+  // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
+  // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
+  // ticket físico auditado. Lo que la máquina no reporta (p. ej. el rango de
+  // documentos) lo deriva el backend desde las facturas reales del día.
+  const registrarAutomatico = useCallback(async (zNumber?: number | null, fiscalSerial?: string | null) => {
+    const payload: Record<string, unknown> = {};
+    if (zNumber && zNumber > 0) payload.z_number = zNumber;
+    if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
+    const result = await fiscalZReportService.createZReport(pharmacyId, payload);
+
+    const fiscalRef =
+      result.report?.fiscalSerial ||
+      (result.report?.zNumber ? String(result.report.zNumber) : null);
+    const fiscalFailure = isFiscalFailure({
+      success: result.success,
+      numeroControl: fiscalRef,
+      error: result.details,
+    });
+
+    // Fallback "No Fiscal": la registracion Z fallo (canal digital o local). Se
+    // imprime el comprobante en la POS80 y se registra con identificadores sinteticos.
+    if (fiscalFailure) {
+      await runFallback(result);
+      return;
+    }
+
+    if (!result.success || !result.report) {
+      setStep("error");
+      let msg = result.message || "No se pudo registrar el reporte Z.";
+      if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
+      else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
+      else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
+      else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
+      else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
+      setErrorMessage(msg);
+      setErrorDetails(result.details);
+      return;
+    }
+
+    setReport(result.report);
+    setStep("result");
+  }, [pharmacyId, runFallback]);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    if (step === "fiscal_printing") {
+      (async () => {
+        setPrintError(null);
+        try {
+          const res = await fiscalPrinterClient.reportZ();
+          if (!res.printed) {
+            // La maquina fiscal no imprimio: fallback "No Fiscal" en la POS80.
+            await runFallback({ success: false, report: null });
+            return;
+          }
+          setStep("loading");
+          await registrarAutomatico(res.z_number, res.fiscal_serial);
+        } catch {
+          // Error al imprimir en la maquina fiscal: fallback "No Fiscal" en la POS80.
+          await runFallback({ success: false, report: null });
+        }
+      })();
+      return;
+    }
+
+    if (step === "loading" && usesDigitalBilling) {
+      (async () => {
+        await registrarAutomatico();
+      })();
+    }
+  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico, runFallback, dataLoaded]);
+
+  const [zNumber, setZNumber] = useState("");
+  const [fiscalSerial, setFiscalSerial] = useState("");
+  const [fiscalDate, setFiscalDate] = useState(todayUtcDate());
+  const [invoiceCount, setInvoiceCount] = useState("");
+  const [docFrom, setDocFrom] = useState("");
+  const [docTo, setDocTo] = useState("");
+
+  const validate = useCallback((): string | null => {
+    if (!pharmacyId) return "No se pudo resolver la farmacia.";
+    const z = Number(zNumber);
+    if (!Number.isInteger(z) || z <= 0) return "El Nº Z debe ser un entero mayor a 0.";
+    if (!fiscalSerial.trim()) return "El serial fiscal es obligatorio.";
+    const count = Number(invoiceCount);
+    if (!Number.isInteger(count) || count < 0) return "La cantidad de facturas debe ser un entero ≥ 0.";
+    if (!docFrom.trim()) return "El documento inicial es obligatorio.";
+    if (!docTo.trim()) return "El documento final es obligatorio.";
+    if (fiscalDate && !/^\d{4}-\d{2}-\d{2}$/.test(fiscalDate)) {
+      return "La fecha fiscal debe tener formato YYYY-MM-DD.";
+    }
+    return null;
+  }, [pharmacyId, zNumber, fiscalSerial, invoiceCount, docFrom, docTo, fiscalDate]);
+
+  const handleSubmit = useCallback(
+    async (e?: FormEvent) => {
+      e?.preventDefault();
+      setFormError(null);
+
+      const validationError = validate();
+      if (validationError) {
+        setFormError(validationError);
+        return;
+      }
+
+      setStep("loading");
+
+      const payload = {
+        z_number: Number(zNumber),
+        fiscal_serial: fiscalSerial.trim(),
+        invoices: {
+          count: Number(invoiceCount),
+          doc_from: docFrom.trim(),
+          doc_to: docTo.trim(),
+        },
+        ...(fiscalDate.trim() ? { fiscal_date: fiscalDate.trim() } : {}),
+      };
+
+      const result = await fiscalZReportService.createZReport(pharmacyId, payload);
+
+      if (!result.success || !result.report) {
+        setStep("error");
+        let msg = result.message || "No se pudo registrar el reporte Z.";
+        if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
+        else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
+        else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
+        else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
+        else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
+        setErrorMessage(msg);
+        setErrorDetails(result.details);
+        return;
+      }
+
+      setReport(result.report);
+      setStep("result");
+    },
+    [validate, zNumber, fiscalSerial, invoiceCount, docFrom, docTo, fiscalDate, pharmacyId]
+  );
+
+  const inputClass =
+    "w-full p-4 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-sm font-bold text-slate-700";
+  const labelClass =
+    "text-[11px] font-black text-slate-800 uppercase tracking-widest ml-1";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-slate-900 text-white rounded-2xl">
+              <HiOutlineDocumentReport size={22} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">Generar reporte Z</h2>
+              <p className="text-xs font-bold text-slate-400">
+                Datos del Z físico / impresora fiscal
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            <HiOutlineXCircle size={22} className="text-slate-400" />
+          </button>
+        </div>
+
+        {step === "fiscal_printing" && !printError && (
+          <div className="p-10 flex flex-col items-center gap-4 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
+            <p className="text-sm font-bold text-slate-600">Imprimiendo reporte Z en la máquina fiscal...</p>
+          </div>
+        )}
+
+        {step === "fiscal_printing" && printError && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div className="p-5 bg-red-50 rounded-full text-red-500">
+              <HiOutlineXCircle size={48} />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-slate-800 mb-2">Error de impresión</p>
+              <p className="text-sm text-slate-500 max-w-md">{printError}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={async () => { await prepairPrinter(); setStep("fiscal_printing"); }}
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "form" && (
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <div className="flex gap-3 px-4 py-3 bg-amber-50 rounded-2xl border border-amber-100">
+              <HiOutlineExclamationCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+              <p className="text-amber-800/80 text-[11px] font-medium leading-relaxed">
+                Primero cierra / imprime el Z en la máquina fiscal. Luego registra aquí el Nº Z,
+                serial y rango de documentos. El backend completa ventas, notas y retenciones del día.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className={labelClass}>
+                  Nº Z <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={zNumber}
+                  onChange={(e) => setZNumber(e.target.value)}
+                  placeholder="128"
+                  className={inputClass}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className={labelClass}>
+                  Serial fiscal <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={fiscalSerial}
+                  onChange={(e) => setFiscalSerial(e.target.value)}
+                  placeholder="Z1F1234567"
+                  className={inputClass}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className={labelClass}>Fecha fiscal</label>
+              <input
+                type="date"
+                value={fiscalDate}
+                onChange={(e) => setFiscalDate(e.target.value)}
+                className={inputClass}
+              />
+              <p className="text-[10px] font-bold text-slate-400 ml-1">
+                Opcional. Si la omites, el backend usa la fecha UTC de hoy.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-4">
+              <p className={labelClass}>Rango de facturas (Z físico)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Cantidad <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={invoiceCount}
+                    onChange={(e) => setInvoiceCount(e.target.value)}
+                    placeholder="40"
+                    className={inputClass}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Doc. desde <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={docFrom}
+                    onChange={(e) => setDocFrom(e.target.value)}
+                    placeholder="00000382"
+                    className={inputClass}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Doc. hasta <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={docTo}
+                    onChange={(e) => setDocTo(e.target.value)}
+                    placeholder="00000421"
+                    className={inputClass}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-3 text-xs font-mono border border-slate-100">
+              <span className="text-slate-400">Farmacia:</span>{" "}
+              <span className="font-bold text-slate-700">{pharmacyId || "—"}</span>
+            </div>
+
+            {formError && (
+              <p className="text-sm font-bold text-red-600 bg-red-50 rounded-xl px-4 py-3">
+                {formError}
+              </p>
+            )}
+
+            <div className="flex gap-3 justify-end pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
+              >
+                Registrar reporte Z
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === "loading" && (
+          <div className="p-10 flex flex-col items-center gap-4 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
+            <p className="text-sm font-bold text-slate-600">Registrando reporte Z...</p>
+          </div>
+        )}
+
+        {step === "error" && (
+          <div className="p-8 flex flex-col items-center gap-6 text-center">
+            <div className="p-5 bg-red-50 rounded-full text-red-500">
+              <HiOutlineXCircle size={48} />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-slate-800 mb-2">Error</p>
+              <p className="text-sm text-slate-500 max-w-md">{errorMessage}</p>
+            </div>
+            {errorDetails && (
+              <div className="w-full max-w-md bg-slate-50 rounded-2xl p-4 text-left border border-slate-200">
+                <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2">
+                  Respuesta backend
+                </p>
+                <p className="text-xs font-mono font-bold text-red-600 break-all">{errorDetails}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={async () => { await prepairPrinter(); setStep(usesDigitalBilling ? "loading" : "form"); }}
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "result" && fiscalFallback && (
+          <div className="p-6 space-y-5">
+            {!zSummary.ok && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wider">
+                  Diferencia en el cuadre
+                </p>
+                <p className="text-sm font-bold text-red-700 mt-1">
+                  Cobrado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
+                </p>
+                <p className="text-[11px] text-red-500/80 mt-1">
+                  Se imprimió en el Z como “Cuadre ventas”.
+                </p>
+              </div>
+            )}
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
+              <p className="text-sm font-black text-amber-600">{NO_FISCAL_LEGEND}</p>
+              <p className="text-xs font-bold text-amber-600/80 mt-1">
+                Z #{report?.zNumber ?? fallbackZ?.z_number ?? "—"} ·{" "}
+                {report?.fiscalDate || fallbackZ?.fiscal_date || "—"}
+              </p>
+            </div>
+            <p className="text-sm font-bold text-slate-500 text-center">
+              El reporte Z se generó, pero la facturación digital falló. El comprobante
+              impreso no es fiscal.
+            </p>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "result" && !fiscalFallback && report && (
+          <div className="p-6 space-y-5">
+            {!zSummary.ok && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wider">
+                  Diferencia en el cuadre
+                </p>
+                <p className="text-sm font-bold text-red-700 mt-1">
+                  Cobrado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
+                </p>
+              </div>
+            )}
+            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+              <p className="text-sm font-black text-emerald-700">Reporte Z registrado</p>
+              <p className="text-xs font-bold text-emerald-600/80 mt-1">
+                Z #{report.zNumber} · {report.fiscalDate || "—"}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <HiOutlineOfficeBuilding size={18} className="text-slate-500" />
+                <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Datos fiscales
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Serial
+                  </span>
+                  <span className="font-bold text-slate-800">{report.fiscalSerial || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    ID
+                  </span>
+                  <span className="font-mono text-xs font-bold text-slate-700">
+                    {report.id || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <HiOutlineReceiptRefund size={18} className="text-slate-500" />
+                <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Totales del día (backend)
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-emerald-50 rounded-xl p-3">
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                    Ventas totales
+                  </span>
+                  <span className="text-base font-black text-emerald-700">
+                    {formatMoney(report.totalSales)}
+                  </span>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">
+                    Base imponible
+                  </span>
+                  <span className="text-base font-black text-blue-700">
+                    {formatMoney(report.taxedSales)}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
+                    Exento
+                  </span>
+                  <span className="text-base font-black text-slate-700">
+                    {formatMoney(report.exemptSales)}
+                  </span>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-3">
+                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">
+                    Contribuyentes
+                  </span>
+                  <span className="text-base font-black text-amber-700">
+                    {report.taxpayers ?? "—"} / {report.nonTaxpayers ?? "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {report.invoices && (
+              <div className="rounded-2xl border border-slate-200 p-4 text-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  Facturas
+                </p>
+                <p className="font-bold text-slate-800">
+                  {report.invoices.count} docs · {report.invoices.docFrom} → {report.invoices.docTo}
+                </p>
+              </div>
+            )}
+
+            {(report.creditNotes || report.debitNotes) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                {report.creditNotes && (
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                      Notas de crédito
+                    </p>
+                    <p className="font-bold text-slate-800">
+                      {report.creditNotes.count}
+                      {report.creditNotes.total != null
+                        ? ` · ${formatMoney(report.creditNotes.total)}`
+                        : ""}
+                    </p>
+                  </div>
+                )}
+                {report.debitNotes && (
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                      Notas de débito
+                    </p>
+                    <p className="font-bold text-slate-800">
+                      {report.debitNotes.count}
+                      {report.debitNotes.total != null
+                        ? ` · ${formatMoney(report.debitNotes.total)}`
+                        : ""}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {report.taxWithholdingsCount != null && (
+              <p className="text-xs font-bold text-slate-500">
+                Retenciones IVA:{" "}
+                <span className="text-slate-800">{report.taxWithholdingsCount}</span>
+              </p>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

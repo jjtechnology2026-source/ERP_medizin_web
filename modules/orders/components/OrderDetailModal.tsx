@@ -1,13 +1,22 @@
 "use client";
 import { useEffect, useState } from "react";
-import { HiOutlineExternalLink } from "react-icons/hi";
+import { HiOutlineExternalLink, HiOutlinePrinter } from "react-icons/hi";
 import { Order } from "../types/orders";
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { buildSaleReprintTicket } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 
 interface OrderDetailModalProps {
   order: Order | null;
   onClose: () => void;
 }
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Efectivo", dollars: "Dólares", card: "Tarjeta",
+  mobile: "Pago Móvil", biopago: "Biopago",
+};
 
 const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: string, value: any, isSmall?: boolean, isFull?: boolean }) => (
   <div className={`flex flex-col ${isFull ? 'col-span-2' : ''}`}>
@@ -21,6 +30,9 @@ const DetailItem = ({ label, value, isSmall = false, isFull = false }: { label: 
 export default function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
   const [visibleOrder, setVisibleOrder] = useState<Order | null>(order);
   const [isOpen, setIsOpen] = useState(!!order);
+  const [isReprinting, setIsReprinting] = useState(false);
+  const { isDollar, getEffectiveRate } = useCurrencyStore();
+  const rate = getEffectiveRate();
 
   useEffect(() => {
     if (order) {
@@ -28,16 +40,36 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
       setIsOpen(true);
       return;
     }
-
     setIsOpen(false);
   }, [order]);
 
   const handleClose = () => {
     setIsOpen(false);
-    setTimeout(() => {
-      setVisibleOrder(null);
-      onClose();
-    }, 330);
+    setVisibleOrder(null);
+    onClose();
+  };
+
+  const handleReprint = async () => {
+    if (!visibleOrder) return;
+    setIsReprinting(true);
+    try {
+      // WebUSB exige gesto del usuario para el pairing: enganchamos la POS80
+      // en el mismo click, antes de renderizar/imprimir.
+      await prepairPrinter();
+      const profile = useAuthStore.getState().profile;
+      const header = {
+        name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+        rif: String(profile?.rif || ""),
+        address: String(profile?.pharmacyAddress || ""),
+        phone: String(profile?.pharmacyPhone || ""),
+      };
+      const result = await printNoFiscalTicket(buildSaleReprintTicket(header, visibleOrder));
+      if (!result.printed) {
+        alert(result.error || "No se pudo imprimir en la POS");
+      }
+    } finally {
+      setIsReprinting(false);
+    }
   };
 
   if (!visibleOrder) return null;
@@ -67,9 +99,17 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
               <DetailItem label="Tipo de entrega" value={visibleOrder.saleType} />
               <DetailItem label="Agente" value={visibleOrder.nameAgent || ''} />
               <DetailItem label="Fecha y hora de la orden" value={new Date(visibleOrder.date).toLocaleString('es-VE')} />
-              <DetailItem label="Tipo de pago" value={visibleOrder.payments?.[0]?.runtimeType || 'Dólares'} />
+              <div className="flex flex-col col-span-2">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter mb-0.5">Tipo de pago</span>
+                {visibleOrder.payments?.length ? (
+                  <div className="flex flex-col gap-1">
+                    {renderPayments(visibleOrder.payments, visibleOrder.rate || rate)}
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium text-slate-400 leading-tight">—</span>
+                )}
+              </div>
               <DetailItem label="Monto" value={`${visibleOrder.totalreal.toFixed(2)} USD`} />
-              <DetailItem label="Cambio" value="4.98 USD" />
               <DetailItem label="Controlado" value={visibleOrder.isControlled ? 'Sí' : 'No'} />
               <DetailItem label="Total de la orden" value={`${visibleOrder.totalreal.toFixed(2)} USD`} />
             </div>
@@ -85,8 +125,8 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                 <DetailItem label="Fecha Fiscal" value={new Date(visibleOrder.date).toISOString()} isSmall isFull />
               </div>
               {/* Sección corregida del PDF fiscal */}
-              <div className="pt-4 border-t border-slate-200">
-                <span className="text-[10px] font-black text-slate-900 uppercase mb-2 block">PDF fiscal:</span>
+              <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <span className="text-[10px] font-black text-slate-900 uppercase block">PDF fiscal:</span>
                 <button
                   onClick={() => {
                     // Accedemos a la ruta exacta según tu JSON
@@ -101,6 +141,13 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                   className="text-[#1D68EF] text-sm font-black flex items-center gap-1 hover:underline active:scale-95"
                 >
                   Ver factura <HiOutlineExternalLink size={18} />
+                </button>
+                <button
+                  onClick={handleReprint}
+                  disabled={isReprinting}
+                  className="text-[#059669] text-sm font-black flex items-center gap-1 hover:underline active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isReprinting ? "Imprimiendo..." : "Reimprimir factura"} <HiOutlinePrinter size={18} />
                 </button>
               </div>
             </div>
@@ -118,7 +165,7 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
                   <div key={idx} className="grid grid-cols-[60px_1fr_80px] text-xs p-4 items-center hover:bg-blue-50/30 transition-colors">
                     <span className="text-slate-400 font-bold">{med.quantity}.0</span>
                     <span className="text-slate-800 font-bold truncate pr-2">{med.name}</span>
-                    <span className="text-right font-black text-slate-600">{med.price}</span>
+                    <span className="text-right font-black text-slate-600">$ {med.price.toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -129,3 +176,21 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     </ModalWrapper>
   );
 }
+
+function renderPayments(payments: any[], rate: number) {
+  return payments.map((p: any, i: number) => {
+    const method = p?.method;
+    const rawAmount = p?.amount ?? 0;
+    if (!method) return null;
+    const label = PAYMENT_LABELS[method] || method;
+    const isUsd = method === "dollars" || p?.currency === "USD";
+    const usdAmount = isUsd ? rawAmount : rawAmount / Math.max(rate, 1);
+    const displayAmount = `$ ${Number(usdAmount).toFixed(2)}`;
+    return (
+      <span key={i} className="text-sm font-medium text-slate-600 leading-tight">
+        {label}: {displayAmount}
+      </span>
+    );
+  });
+}
+

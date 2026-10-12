@@ -1,41 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { AppNotification, NotificationState, NotificationType } from "../types/notifications";
 
 const NotificationContext = createContext<NotificationState | null>(null);
 
 const MAX_NOTIFICATIONS = 50;
 
-const MOCK_NOTIFS: AppNotification[] = [
-  {
-    id: "m0",
-    type: "order",
-    title: "Nuevo pedido",
-    message: "Se ha registrado un nuevo pedido de Jesús Márquez (#8X0PYTPK)",
-    timestamp: new Date().toISOString(),
-    read: false,
-  },
-  {
-    id: "m1",
-    type: "profile",
-    title: "Perfil Actualizado",
-    message: "Tu foto de perfil ha sido actualizada con éxito.",
-    timestamp: new Date().toISOString(),
-    read: true,
-  },
-  {
-    id: "m2",
-    type: "alert",
-    title: "Error en Inventario",
-    message: "El producto 'Ibuprofeno 500mg' tiene bajo stock.",
-    timestamp: new Date().toISOString(),
-    read: false,
-  }
-];
-
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFS);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const unreadCount = useMemo(() => 
     notifications.filter(n => !n.read).length, 

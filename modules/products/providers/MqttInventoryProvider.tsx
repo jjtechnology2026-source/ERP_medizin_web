@@ -10,8 +10,7 @@
  * Topics watched (per Dart app documentation):
  *   - pharmacy/{pharmacyId}/insert_inventory  → add/upsert medications
  *   - pharmacy/{pharmacyId}/update_inventory  → update medications
- *   - pharmacy/{pharmacyId}/remove_inventory  → reduce stock after sale
- *   - farmacia/inventario/+                   → JSON stock update by barcode
+ *   - pharmacy/{pharmacyId}/decrease_inventory  → reduce stock after sale
  *
  * Payload format:
  *   Protobuf: DtoUpdateMedications { idAgent, idPharmacy, medications: MedicationProto[] }
@@ -23,6 +22,8 @@ import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
 import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { mergeEcho } from "@/modules/products/lib/inventory-write";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 import type { Medication } from "@/modules/products/types/products.types";
 
 // ─── Context (simple marker so we don't mount twice) ────────────────────────
@@ -55,10 +56,12 @@ function protoToMedication(proto: MedicationProtoLike): Medication {
     subcategory: proto.subcategory || "",
     price: typeof proto.price === "number" ? proto.price : 0,
     quantity: typeof proto.quantity === "number" ? proto.quantity : 0,
-    stock: typeof proto.stock === "number" ? proto.stock : 0,
+    stock: (typeof proto.stock === "number" && proto.stock > 0)
+        ? proto.stock
+        : (typeof proto.quantity === "number" ? proto.quantity : 0),
     description: proto.description || "",
     controlled: !!proto.controlled,
-    vat: typeof proto.vat === "number" ? proto.vat : 16,
+    vat: effectiveVat(proto.vat),
     antibiotic: !!proto.antibiotic,
     minimum: typeof proto.minimum === "number" ? proto.minimum : 0,
   };
@@ -75,28 +78,11 @@ function tryDecodeDtoUpdateMedications(raw: Uint8Array): DtoUpdateMedications | 
   }
 }
 
-/** Try to parse a JSON stock update (farmacia/inventario/{barCode}) */
-function tryParseJsonStockUpdate(
-  raw: Uint8Array | string
-): { barCode: string; stock: number } | null {
-  try {
-    const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-    const json = JSON.parse(text.trim());
-    const barCode = json.barCode || json.bar_code || json.codigo || "";
-    // Dart docs: for farmacia/inventario/+, stockNuevo is the new stock value
-    const stock = json.stockNuevo ?? json.stock ?? json.stockActual ?? json.quantity ?? -1;
-    if (barCode && stock >= 0) return { barCode, stock };
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── Provider ───────────────────────────────────────────────────────────────
 
 export function MqttInventoryProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuthStore();
-  const { fetchInventory, applyInventoryUpdate } = useProductsStore();
+  const { fetchInventory } = useProductsStore();
   const initialFetchDone = useRef(false);
 
   // 1. Initial REST load — same as Dart does on startup
@@ -114,7 +100,7 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
     const pharmacyId = profile.pharmacyId;
 
     // Ensure subscriptions (idempotent — safe to call even if already subscribed)
-    mqttServer.subscribeToInventory(pharmacyId).catch(() => {});
+    mqttServer.subscribeToInventory(pharmacyId, (useAuthStore.getState().profile as any)?.id_agent).catch(() => {});
 
     const unsubMessage = mqttServer.onMessage((topic, rawPayload) => {
       const payload = payloadToUint8Array(rawPayload);
@@ -127,15 +113,21 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 
-        const updates = dto.medications.map(protoToMedication);
-
         useProductsStore.setState((state) => {
           const inventoryMap = new Map(state.inventory.map((m) => [m.barCode, m]));
-          updates.forEach((med) => {
-            inventoryMap.set(med.barCode, {
-              ...(inventoryMap.get(med.barCode) || {}),
-              ...med,
+          const now = Date.now();
+          dto.medications.forEach((proto) => {
+            const barCode = proto.barCode || "";
+            const med: Medication = protoToMedication(proto);
+            // An echo within the recent-mutation window applies price/metadata but
+            // must not add the stock delta again (PERSIST-4).
+            const merged = mergeEcho({
+              existing: inventoryMap.get(barCode),
+              incoming: med,
+              lastMutationAt: state.recentMutations[barCode],
+              now,
             });
+            inventoryMap.set(barCode, merged);
           });
           return { inventory: Array.from(inventoryMap.values()) };
         });
@@ -143,33 +135,35 @@ export function MqttInventoryProvider({ children }: { children: ReactNode }) {
       }
 
       // ── REMOVE: reduce stock after a sale ────────────────────────────────
-      // Dart note: 'quantity' field in remove_inventory = nuevo stock restante
-      if (topic === MQTT_TOPICS.inventoryRemove(pharmacyId)) {
+      // quantity = unidades vendidas, se descuenta del stock actual
+      if (topic === MQTT_TOPICS.inventoryDecrease(pharmacyId)) {
         const dto = tryDecodeDtoUpdateMedications(payload);
         if (!dto) return;
 
-        const stockUpdates = dto.medications.map((med) => ({
-          barCode: med.barCode,
-          stock: typeof med.quantity === "number" ? med.quantity : 0,
-        }));
+        const { recentMutations } = useProductsStore.getState();
+        const now = Date.now();
+        const items = dto.medications
+          .filter((med) => {
+            const barCode = med.barCode ?? "";
+            const lastMut = recentMutations[barCode];
+            return !lastMut || now - lastMut > 5000;
+          })
+          .map((med) => ({
+            barCode: med.barCode ?? "",
+            quantity: typeof med.quantity === "number" ? med.quantity : 1,
+          }));
 
-        applyInventoryUpdate(stockUpdates);
-        return;
-      }
-
-      // ── farmacia/inventario/{barCode}: JSON stock update ──────────────────
-      if (topic.startsWith("farmacia/inventario/")) {
-        const jsonUpdate = tryParseJsonStockUpdate(rawPayload);
-        if (jsonUpdate) {
-          applyInventoryUpdate([{ barCode: jsonUpdate.barCode, stock: jsonUpdate.stock }]);
+        if (items.length > 0) {
+          useProductsStore.getState().decrementStock(items);
         }
+        return;
       }
     });
 
     return () => {
       unsubMessage();
     };
-  }, [profile?.pharmacyId, applyInventoryUpdate]);
+  }, [profile?.pharmacyId]);
 
   return (
     <MqttInventoryContext.Provider value={true}>

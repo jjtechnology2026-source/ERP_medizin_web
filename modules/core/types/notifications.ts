@@ -1,4 +1,4 @@
-export type NotificationType = 'order' | 'profile' | 'alert';
+export type NotificationType = 'order' | 'profile' | 'alert' | 'error';
 
 export interface AppNotification {
   id: string;

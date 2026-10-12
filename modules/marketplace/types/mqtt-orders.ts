@@ -1,4 +1,5 @@
 export interface MarketplaceOrderSummary {
+  _source?: "mqtt" | "redis";
   orderId: string;
   clientName: string;
   clientAddress: string;
@@ -28,6 +29,7 @@ export interface MqttOrdersContextValue {
   currentOrder: MarketplaceOrderSummary | null;
   mqttConnected: boolean;
   acceptOrder: (orderId?: string) => Promise<boolean>;
+  finalizeOrder: (orderId?: string) => Promise<boolean>;
   rejectOrder: (orderId?: string, reason?: string) => Promise<boolean>;
   dismissOrder: () => void;
   focusOrder: (orderId: string) => void;
@@ -35,4 +37,6 @@ export interface MqttOrdersContextValue {
   secondsLeft: number;
   feedback: FeedbackState;
   clearFeedback: () => void;
+  mqttError: string | null;
+  clearMqttError: () => void;
 }

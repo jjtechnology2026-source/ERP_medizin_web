@@ -1,5 +1,6 @@
 import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
+import { effectiveVat } from "@/modules/products/lib/pricing";
 
 const cleanImg = (item: any) => ({
   ...item,
@@ -7,28 +8,100 @@ const cleanImg = (item: any) => ({
   stock: item.stock !== undefined ? Number(item.stock) : (item.quantity !== undefined ? Number(item.quantity) : 0),
   quantity: item.quantity !== undefined ? Number(item.quantity) : (item.stock !== undefined ? Number(item.stock) : 0),
   price: Number(item.price) || 0,
+  vat: Math.round(Number(item.vat)) || 0,
+  minimum: Math.round(Number(item.minimum)) || 0,
+  discount: item.discount !== undefined ? Number(item.discount) : undefined,
+  basePrice:
+    item.base_price !== undefined && item.base_price !== null
+      ? Number(item.base_price)
+      : item.basePrice !== undefined && item.basePrice !== null
+        ? Number(item.basePrice)
+        : undefined,
+  profitPercentage:
+    item.profit_percentage !== undefined && item.profit_percentage !== null
+      ? Number(item.profit_percentage)
+      : item.profitPercentage !== undefined && item.profitPercentage !== null
+        ? Number(item.profitPercentage)
+        : undefined,
 });
 
 export const productsService = {
-  async getInventory(): Promise<Medication[]> {
-    const { data } = await api.get("/admin/Inventory/Stock");
-    const rawItems = Array.isArray(data) ? data : data?.result ?? data?.data ?? data?.medications ?? [];
-    return rawItems.map(cleanImg);
+  /** Carga catálogo con cursor paginado desde SurrealDB */
+  async getCatalog(cursor?: string, size = 5000): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+  }> {
+    const payload: any = { size };
+    if (cursor) payload.cursor = cursor;
+    const { data } = await api.post("/Medications/list", payload, {
+      headers: { "Content-Type": "application/json" },
+    });
+    const rawItems = Array.isArray(data?.medications)
+      ? data.medications
+      : Array.isArray(data) ? data : [];
+    return {
+      medications: rawItems.map(cleanImg),
+      next_cursor: data?.next_cursor ?? data?.cursor ?? null,
+    };
   },
 
-  async getCatalog(): Promise<Medication[]> {
-    try {
-      const { data } = await api.post("/Medications/list", "null", {
-        headers: { "Content-Type": "application/json" },
-      });
-      const rawItems = Array.isArray(data)
-        ? data
-        : data?.medications ?? data?.result ?? data?.data ?? [];
-      return rawItems.map(cleanImg);
-    } catch (e) {
-      console.error("Error al obtener catálogo real de medicamentos:", e);
-      return [];
-    }
+  /** Busca productos en la tabla products (catálogo nacional) por nombre, principio activo, marca o código */
+  async searchProducts(text: string, size = 20): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+  }> {
+    const { data } = await api.post(
+      "/admin/products/search",
+      { text, size },
+      { headers: { "Content-Type": "application/json" } }
+    );
+    const rawItems = Array.isArray(data?.products) ? data.products : [];
+    return {
+      medications: rawItems.map(cleanImg),
+      next_cursor: data?.cursor ?? null,
+    };
+  },
+
+  /** Carga inventario de una farmacia con cursor paginado + filtro server-side */
+  async getCursorInventory(
+    pharmacyId: string,
+    opts: {
+      cursor?: string;
+      limit?: number;
+      query?: string;
+      lowStock?: boolean;
+      stockFilter?: "in" | "out";
+      resumen?: boolean;
+      offset?: number;
+    } = {}
+  ): Promise<{
+    medications: Medication[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number | null;
+    lowStockCount: number | null;
+  }> {
+    const params = new URLSearchParams({ limit: String(opts.limit ?? 50) });
+    if (opts.cursor) params.set("cursor", opts.cursor);
+    if (opts.offset && opts.offset > 0) params.set("offset", String(opts.offset));
+    const q = opts.query?.trim();
+    if (q) params.set("query", q);
+    if (opts.lowStock) params.set("low_stock", "true");
+    if (opts.stockFilter) params.set("stock_filter", opts.stockFilter);
+    if (opts.resumen) params.set("resumen", "true");
+    const { data } = await api.get(
+      `/admin/Pharmacy/${pharmacyId}/medications/cursor?${params}`
+    );
+    return {
+      medications: (data.medications ?? []).map(cleanImg),
+      next_cursor: data.next_cursor ?? null,
+      has_more: data.has_more ?? false,
+      total: typeof data.total === "number" ? data.total : null,
+      lowStockCount:
+        typeof data.resumen?.articulos_bajo_stock === "number"
+          ? data.resumen.articulos_bajo_stock
+          : null,
+    };
   },
 
   async createProduct(medication: Partial<Medication>): Promise<Medication> {
@@ -50,36 +123,15 @@ export const productsService = {
       vat: Math.round(Number(medication.vat)) || 0,
       antibiotic: Boolean(medication.antibiotic),
       minimum: Math.round(Number(medication.minimum)) || 0,
+      discount: medication.discount !== undefined ? Number(medication.discount) : null,
+      // Catalog create MUST NOT receive basePrice/profitPercentage: the backend
+      // rejects catalog pricing (pricing belongs to the per-pharmacy inventory
+      // write via `increaseInventory`). Sending them now breaks `/Medications/Create`.
       detalle: (medication as any).detalle || "",
     }];
 
-    const { data } = await api.post("/Medications/Create", payload);
-    return Array.isArray(data) && data.length > 0 ? cleanImg(data[0]) : cleanImg(medication);
-  },
-
-  async upsertProducts(medications: Partial<Medication>[]): Promise<void> {
-    const payload = medications.map((medication) => ({
-      brand: medication.brand || "",
-      activeIngredient: medication.activeIngredient || "",
-      dosage: medication.dosage || "",
-      tablets: medication.tablets || "",
-      barCode: medication.barCode || "",
-      name: medication.name || "",
-      image: medication.image && typeof medication.image === "string" ? medication.image : "",
-      category: medication.category || "",
-      subcategory: medication.subcategory || "",
-      price: Number(medication.price) || 0,
-      quantity: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
-      stock: medication.stock !== undefined ? Number(medication.stock) : (Number(medication.quantity) || 0),
-      description: medication.description || "",
-      controlled: Boolean(medication.controlled),
-      vat: Math.round(Number(medication.vat)) || 0,
-      antibiotic: Boolean(medication.antibiotic),
-      minimum: Math.round(Number(medication.minimum)) || 0,
-      detalle: (medication as any).detalle || "",
-    }));
-
-    await api.post("/admin/Medications/upsert", payload);
+    await api.post("/Medications/Create", payload);
+    return cleanImg(medication);
   },
 
   async uploadImage(image: { name: string; data: number[] }): Promise<unknown> {
@@ -96,40 +148,61 @@ export const productsService = {
   async bulkImportWithProgress(
     products: BulkProductRow[],
     onProgress?: (current: number, total: number, status: string) => void
-  ): Promise<{ success: number; errors: string[] }> {
+  ): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     const errors: string[] = [];
-    let success = 0;
+    const created: Medication[] = [];
     const total = products.length;
     for (let i = 0; i < total; i++) {
       const product = products[i];
       onProgress?.(i + 1, total, product.name);
       try {
-        await this.createProduct({
+        const medication = await this.createProduct({
           brand: product.brand,
           activeIngredient: product.activeIngredient,
           dosage: product.dosage,
           tablets: product.tablets,
           barCode: product.barCode,
           name: product.name,
-          category: product.category,
-          subcategory: product.subcategory,
+          category: product.category || "General",
+          subcategory: product.subcategory || "Varios",
           description: product.description,
           controlled: product.controlled,
           antibiotic: product.antibiotic,
           price: product.price ?? 0,
           stock: product.stock ?? 0,
-          vat: product.vat ?? 16,
+          vat: effectiveVat(product.vat),
           minimum: product.minimum ?? 0,
+          basePrice: product.basePrice,
+          profitPercentage: product.profitPercentage,
+          lote: product.lote,
         });
-        success++;
-      } catch {
-        errors.push(`Error al crear "${product.name}" (código: ${product.barCode})`);
+        created.push(medication);
+      } catch (e: any) {
+        const msg = e?.response?.data?.message || e?.message || "Error desconocido";
+        errors.push(`Error al crear "${product.name}" (código: ${product.barCode}): ${msg}`);
       }
     }
-    return { success, errors };
+    return { success: created.length, errors, created };
   },
 
-  async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[] }> {
+  async deleteProduct(barCode: string): Promise<void> {
+    await api.delete("/Medications/Delete", { data: { bar_code: barCode } });
+  },
+
+  /** Cambia solo el nombre del producto por barCode (regenera search_document/embedding en el backend) */
+  async updateName(barCode: string, name: string): Promise<void> {
+    await api.put("/admin/products/update-name", { barCode, name });
+  },
+
+  /** Aumenta inventario vía HTTP (reemplaza MQTT) */
+  async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; vat?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
+    await api.post("/admin/MedicationsAgent/increase", {
+      pharmacy_id: pharmacyId,
+      medications,
+    });
+  },
+
+  async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[]; created: Medication[] }> {
     return this.bulkImportWithProgress(products);
   },
 };

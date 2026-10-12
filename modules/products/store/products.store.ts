@@ -1,312 +1,460 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { Medication, StockFilter } from "@/modules/products/types/products.types";
 import { productsService } from "@/modules/products/api/products.service";
-import api from "@/modules/core/api/client";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
+import type { PricingSnapshot } from "@/modules/products/lib/inventory-write";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
 import { DtoUpdateMedications } from "@/proto/interfaces/dto";
 
+// Tamaño de página del inventario. Paginación clásica (page-based): se pide una
+// página a la vez con offset; NO se precarga todo el inventario.
+export const INVENTORY_PAGE_SIZE = 10;
+
 interface ProductsState {
+  /** Solo la página actual del inventario. */
   inventory: Medication[];
   catalog: Medication[];
   isLoading: boolean;
   isInitialLoad: boolean;
+  hasMore: boolean;
+  page: number;
+  inventoryTotal: number | null;
+  lowStockCount: number | null;
   error: string | null;
   filter: StockFilter;
+  /** Filtro de existencia del inventario: null = todos, "in" = con stock, "out" = sin stock. */
+  stockFilter: "in" | "out" | null;
   searchQuery: string;
   editMode: boolean;
   currentMedicine: Partial<Medication> | null;
+  lastPharmacyId: string | null;
+  _fetchPromise: Promise<void> | null;
+  _countsPharmacyId: string | null;
+  recentMutations: Record<string, number>;
 }
 
 interface ProductsActions {
   fetchInventory: (force?: boolean) => Promise<void>;
-  fetchCatalog: () => Promise<void>;
+  setPage: (page: number) => Promise<void>;
+  searchInventory: (text: string) => Promise<void>;
+  refreshCounts: (force?: boolean) => Promise<void>;
+  findInventoryItem: (barCode: string, opts?: { strict?: boolean }) => Promise<Medication | null>;
+  fetchCatalog: (force?: boolean) => Promise<void>;
   setFilter: (filter: StockFilter) => void;
+  setStockFilter: (stockFilter: "in" | "out" | null) => void;
   setSearchQuery: (query: string) => void;
   setEditMode: (mode: boolean) => void;
   setCurrentMedicine: (med: Partial<Medication> | null) => void;
   saveMedicine: (medicine: Medication) => Promise<boolean>;
+  updateMedicineName: (barCode: string, name: string) => Promise<boolean>;
+  addToInventory: (medications: Medication[]) => void;
   deleteMedicine: (barCode: string) => Promise<void>;
   decrementStock: (items: { barCode: string; quantity: number }[]) => void;
   applyInventoryUpdate: (updates: { barCode: string; stock: number }[]) => void;
-  getFilteredInventory: () => Medication[];
   getLowStockCount: () => number;
   clearStorage: () => void;
 }
 
 type ProductsStore = ProductsState & ProductsActions;
 
-const cleanImage = (item: any) => ({
-  ...item,
-  image: item.image && typeof item.image === "string" && item.image.startsWith("http") ? item.image : "",
-  stock: item.stock !== undefined ? Number(item.stock) : (item.quantity !== undefined ? Number(item.quantity) : 0),
-  quantity: item.quantity !== undefined ? Number(item.quantity) : (item.stock !== undefined ? Number(item.stock) : 0),
-  price: Number(item.price) || 0,
-});
+const initialFilters = {
+  filter: "GENERAL" as StockFilter,
+  stockFilter: null as "in" | "out" | null,
+  searchQuery: "",
+  editMode: false,
+  currentMedicine: null,
+};
 
-export const useProductsStore = create<ProductsStore>()(
-  persist(
-    (set, get) => ({
-      inventory: [],
-      catalog: [],
-      isLoading: true,
-      isInitialLoad: true,
-      error: null,
-      filter: "GENERAL",
-      searchQuery: "",
-      editMode: false,
-      currentMedicine: null,
+export const useProductsStore = create<ProductsStore>()((set, get) => {
+  // Dedup de la carga de una pagina por clave: si dos componentes piden la misma
+  // pagina a la vez, comparten una sola peticion.
+  let pageInflight: { key: string; promise: Promise<void> } | null = null;
 
-      // Clear persisted products and reset state
-      clearStorage: () => {
+  /** Carga una pagina concreta (page-based, offset). */
+  const loadPage = async (page: number) => {
+    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+    if (!pharmacyId) {
+      set({ isLoading: false });
+      return;
+    }
+    const { searchQuery, filter, stockFilter } = get();
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * INVENTORY_PAGE_SIZE;
+
+    const key = `${pharmacyId}|${searchQuery}|${filter}|${stockFilter ?? "all"}|${safePage}`;
+    if (pageInflight && pageInflight.key === key) return pageInflight.promise;
+
+    const promise = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          offset,
+          limit: INVENTORY_PAGE_SIZE,
+          query: searchQuery || undefined,
+          lowStock: filter === "LOW",
+          stockFilter: stockFilter ?? undefined,
+        });
+        set({
+          inventory: res.medications,
+          hasMore: res.has_more,
+          page: safePage,
+          isLoading: false,
+          isInitialLoad: false,
+          lastPharmacyId: pharmacyId,
+          error: null,
+        });
+      } catch {
         set({
           inventory: [],
-          catalog: [],
+          hasMore: false,
           isLoading: false,
-          isInitialLoad: true,
-          error: null,
-          filter: "GENERAL",
-          searchQuery: "",
-          editMode: false,
-          currentMedicine: null,
+          isInitialLoad: false,
+          error: "Error al cargar inventario",
         });
-        try {
-          localStorage.removeItem("products-storage");
-        } catch (e) {
-          // noop
+      }
+    })();
+
+    pageInflight = { key, promise };
+    try {
+      await promise;
+    } finally {
+      if (pageInflight?.promise === promise) pageInflight = null;
+    }
+  };
+
+  return {
+    inventory: [],
+    catalog: [],
+    isLoading: true,
+    isInitialLoad: true,
+    hasMore: false,
+    page: 1,
+    inventoryTotal: null,
+    lowStockCount: null,
+    error: null,
+    ...initialFilters,
+    lastPharmacyId: null,
+    _fetchPromise: null,
+    _countsPharmacyId: null,
+    recentMutations: {},
+
+    clearStorage: () => {
+      set({
+        inventory: [],
+        catalog: [],
+        isLoading: false,
+        isInitialLoad: true,
+        hasMore: false,
+        page: 1,
+        inventoryTotal: null,
+        lowStockCount: null,
+        error: null,
+        ...initialFilters,
+        lastPharmacyId: null,
+        _countsPharmacyId: null,
+      });
+    },
+
+    fetchInventory: async (force = false) => {
+      const { inventory, lastPharmacyId, _fetchPromise } = get();
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) {
+        if (inventory.length === 0) set({ isLoading: true });
+        return;
+      }
+      if (!force && inventory.length > 0 && lastPharmacyId === pharmacyId && get().page === 1) return;
+      if (_fetchPromise) return _fetchPromise;
+
+      const promise = (async () => {
+        await loadPage(1);
+        void get().refreshCounts();
+      })();
+
+      set({ _fetchPromise: promise });
+      try {
+        await promise;
+      } finally {
+        set({ _fetchPromise: null });
+      }
+    },
+
+    setPage: async (page) => {
+      await loadPage(page);
+    },
+
+    searchInventory: async (text) => {
+      set({ searchQuery: text });
+      await loadPage(1);
+    },
+
+    refreshCounts: async (force = false) => {
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) return;
+      // Los conteos son caros (scan agregado): se calculan una vez por farmacia.
+      if (!force && get()._countsPharmacyId === pharmacyId) return;
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          limit: 1,
+          resumen: true,
+        });
+        set({
+          inventoryTotal: res.total ?? null,
+          lowStockCount: res.lowStockCount ?? null,
+          _countsPharmacyId: pharmacyId,
+        });
+      } catch {
+        // conteos son best-effort
+      }
+    },
+
+    findInventoryItem: async (barCode, opts) => {
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId || !barCode) return null;
+      try {
+        const page = await productsService.getCursorInventory(pharmacyId, {
+          query: barCode,
+          limit: 10,
+        });
+        return (
+          page.medications.find((m) => m.barCode === barCode) ??
+          page.medications[0] ??
+          null
+        );
+      } catch (error) {
+        // strict rethrows so the caller can tell a real failure apart from a
+        // genuine miss; the read-only consumers keep the null-on-miss default.
+        if (opts?.strict) throw error;
+        return null;
+      }
+    },
+
+    addToInventory: (medications) => {
+      const { inventory } = get();
+      const map = new Map(inventory.map((m) => [m.barCode, m]));
+      medications.forEach((m) => {
+        if (m.barCode) map.set(m.barCode, m);
+      });
+      set({ inventory: Array.from(map.values()) });
+    },
+
+    fetchCatalog: async (force?: boolean) => {
+      const { catalog } = get();
+      if (!force && catalog.length > 0) return;
+      set({ isLoading: true, error: null });
+      try {
+        const allCatalog: Medication[] = [];
+        let cursor: string | undefined;
+        let pageCount = 0;
+        for (let i = 0; i < 10; i++) {
+          const page = await productsService.getCatalog(cursor, 5000);
+          allCatalog.push(...page.medications);
+          pageCount++;
+          cursor = page.next_cursor ?? undefined;
+          set({ catalog: [...allCatalog], isLoading: true });
+          if (!cursor || page.medications.length === 0) break;
         }
-      },
+        console.log("[fetchCatalog] Loaded", allCatalog.length, "medications in", pageCount, "page(s)");
+        set({ catalog: allCatalog, isLoading: false });
+      } catch (e) {
+        console.error("[fetchCatalog] Failed:", e);
+        set({ isLoading: false, error: "Error al cargar catálogo" });
+      }
+    },
 
-      fetchInventory: async (force = false) => {
-        const { isInitialLoad, inventory } = get();
-        if (!force && !isInitialLoad && inventory.length > 0) return;
+    setFilter: (filter) => {
+      set({ filter });
+      void loadPage(1);
+    },
 
-        const localCatalog = useAuthStore.getState().medicinesCatalog || [];
+    setStockFilter: (stockFilter) => {
+      set({ stockFilter });
+      void loadPage(1);
+    },
 
-        if (isInitialLoad && inventory.length === 0 && localCatalog.length > 0) {
-          set({ inventory: localCatalog.map(cleanImage), isLoading: true });
-        } else {
-          set({ isLoading: true });
-        }
+    setSearchQuery: (searchQuery) => set({ searchQuery }),
 
-        try {
-          const profile = useAuthStore.getState().profile;
-          if (profile?.id) {
-            const { data: userData } = await api.post(`/admin/User/searchuser/${profile.id}`);
-            
-            if (userData && userData.medicines && Array.isArray(userData.medicines)) {
-              const apiInventory = userData.medicines.map(cleanImage);
-              
-              const inventoryMap = new Map();
-              apiInventory.forEach((med: Medication) => {
-                inventoryMap.set(med.barCode, med);
-              });
+    setEditMode: (editMode) => set({ editMode }),
 
-              if (!force) {
-                const currentLocal = get().inventory;
-                currentLocal.forEach((med) => {
-                  if (med.barCode && !inventoryMap.has(med.barCode)) {
-                    inventoryMap.set(med.barCode, med);
-                  }
-                });
-              }
-              const merged = Array.from(inventoryMap.values());
-              if (merged.length > 0) {
-                set({ inventory: merged });
-                useAuthStore.getState().setMedicinesCatalog(merged);
-              }
-            }
-          }
-        } catch {
-          // Fallback to persisted inventory on failure
-        }
-        set({ isLoading: false, isInitialLoad: false });
-      },
+    setCurrentMedicine: (currentMedicine) => set({ currentMedicine }),
 
-      fetchCatalog: async () => {
-        set({ isLoading: true, error: null });
-        try {
-          const catalog = await productsService.getCatalog();
-          set({ catalog, isLoading: false });
-        } catch {
-          set({ isLoading: false, error: "Error al cargar catálogo" });
-        }
-      },
+    saveMedicine: async (medicine) => {
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      const barCode = medicine.barCode || "";
+      const stockDelta = typeof medicine.stock === "number" ? medicine.stock : 0;
 
-      setFilter: (filter) => set({ filter }),
+      // Existence is resolved against the authoritative server source, not the
+      // in-memory page (size 10). A request failure is fatal for this save:
+      // no write, no optimistic update, no success (PERSIST-3).
+      let serverExisting: Medication | null;
+      try {
+        serverExisting = await get().findInventoryItem(barCode, { strict: true });
+      } catch (error) {
+        console.error("[saveMedicine] findInventoryItem error:", error);
+        return false;
+      }
 
-      setSearchQuery: (searchQuery) => set({ searchQuery }),
-
-      setEditMode: (editMode) => set({ editMode }),
-
-      setCurrentMedicine: (currentMedicine) => set({ currentMedicine }),
-
-      saveMedicine: async (medicine) => {
-        const { editMode, inventory } = get();
-        const localCopy = { ...medicine };
-        try {
-          if (!editMode) {
-            await productsService.createProduct(localCopy);
-          }
-        } catch (error) {
-          console.error("API error while saving medicine:", error);
-          return false;
-        }
-        if (editMode) {
-          set({
-            inventory: inventory.map((m) =>
-              m.barCode === medicine.barCode ? medicine : m
-            ),
+      // Catalog upsert. For an existing row keep the server stock/quantity so the
+      // catalog is not rewritten with the stock delta.
+      try {
+        if (serverExisting) {
+          await productsService.createProduct({
+            ...medicine,
+            stock: serverExisting.stock ?? 0,
+            quantity: serverExisting.quantity ?? 0,
           });
         } else {
-          set({ inventory: [...inventory.filter(m => m.barCode !== medicine.barCode), medicine] });
+          await productsService.createProduct(medicine);
         }
+      } catch (error) {
+        console.error("API error while saving medicine:", error);
+        return false;
+      }
 
-        // Publish MQTT inventory update/insert to notify other clients
-        try {
-          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-          if (pharmacyId) {
-            const quantityVal = typeof medicine.quantity === "number" ? medicine.quantity : (typeof medicine.stock === "number" ? medicine.stock : 0);
-            const stockVal = typeof medicine.stock === "number" ? medicine.stock : (typeof medicine.quantity === "number" ? medicine.quantity : 0);
-            
-            const medProto = {
-              barCode: medicine.barCode || "",
-              name: medicine.name || "",
-              price: medicine.price || 0,
-              quantity: quantityVal > 0 ? quantityVal : stockVal,
-              stock: stockVal,
-              brand: medicine.brand || "",
-              activeIngredient: medicine.activeIngredient || "",
-              dosage: medicine.dosage || "",
-              tablets: medicine.tablets || "",
-              image: medicine.image || "",
-              category: medicine.category || "",
-              subcategory: medicine.subcategory || "",
-              description: medicine.description || "",
-              controlled: Boolean(medicine.controlled),
-              vat: Number(medicine.vat) || 0,
-              antibiotic: Boolean(medicine.antibiotic),
-              minimum: Number(medicine.minimum) || 0,
-            } as any;
+      const submitted: PricingSnapshot = {
+        price: medicine.price,
+        minimum: medicine.minimum,
+        discount: medicine.discount,
+        basePrice: medicine.basePrice,
+        profitPercentage: medicine.profitPercentage,
+        // VAT participates so a VAT-only edit is not silently skipped.
+        vat: medicine.vat,
+      };
 
-            const dto: any = {
-              idAgent: "web",
-              idPharmacy: pharmacyId,
-              medications: [medProto],
-            };
+      // Decision table (design Decision 3): `found` writes on a stock delta or a
+      // pricing change; `missing` writes on a stock delta or hasPricing. A lot-only
+      // or pure no-op save skips the increase entirely, so no backend propagation
+      // fires (LOT-REQ).
+      const shouldWrite = shouldWriteInventory({
+        stockDelta,
+        submitted,
+        existing: serverExisting,
+      });
 
-            const buf = DtoUpdateMedications.encode(dto).finish();
-            const topic = editMode ? MQTT_TOPICS.inventoryUpdate(pharmacyId) : MQTT_TOPICS.inventoryInsert(pharmacyId);
-            mqttServer.publish(topic, buf).catch(() => {});
-          }
-        } catch (e) {
-          // noop
-        }
-
+      if (!shouldWrite) {
+        void get().refreshCounts(true);
         return true;
-      },
+      }
 
-      deleteMedicine: async (barCode) => {
-        const { inventory } = get();
-        set({ inventory: inventory.filter((m) => m.barCode !== barCode) });
-      },
+      const { inventory } = get();
+      const previousInventory = inventory;
+      const localExisting = inventory.find((m) => m.barCode === barCode && m.barCode);
 
-      decrementStock: (items) => {
-        const { inventory } = get();
-        const updated = inventory.map((med) => {
-          const item = items.find((i) => i.barCode === med.barCode);
-          if (item) {
-            return { ...med, stock: Math.max(0, (med.stock ?? 0) - item.quantity) };
-          }
-          return med;
-        });
-        set({ inventory: updated });
+      // Optimistic upsert, rooted on the server-resolved stock when present.
+      const baseStock = serverExisting?.stock ?? localExisting?.stock ?? 0;
+      const baseQuantity =
+        serverExisting?.quantity ?? localExisting?.quantity ?? medicine.quantity ?? 0;
+      const optimistic: Medication = {
+        ...(localExisting ?? serverExisting ?? medicine),
+        ...medicine,
+        stock: baseStock + stockDelta,
+        quantity: baseQuantity,
+      };
+      const optimisticMap = new Map(inventory.map((m) => [m.barCode, m]));
+      optimisticMap.set(barCode, optimistic);
+      set({ inventory: Array.from(optimisticMap.values()) });
 
-        // Publish inventoryRemove with new stock values so other clients update
-        try {
-          const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-          if (pharmacyId) {
-            const meds = updated
-              .map((m) => ({ barCode: m.barCode, quantity: m.stock ?? 0 }))
-              .filter((m) => items.some((it) => it.barCode === m.barCode));
-            if (meds.length > 0) {
-              const dto: any = { idAgent: "web", idPharmacy: pharmacyId, medications: meds };
-              const buf = DtoUpdateMedications.encode(dto).finish();
-              mqttServer.publish(MQTT_TOPICS.inventoryRemove(pharmacyId), buf).catch(() => {});
-            }
-          }
-        } catch (e) {
-          // noop
+      try {
+        if (pharmacyId) {
+          await productsService.increaseInventory(pharmacyId, [
+            buildIncreaseItem(medicine, stockDelta),
+          ]);
         }
-      },
+      } catch (e) {
+        // Revert the optimistic upsert and surface the failure to the caller.
+        // A failed write must NOT stamp recentMutations: the optimistic stock
+        // was rolled back, so an echo arriving later must still be applied.
+        console.error("[saveMedicine] increaseInventory error:", e);
+        set({ inventory: previousInventory });
+        return false;
+      }
 
+      // Record the optimistic mutation so the MQTT echo is not added twice.
+      if (stockDelta > 0) {
+        set({ recentMutations: { ...get().recentMutations, [barCode]: Date.now() } });
+      }
 
-      applyInventoryUpdate: (updates) => {
-        const { inventory } = get();
-        const updated = inventory.map((med) => {
-          const update = updates.find((u) => u.barCode === med.barCode);
-          if (update) {
-            return { ...med, stock: update.stock };
-          }
-          return med;
-        });
-        set({ inventory: updated });
-      },
+      void get().refreshCounts(true);
+      return true;
+    },
 
-      getFilteredInventory: () => {
-        const { inventory, filter, searchQuery } = get();
-        const q = searchQuery.toLowerCase().trim();
-        let filtered = [...inventory];
+    updateMedicineName: async (barCode, name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return false;
+      try {
+        await productsService.updateName(barCode, trimmed);
+      } catch (e) {
+        console.error("[updateMedicineName] API error:", e);
+        return false;
+      }
+      const { inventory, catalog, currentMedicine } = get();
+      set({
+        currentMedicine: currentMedicine?.barCode === barCode ? { ...currentMedicine, name: trimmed } : currentMedicine,
+        inventory: inventory.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
+        catalog: catalog.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
+      });
+      void get().setPage(get().page);
+      return true;
+    },
 
-        // Stock tabs: GENERAL => productos con stock > 0, LOW => productos con stock === 0
-        if (filter === "GENERAL") {
-          filtered = filtered.filter((m) => (m.stock ?? 0) > 0);
-        } else if (filter === "LOW") {
-          filtered = filtered.filter((m) => (m.stock ?? 0) === 0);
+    deleteMedicine: async (barCode) => {
+      const { inventory } = get();
+      try {
+        await productsService.deleteProduct(barCode);
+      } catch (error) {
+        console.error("API error while deleting medicine:", error);
+      }
+      const updated = inventory.filter((m) => m.barCode !== barCode);
+      set({ inventory: updated });
+
+      try {
+        const authState = useAuthStore.getState();
+        const pharmacyId = authState.profile?.pharmacyId;
+        if (pharmacyId) {
+          const agentId = (authState.profile as any)?.id_agent || (authState.profile as any)?.agentId || "web";
+          const dto: any = {
+            idAgent: agentId,
+            idPharmacy: pharmacyId,
+            medications: [{ barCode, quantity: 0 }],
+          };
+          const buf = DtoUpdateMedications.encode(dto).finish();
+          mqttServer.publish(MQTT_TOPICS.inventoryDecrease(pharmacyId), buf, agentId).catch(() => {});
         }
+      } catch (e) {}
 
-        if (q) {
-          filtered = filtered.filter(
-            (m) =>
-              (m.name || "").toLowerCase().includes(q) ||
-              (m.barCode || "").toLowerCase().includes(q) ||
-              (m.activeIngredient || "").toLowerCase().includes(q) ||
-              (m.brand || "").toLowerCase().includes(q)
-          );
+      void get().refreshCounts(true);
+    },
+
+    decrementStock: (items) => {
+      const { inventory, recentMutations } = get();
+      const now = Date.now();
+      const updated = inventory.map((med) => {
+        const item = items.find((i) => i.barCode === med.barCode);
+        if (item) {
+          recentMutations[med.barCode] = now;
+          return { ...med, stock: Math.max(0, (med.stock ?? 0) - item.quantity) };
         }
+        return med;
+      });
+      set({ inventory: updated, recentMutations: { ...recentMutations } });
+    },
 
-        return filtered;
-      },
-
-      getLowStockCount: () => {
-        return get().inventory.filter((m) => (m.stock ?? 0) === 0).length;
-      },
-    }),
-    {
-      name: "products-storage",
-      partialize: (state) => ({
-        inventory: state.inventory,
-      }),
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        if (state.inventory.length > 0) {
-          state.isInitialLoad = false;
-          state.isLoading = false;
-          setTimeout(() => state.fetchInventory(true), 500);
+    applyInventoryUpdate: (updates) => {
+      const { inventory } = get();
+      const updated = inventory.map((med) => {
+        const update = updates.find((u) => u.barCode === med.barCode);
+        if (update) {
+          return { ...med, stock: update.stock };
         }
-      },
-    }
-  )
-);
+        return med;
+      });
+      set({ inventory: updated });
+    },
 
-// Auto-sync when auth store's medicinesCatalog changes
-if (typeof window !== "undefined") {
-  useAuthStore.subscribe((state) => {
-    const pState = useProductsStore.getState();
-    if (state.medicinesCatalog?.length && pState.inventory.length === 0) {
-      pState.fetchInventory(true);
-    }
-  });
-}
+    getLowStockCount: () => {
+      const { lowStockCount } = get();
+      return lowStockCount ?? 0;
+    },
+  };
+});

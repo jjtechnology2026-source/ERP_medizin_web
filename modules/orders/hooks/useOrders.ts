@@ -1,10 +1,20 @@
-import { useState, useEffect } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/modules/core/api/client";
 
+export interface SearchOrdersResponse {
+  orders: any[];
+  next_cursor: string | null;
+  has_more: boolean;
+  total: number;
+}
+
+const ITEMS_PER_PAGE = 20;
+
+// ponytail: pre-fetch 2 pages ahead so navigation feels instant
+const PREFETCH_PAGES = 2;
+
 export function useOrders(idGroup: string, idPharmacy: string) {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     id_group: idGroup,
     id_pharmacy: idPharmacy,
@@ -14,23 +24,26 @@ export function useOrders(idGroup: string, idPharmacy: string) {
     status: "",
   });
 
+  const prefetchRemaining = useRef(0);
+
   // Keep id_group and id_pharmacy updated if they change from props
   useEffect(() => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       id_group: idGroup,
-      id_pharmacy: idPharmacy
+      id_pharmacy: idPharmacy,
     }));
   }, [idGroup, idPharmacy]);
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
+  const buildParams = useCallback(
+    (cursor: string | null): Record<string, string> => {
       const cleanParams: Record<string, string> = {
-        page: page.toString(),
-        limit: "20",
+        limit: String(ITEMS_PER_PAGE),
       };
 
+      if (cursor) {
+        cleanParams.cursor = cursor;
+      }
       if (filters.id_group && filters.id_group !== "undefined") {
         cleanParams.id_group = filters.id_group;
       }
@@ -50,25 +63,63 @@ export function useOrders(idGroup: string, idPharmacy: string) {
         cleanParams.status = filters.status;
       }
 
-      const params = new URLSearchParams(cleanParams);
-      const response = await api.get(`/admin/Orders/SearchOrders?${params}`);
-      
-      // Extract array safely from possible backend response wrapper keys
-      const finalData = response.data?.result || response.data?.data || response.data;
-      setOrders(Array.isArray(finalData) ? finalData : []);
-    } catch (error) {
-      console.error("Error fetching orders", error);
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return cleanParams;
+    },
+    [filters],
+  );
 
-  console.log(JSON.stringify(orders, null, 2));
+  const query = useInfiniteQuery({
+    queryKey: ["orders", filters],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams(buildParams(pageParam));
+      const response = await api.get<SearchOrdersResponse>(
+        `/admin/Orders/SearchOrders?${params}`,
+      );
+      return response.data;
+    },
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    initialPageParam: null as string | null,
+    staleTime: 30_000,
+  });
 
+  // Reset pre-fetch counter when filters change (triggers new query)
   useEffect(() => {
-    fetchOrders();
-  }, [page, filters]);
+    prefetchRemaining.current = PREFETCH_PAGES;
+  }, [filters]);
 
-  return { orders, loading, setFilters, filters, setPage, page, refresh: fetchOrders };
+  // Pre-fetch next pages automatically when data arrives
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  useEffect(() => {
+    if (
+      hasNextPage &&
+      !isFetchingNextPage &&
+      prefetchRemaining.current > 0
+    ) {
+      prefetchRemaining.current--;
+      fetchNextPage();
+    }
+  }, [
+    query.data?.pages.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
+
+  const orders = useMemo(
+    () => query.data?.pages.flatMap((p) => p.orders ?? []) ?? [],
+    [query.data],
+  );
+
+  const total = query.data?.pages[0]?.total ?? 0;
+
+  return {
+    orders,
+    loading: query.isLoading,
+    total,
+    setFilters,
+    filters,
+    refresh: () => query.refetch(),
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+  };
 }

@@ -13,12 +13,14 @@ export interface Medication {
   stock: number;
   description: string;
   controlled: boolean;
-  vat: number;
+  vat?: number;
   antibiotic: boolean;
   minimum: number;
   discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
   lote?: string;
-  fecha_vencimiento_lote?: string;
+  fechaVencimiento?: string;
 }
 
 export type StockFilter = "GENERAL" | "LOW";
@@ -47,6 +49,11 @@ export interface BulkProductRow {
   stock?: number;
   minimum?: number;
   vat?: number;
+  discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
+  lote?: string;
+  fechaVencimiento?: string;
 }
 
 export interface BulkProductParseResult {

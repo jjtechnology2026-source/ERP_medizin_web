@@ -1,6 +1,11 @@
 "use client";
 import { useState } from "react";
-import { HiSearch, HiTrash, HiChartBar, HiShoppingBag, HiDocumentText } from "react-icons/hi";
+import {
+  HiSearch,
+  HiTrash,
+  HiShoppingBag,
+  HiDocumentText,
+} from "react-icons/hi";
 import ProductSearchDialog from "@/modules/cash-register/components/ProductSearchDialog";
 import ManualAddDialog from "@/modules/cash-register/components/ManualAddDialog";
 import PriceCheckDialog from "@/modules/cash-register/components/PriceCheckDialog";
@@ -57,13 +62,6 @@ export default function ActionButtons({ onCheckout }: { onCheckout: () => void }
         >
           <HiTrash size={15} />
           Eliminar Art.
-        </button>
-        <button
-          onClick={handleDeleteOrder}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1f2937] hover:bg-[#111827] text-white rounded-xl font-black text-[11px] tracking-wider shadow-xs hover:scale-105 active:scale-95 transition-all"
-        >
-          <HiChartBar size={15} />
-          Generar Z
         </button>
       </div>
 

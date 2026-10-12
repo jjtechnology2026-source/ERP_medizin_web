@@ -28,6 +28,11 @@ import {
   FeedbackType 
 } from "../types/mqtt-orders";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { effectiveVat } from "@/modules/products/lib/pricing";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { addChatMessage } from "@/modules/core/store/chat.store";
+import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
+import api from "@/modules/core/api/client";
 
 const MqttOrdersContext = createContext<MqttOrdersContextValue | null>(null);
 
@@ -51,6 +56,7 @@ function decodeOrderContactAndItems(payload: Uint8Array): MarketplaceOrderSummar
       clientAddress: decoded.clientAddress,
       clientPhone: decoded.clientPhone,
       clientIdNumber: decoded.clientIdNumber,
+      saleType: ((decoded as any).type_sale || (decoded as any).saleType) ?? undefined,
       items: decoded.items.map((item) => ({
         name: item.barcode,
         barcode: item.barcode,
@@ -73,6 +79,7 @@ function decodeOrderDto(payload: Uint8Array): MarketplaceOrderSummary | null {
       clientAddress: decoded.client?.address || "Dirección no disponible",
       clientPhone: decoded.client?.phone,
       clientIdNumber: decoded.client?.identity || undefined,
+      saleType: ((decoded as any).type_sale || (decoded as any).saleType) ?? undefined,
       items: decoded.medicines?.map((item) => ({
         name: item.name || item.barcode || "Producto",
         barcode: item.barcode,
@@ -166,7 +173,9 @@ function normalizeIncomingOrder(payload: Uint8Array | string): MarketplaceOrderS
       // no bloquear decode si falla la búsqueda en el store
     }
 
-    const total = parsed.total ?? normalizedItems.reduce((acc: number, item: any) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const itemsTotal = normalizedItems.reduce((acc: number, item: any) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    // Preferimos el total del payload solo si es válido (> 0); si viene 0/ausente, sumamos los ítems.
+    const total = parsed.total && Number(parsed.total) > 0 ? Number(parsed.total) : itemsTotal;
 
   return {
     orderId,
@@ -176,7 +185,7 @@ function normalizeIncomingOrder(payload: Uint8Array | string): MarketplaceOrderS
     clientIdNumber: parsed.clientIdNumber ?? parsed.client_id ?? parsed.client?.identity ?? parsed.client?.cedula,
     total,
     items: normalizedItems,
-    saleType: parsed.saleType ?? parsed.type_sale ?? "Marketplace",
+    saleType: parsed.saleType ?? parsed.type_sale ?? "Pickup",
     createdAt: parsed.createdAt || new Date().toISOString(),
   };
 }
@@ -186,8 +195,10 @@ import { useNotifications } from "@/modules/core/providers/NotificationProvider"
 export function MqttOrdersProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuthStore();
   const { addNotification } = useNotifications();
+  const chatToast = useChatToast();
   const [queuedOrders, setQueuedOrders] = useState<MarketplaceOrderSummary[]>([]);
   const queuedOrdersRef = useRef<MarketplaceOrderSummary[]>([]);
+  const subscribedOrderIds = useRef<Set<string>>(new Set());
   
   useEffect(() => {
     queuedOrdersRef.current = queuedOrders;
@@ -197,6 +208,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
   const [mqttConnected, setMqttConnected] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [feedback, setFeedback] = useState<FeedbackState>({ type: "none", title: "", message: "" });
+  const [mqttError, setMqttError] = useState<string | null>(null);
 
   const currentOrder = useMemo(() => 
     queuedOrders.find(o => o.orderId === focusedOrderId) || null, 
@@ -207,12 +219,16 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     setFeedback({ type: "none", title: "", message: "" });
   }, []);
 
+  const clearMqttError = useCallback(() => {
+    setMqttError(null);
+  }, []);
+
   const removeFromQueue = useCallback((orderId: string) => {
     setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
     if (focusedOrderId === orderId) setFocusedOrderId(null);
   }, [focusedOrderId]);
 
-  /** Lógica de Aceptación */
+  /** Lógica de Aceptación (desde el diálogo MQTT) */
   const acceptOrder = useCallback(async (orderId?: string) => {
     const id = orderId || focusedOrderId;
     if (!id || !profile?.pharmacyId) return false;
@@ -222,14 +238,52 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       orderId: id,
       pharmacyId: profile.pharmacyId,
       status: "Accepted",
-      timestamp: new Date().toISOString()
-    }));
+      timestamp: new Date().toISOString(),
+      id_agent: profile.id_agent || "",
+      name_agent: profile.name_agent || "",
+      id_group: profile.id_group || "",
+      name_group: profile.name_group || "",
+      rif_emisor: profile.rif_emisor || "",
+    }), (profile as any)?.id_agent);
 
     if (success) {
+      mqttServer.subscribe(MQTT_TOPICS.clientToPharmacy(id), (profile as any)?.id_agent).catch(() => {});
       setFeedback({
         type: "success",
         title: "¡Orden Aceptada!",
         message: "La orden ha sido confirmada exitosamente en el sistema."
+      });
+      setFocusedOrderId(null);
+    } else {
+      setFeedback({
+        type: "error",
+        title: "Error de Conexión",
+        message: "No se pudo notificar al servidor. Por favor, intente de nuevo."
+      });
+    }
+    return success;
+  }, [focusedOrderId, profile]);
+
+  /** Lógica de Finalización (desde la tabla) */
+  const finalizeOrder = useCallback(async (orderId?: string) => {
+    const id = orderId || focusedOrderId;
+    if (!id || !profile?.pharmacyId) return false;
+
+    const success = await mqttServer.publish(
+      MQTT_TOPICS.completedOrder(id),
+      JSON.stringify({
+        orderId: id,
+        pharmacyId: profile.pharmacyId,
+        timestamp: new Date().toISOString(),
+      }),
+      (profile as any)?.id_agent
+    );
+
+    if (success) {
+      setFeedback({
+        type: "success",
+        title: "¡Orden Finalizada!",
+        message: "La orden ha sido completada exitosamente."
       });
       removeFromQueue(id);
     } else {
@@ -253,7 +307,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       pharmacyId: profile.pharmacyId,
       status: "Rejected",
       reason
-    }));
+    }), (profile as any)?.id_agent);
 
     if (success) {
       setFeedback({
@@ -283,17 +337,34 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     const unsubConnection = mqttServer.onConnectionChange((connected) => {
       setMqttConnected(connected);
       if (connected) {
-        mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
-        mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
+        setMqttError(null);
+        mqttServer.subscribeToMarketplace(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
+        mqttServer.subscribeToInventory(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
       }
+    });
+
+    const unsubError = mqttServer.onError((message) => {
+      setMqttError(message);
+      addNotification({
+        type: 'error',
+        title: 'Error MQTT',
+        message,
+      } as any);
     });
 
     const unsubMessage = mqttServer.onMessage((topic, payload) => {
       // ── PAGO ACEPTADO: orden pagada por el cliente ──────────────────────────
-      if (topic.includes("/payment_accepted") || topic.includes("/accepted_delivery")) {
+      if (topic.includes("/payment_accepted")) {
         const orderId = topic.split("/")[1]; // order_id/{orderId}/payment_accepted
         if (!orderId) return;
 
+        const order = queuedOrdersRef.current.find((o) => o.orderId === orderId);
+        if (!order?.items?.length) {
+          setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+          return;
+        }
+
+        // Notificar
         addNotification({
           type: 'order',
           title: 'Pago confirmado',
@@ -301,46 +372,170 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
           orderId
         });
 
-        // Remover de la cola de pendientes
-        setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+        // Construir orden completa y enviar al backend
+        (async () => {
+          try {
+            const sessionResponse = await api.get("/admin/sesiones/activa");
+            const sesionCajaId = sessionResponse.data?.data?.sesion?.id;
+            if (!sesionCajaId) {
+              console.error("[MqttOrdersProvider] No hay sesión de caja activa — orden queda en cola");
+              setFeedback({
+                type: "error",
+                title: "Sin sesión de caja",
+                message: "No hay una sesión de caja activa. Abrí una caja para procesar órdenes de marketplace.",
+              });
+              return;
+            }
 
-        // Descontar inventario local (como en Dart: publish remove_inventory + applyInventoryUpdate)
-        const order = queuedOrdersRef.current.find((o) => o.orderId === orderId);
-        if (order?.items?.length) {
-          const stockUpdates = order.items.map((item) => ({
-            barCode: item.barcode || "",
-            stock: 0, // Se marcará como vendido
-          })).filter((u) => u.barCode);
+            const inventory = useProductsStore.getState().inventory || [];
+            const rate = useCurrencyStore.getState().getEffectiveRate();
 
-          if (stockUpdates.length > 0) {
+            const medications = order.items!.map((item) => {
+              const full = inventory.find((p: any) => p.barCode && p.barCode === item.barcode);
+              return {
+                barCode: item.barcode || "",
+                name: full?.name || item.name || "",
+                price: full?.price ?? item.price ?? 0,
+                quantity: item.quantity,
+                brand: full?.brand || "",
+                activeIngredient: full?.activeIngredient || "",
+                dosage: full?.dosage || "",
+                tablets: full?.tablets || "",
+                image: full?.image || "",
+                category: full?.category || "",
+                subcategory: full?.subcategory || "",
+                stock: full?.stock ?? 0,
+                description: full?.description || "",
+                controlled: full?.controlled || false,
+                vat: effectiveVat(full?.vat),
+                antibiotic: full?.antibiotic || false,
+                minimum: full?.minimum || 0,
+              };
+            });
+
+            const subtotalUSD = medications.reduce((s, m) => s + m.price * m.quantity, 0);
+            const totalVES = Math.round(subtotalUSD * rate * 100) / 100;
+
+            const modelOrder = {
+              date: new Date().toISOString(),
+              id: orderId,
+              nameGroup: profile?.name_group || "",
+              idAgent: (profile as any)?.id_agent || (profile as any)?.agentId || profile?.id || "",
+              nameAgent: profile?.name || "",
+              idPharmacy: profile?.pharmacyId || "",
+              idGroup: profile?.id_group || "",
+              pharmacy: profile?.pharmacyName || "",
+              medications,
+              totalreal: subtotalUSD,
+              totalsystem: subtotalUSD,
+              rate,
+              payments: [{
+                method: "mobile",
+                amount: totalVES,
+                reference: "",
+                bank: ""
+              }],
+              changes: [],
+              totalPaidIn: totalVES,
+              totalChangeOut: 0,
+              rifEmisor: (profile as any)?.rif || "J-00000000-0",
+              client: {
+                id: "",
+                documento: order.clientIdNumber || "V-00000000",
+                name: order.clientName || "Cliente Marketplace",
+                email: "",
+                direccion: order.clientAddress || "",
+                phone: order.clientPhone || "0000000000",
+                retencion: 0,
+                tipo_documento: (order.clientIdNumber?.match(/^[A-Za-z]/)?.[0]?.toUpperCase()) || "V",
+              },
+              facturacion: null,
+              notaCredito: null,
+              notaDebito: null,
+              numeroControlInterno: null,
+              gender: "Male",
+              saleStatus: "Completed",
+              isControlled: medications.some((m) => m.controlled),
+              saleType: order.saleType || "Pickup",
+              address: order.clientAddress || "",
+              observation: null,
+              delivery: null,
+            };
+
+            const url = `/admin/Orders/insertorder?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`;
+            await api.post(url, [modelOrder]);
+
             // Descontar stock local
             useProductsStore.getState().decrementStock(
-              order.items.map((item) => ({
+              order.items!.map((item) => ({
                 barCode: item.barcode || "",
                 quantity: item.quantity,
               })).filter((u) => u.barCode)
             );
 
-            // Notificar vía MQTT el descuento de inventario
-            if (profile?.pharmacyId) {
-              const invTopic = MQTT_TOPICS.inventoryRemove(profile.pharmacyId);
-              mqttServer.publish(invTopic, JSON.stringify({
-                medications: order.items.map((item) => ({
-                  barCode: item.barcode,
-                  quantity: item.quantity,
-                })),
-                idAgent: profile.id,
-                idPharmacy: profile.pharmacyId,
-              })).catch(() => {});
-            }
+            // Limpiar cola
+            setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+
+            setFeedback({
+              type: "success",
+              title: "¡Pago Confirmado!",
+              message: `La orden #${orderId.slice(-8)} fue registrada. Stock actualizado.`
+            });
+          } catch (e: any) {
+            console.error("[MqttOrdersProvider] insertorder falló", e?.response?.status, e?.response?.data);
           }
-        }
+        })();
+        return;
+      }
+
+      // ── ENTREGA ACEPTADA: solo feedback ──────────────────────────────────
+      if (topic.includes("/accepted_delivery")) {
+        const orderId = topic.split("/")[1];
+        if (!orderId) return;
+
+        addNotification({
+          type: 'order',
+          title: 'Entrega confirmada',
+          message: `La entrega de la orden #${orderId.slice(-8)} ha sido confirmada`,
+          orderId
+        });
+
+        setQueuedOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+        return;
+      }
+
+      // ── ORDEN COMPLETADA (por otro sistema) ─────────────────────────────
+      if (topic.includes("/completed")) {
+        const orderId = topic.split("/")[1];
+        if (!orderId) return;
+
+        addNotification({
+          type: 'order',
+          title: 'Orden completada',
+          message: `La orden #${orderId.slice(-8)} ha sido completada externamente`,
+          orderId
+        });
 
         setFeedback({
           type: "success",
-          title: "¡Pago Confirmado!",
-          message: `El pago de la orden #${orderId.slice(-8)} ha sido procesado. Stock actualizado.`
+          title: "¡Orden Completada!",
+          message: `La orden #${orderId.slice(-8)} ha sido completada.`
         });
+        removeFromQueue(orderId);
+        return;
+      }
+
+      // ── MENSAJE DE CHAT (cliente → farmacia) ─────────────────────────────
+      if (topic.endsWith("/cliente/message_pharmacy_send")) {
+        try {
+          const raw = typeof payload === "string" ? payload : new TextDecoder().decode(payload);
+          const data = JSON.parse(raw);
+          if (data.text) {
+            const orderId = topic.split("/")[1];
+            addChatMessage(orderId, { text: data.text, sender: "client", timestamp: data.timestamp || Date.now() });
+            chatToast.show(`Cliente: ${data.text.slice(0, 80)}`);
+          }
+        } catch {}
         return;
       }
 
@@ -385,6 +580,14 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               }
             }
 
+            // Recalcular el total con los precios finales ya resueltos.
+            // Los DTO de MQTT (OrderContactAndItems / OrderDto) no traen `total`,
+            // así que normalizeIncomingOrder pudo calcularlo en 0 antes del backfill.
+            normalized.total = (normalized.items || []).reduce(
+              (sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0),
+              0
+            );
+
             addNotification({
               type: 'order',
               title: 'Nuevo pedido',
@@ -413,17 +616,44 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
       }
     });
 
-    // Suscribirse también a confirmaciones de pago (como en Dart)
-    mqttServer.subscribe([MQTT_TOPICS.paymentAcceptedWildcard, MQTT_TOPICS.acceptedDeliveryWildcard]).catch(() => {});
-
-    mqttServer.subscribeToMarketplace(profile.pharmacyId).catch(() => {});
-    mqttServer.subscribeToInventory(profile.pharmacyId).catch(() => {});
+    mqttServer.subscribeToMarketplace(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
+    mqttServer.subscribeToInventory(profile.pharmacyId, (profile as any)?.id_agent).catch(() => {});
 
     return () => {
       unsubConnection();
+      unsubError();
       unsubMessage();
     };
   }, [profile]);
+
+  // Sync per-order payment/accepted_delivery subscriptions
+  useEffect(() => {
+    const currentIds = new Set(queuedOrders.map((o) => o.orderId));
+
+    currentIds.forEach((orderId) => {
+      if (!subscribedOrderIds.current.has(orderId)) {
+        subscribedOrderIds.current.add(orderId);
+        mqttServer.subscribe([
+          MQTT_TOPICS.paymentAccepted(orderId),
+          MQTT_TOPICS.acceptedDelivery(orderId),
+          MQTT_TOPICS.completedOrder(orderId),
+          MQTT_TOPICS.clientToPharmacy(orderId),
+        ], (profile as any)?.id_agent).catch(() => {});
+      }
+    });
+
+    subscribedOrderIds.current.forEach((orderId) => {
+      if (!currentIds.has(orderId)) {
+        subscribedOrderIds.current.delete(orderId);
+        mqttServer.unsubscribe([
+          MQTT_TOPICS.paymentAccepted(orderId),
+          MQTT_TOPICS.acceptedDelivery(orderId),
+          MQTT_TOPICS.completedOrder(orderId),
+          MQTT_TOPICS.clientToPharmacy(orderId),
+        ]).catch(() => {});
+      }
+    });
+  }, [queuedOrders]);
 
   // Timer para la orden actual
   useEffect(() => {
@@ -447,6 +677,7 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     currentOrder,
     mqttConnected,
     acceptOrder,
+    finalizeOrder,
     rejectOrder,
     dismissOrder,
     focusOrder,
@@ -454,11 +685,14 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     secondsLeft,
     feedback,
     clearFeedback,
+    mqttError,
+    clearMqttError,
   }), [
     queuedOrders,
     currentOrder,
     mqttConnected,
     acceptOrder,
+    finalizeOrder,
     rejectOrder,
     dismissOrder,
     focusOrder,
@@ -466,6 +700,8 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
     secondsLeft,
     feedback,
     clearFeedback,
+    mqttError,
+    clearMqttError,
   ]);
 
   return (

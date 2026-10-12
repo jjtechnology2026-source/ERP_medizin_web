@@ -40,7 +40,7 @@ export function usePanel() {
     return `/admin/Orders/SearchOrders?${params}`;
   }, [profile?.id_group, profile?.pharmacyId]);
 
-  const { data: orders = [], refetch, isLoading } = useApiQuery<Order[]>(
+  const { data: response, refetch, isLoading } = useApiQuery<{ orders: Order[] }>(
     ["panel-stats-v2", profile?.id_group, profile?.pharmacyId],
     ordersQuery || "",
     {
@@ -50,6 +50,7 @@ export function usePanel() {
       refetchOnWindowFocus: false,
     }
   );
+  const orders = response?.orders ?? [];
 
   // Auto-refetch cuando el perfil esté disponible
   useEffect(() => {

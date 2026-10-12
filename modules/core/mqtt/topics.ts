@@ -1,19 +1,8 @@
 export const MQTT_TOPICS = {
-  salesWildcard: "farmacia/ventas/+",
-  inventoryWildcard: "farmacia/inventario/+",
-  stockAlerts: "farmacia/alertas/stock",
   inventoryInsert: (pharmacyId: string) => `pharmacy/${pharmacyId}/insert_inventory`,
   inventoryUpdate: (pharmacyId: string) => `pharmacy/${pharmacyId}/update_inventory`,
-  inventoryRemove: (pharmacyId: string) => `pharmacy/${pharmacyId}/remove_inventory`,
+  inventoryDecrease: (pharmacyId: string) => `pharmacy/${pharmacyId}/decrease_inventory`,
   marketplacePharmacy: (pharmacyId: string) => `pharmacy/${pharmacyId}`,
-  pendingOrdersWildcard: "farmacia/ordenes/pendientes/+",
-  pendingOrdersConfirmationWildcard: "farmacia/ordenes/confirmacion/+",
-
-  // Topics de venta individual por código de barra
-  saleByBarCode: (barCode: string) => `farmacia/ventas/${barCode}`,
-
-  // Topics de órdenes de venta
-  orderSale: (orderId: string) => `farmacia/ordenes/${orderId}/venta`,
 
   // Topics de cliente para marketplace
   clientSearchMedicine: (clientId: string, orderId: string) =>
@@ -31,6 +20,12 @@ export const MQTT_TOPICS = {
   rejectOrder: (pharmacyId: string, orderId: string) =>
     `pharmacy/${pharmacyId}/orden_id/${orderId}/negada_order`,
   paymentAccepted: (orderId: string) => `order_id/${orderId}/payment_accepted`,
-  paymentAcceptedWildcard: "order_id/+/payment_accepted",
-  acceptedDeliveryWildcard: "order_id/+/accepted_delivery",
+  acceptedDelivery: (orderId: string) => `order_id/${orderId}/accepted_delivery`,
+  completedOrder: (orderId: string) => `order/${orderId}/completed`,
+
+  // Topics de mensajería farmacia ↔ cliente
+  pharmacyToClient: (orderId: string) =>
+    `order/${orderId}/pharmacy/message_client_send`,
+  clientToPharmacy: (orderId: string) =>
+    `order/${orderId}/cliente/message_pharmacy_send`,
 } as const;

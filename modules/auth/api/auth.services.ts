@@ -13,37 +13,59 @@ interface LoginResponse {
   [key: string]: any;
 }
 
+export const TOKEN_EXPIRY_FALLBACK_SECONDS = 3600;
+
+export function decodeJwtExp(token: string | undefined): number {
+  try {
+    if (!token) return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+    const parts = token.split(".");
+    if (parts.length !== 3) return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+
+    // URL-safe base64 → standard base64
+    let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (payload.length % 4) payload += "=";
+
+    const decoded = JSON.parse(atob(payload));
+    if (typeof decoded.exp !== "number") return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+
+    return decoded.exp * 1000;
+  } catch {
+    return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
+  }
+}
+
 export const authService = {
   async login(credentials: { username: string; password: string }): Promise<LoginResponse> {
     const isClient = typeof window !== "undefined";
     if (isClient) {
       const { data } = await axios.post("/api/proxy", {
         url: "/login_agent",
-        method: "GET",
+        method: "POST",
         data: {
           user: credentials.username,
           password: credentials.password,
           lastLogin: new Date().toISOString(),
         },
-      });
+      }, { timeout: 20000 });
       console.log(JSON.stringify(data, null, 2));
       return data;
     } else {
       const { data } = await loginApi.request({
         url: "/login_agent",
-        method: "GET",
+        method: "POST",
         data: {
           user: credentials.username,
           password: credentials.password,
           lastLogin: new Date().toISOString(),
         },
         headers: { "Content-Type": "application/json" },
+        timeout: 20000,
       });
       return data;
     }
   },
 
-  async refresh(token: string): Promise<{ token: string; refresh_token: string; expires_in?: number }> {
+  async refresh(token: string): Promise<{ token: string; refresh_token?: string; expires_in?: number }> {
     const { data } = await loginApi.post("/auth/refresh-token", { token });
     return data;
   },
@@ -82,7 +104,7 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
       pharmacies: group?.sucursales || [],
       accessToken: data.token,
       refreshToken: data.refresh_token,
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+      expiresAt: decodeJwtExp(data.token),
     };
   }
 
@@ -93,19 +115,22 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
     name: getSafeString(agent.agentUsername || agent.username || agent.user || agent.name),
     email: getSafeString(agent.email),
     role: getSafeString(agent.role || "agent"),
-    id_group: String(agent.groupId || agent.id_group || agent.idGroup || ""),
+    id_group: String(agent.groupId || agent.id_group || agent.idGroup || agent.group_id || ""),
     name_group: String(agent.groupName || agent.name_group || agent.nameGroup || ""),
     pharmacyId: String(agent.pharmacyId || agent.pharmacy_id || agent.idPharmacy || ""),
     pharmacyName: String(agent.pharmacyName || agent.pharmacy_name || agent.namePharmacy || ""),
     rif: getSafeString(agent.rif || agent.rifPharmacy),
+    pharmacyAddress: getSafeString(agent.pharmacyAddress || agent.addressPharmacy),
+    pharmacyPhone: getSafeString(agent.pharmacyPhone || agent.phonePharmacy),
     permits: Array.isArray(agent.permitsArray)
       ? agent.permitsArray
       : Array.isArray(agent.permits)
         ? agent.permits
         : [],
     usesDigitalBilling: Boolean(agent.usesDigitalBilling),
+    cajaId: agent.cajaId ?? null,
     accessToken: data.token || agent.token,
     refreshToken: data.refresh_token || agent.refresh_token,
-    expiresAt: Date.now() + ((data.expires_in || agent.expires_in || 3600) as number) * 1000,
+    expiresAt: decodeJwtExp(data.token || agent.token),
   };
 };

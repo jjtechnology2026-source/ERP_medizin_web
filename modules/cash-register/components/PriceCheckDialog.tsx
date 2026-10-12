@@ -2,22 +2,23 @@
 import { useState } from "react";
 import { HiX, HiSearch } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
+import { taxBreakdown } from "@/modules/products/lib/pricing";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState("");
-  const [result, setResult] = useState<{ name: string; price: number; stock: number } | null>(null);
+  const [result, setResult] = useState<{ name: string; price: number; discount?: number; stock: number; vat?: number; basePrice?: number } | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const { inventory } = useProductsStore();
+  const { findInventoryItem } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
-  const handleSearch = () => {
-    const med = inventory.find(
-      (m) => m.barCode === code.trim() || m.name.toLowerCase().includes(code.trim().toLowerCase())
-    );
+  const handleSearch = async () => {
+    const q = code.trim();
+    if (!q) return;
+    const med = await findInventoryItem(q);
     if (med) {
-      setResult({ name: med.name, price: med.price, stock: med.stock });
+      setResult({ name: med.name, price: med.price, discount: med.discount, stock: med.stock, vat: med.vat, basePrice: med.basePrice });
       setNotFound(false);
     } else {
       setResult(null);
@@ -26,9 +27,11 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
   };
 
   const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${(price / (rate || 300)).toFixed(2)}`;
-    return `Bs ${price.toFixed(2)}`;
+    if (isDollar) return `$ ${price.toFixed(2)}`;
+    return `Bs ${(price * rate).toFixed(2)}`;
   };
+
+  const breakdown = result ? taxBreakdown(result.price, result.vat ?? 0, result.basePrice) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -61,10 +64,39 @@ export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
         {result && (
           <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
             <p className="font-bold text-slate-700 text-sm">{result.name}</p>
+            {result.discount ? (
+              <>
+              <div className="flex justify-between">
+                <span className="text-xs font-bold text-slate-400">Precio original:</span>
+                <span className="text-sm font-bold text-slate-400 line-through">{formatPrice(result.price / (1 - result.discount / 100))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-bold text-slate-400">Descuento:</span>
+                <span className="text-sm font-bold text-amber-600">{result.discount}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-bold text-slate-400">Precio final:</span>
+                <span className="text-lg font-black text-emerald-600">{formatPrice(result.price)}</span>
+              </div>
+              </>
+            ) : (
             <div className="flex justify-between">
               <span className="text-xs font-bold text-slate-400">Precio:</span>
               <span className="text-lg font-black text-blue-600">{formatPrice(result.price)}</span>
             </div>
+            )}
+            {breakdown && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-xs font-bold text-slate-400">Precio base (sin IVA):</span>
+                  <span className="text-sm font-bold text-slate-600">{formatPrice(breakdown.saleNoVat)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs font-bold text-slate-400">IVA {result?.vat ?? 0}%:</span>
+                  <span className="text-sm font-bold text-slate-600">{formatPrice(breakdown.iva)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-xs font-bold text-slate-400">Stock:</span>
               <span className="font-bold text-slate-600">{result.stock} u.</span>

@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { HiArrowLeft, HiOutlineCash } from "react-icons/hi";
-import { useProductsStore } from "@/modules/products/store/products.store";
+import { productsService } from "@/modules/products/api/products.service";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { taxBreakdown } from "@/modules/products/lib/pricing";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
 
 interface TaxGroupProps {
@@ -11,6 +13,8 @@ interface TaxGroupProps {
     items: Medication[];
     totalStock: number;
     totalValue: number;
+    totalBase: number;
+    totalIva: number;
   };
   formatPrice: (p: number) => string;
 }
@@ -26,6 +30,15 @@ function TaxGroupCard({ group, formatPrice }: TaxGroupProps) {
   }, [group.items, currentPage]);
 
   const avgPrice = group.totalStock > 0 ? group.totalValue / group.totalStock : 0;
+
+  const unitBreakdown = (med: Medication) => {
+    const b = taxBreakdown(med.price, med.vat ?? 0, med.basePrice);
+    return (
+      <p className="text-[9px] text-slate-400 mt-0.5">
+        Base {formatPrice(b.saleNoVat)} · IVA {formatPrice(b.iva)} c/u
+      </p>
+    );
+  };
 
   return (
     <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-6 space-y-6">
@@ -49,6 +62,9 @@ function TaxGroupCard({ group, formatPrice }: TaxGroupProps) {
         <div className="flex flex-col text-center border-x border-slate-200/60">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor stock</span>
           <span className="text-base font-black text-blue-600">{formatPrice(group.totalValue)}</span>
+          <span className="text-[9px] font-medium text-slate-400 mt-0.5">
+            Base {formatPrice(group.totalBase)} · IVA {formatPrice(group.totalIva)}
+          </span>
         </div>
         <div className="flex flex-col text-center">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio promedio</span>
@@ -72,6 +88,7 @@ function TaxGroupCard({ group, formatPrice }: TaxGroupProps) {
               <div className="text-right min-w-[100px]">
                 <span className="text-sm font-black text-slate-700">{formatPrice(med.price * med.stock)}</span>
                 <p className="text-[9px] text-slate-400 mt-0.5">{formatPrice(med.price)} c/u</p>
+                {unitBreakdown(med)}
               </div>
             </div>
           </div>
@@ -111,31 +128,74 @@ export default function StockTaxBreakdown({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { inventory, isLoading, fetchInventory } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
+  // Reporte: recorre todas las paginas del endpoint (no usa el store, que ahora
+  // esta paginado) solo al abrir esta vista.
+  const [items, setItems] = useState<Medication[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
-    if (inventory.length === 0) fetchInventory();
-  }, [fetchInventory, inventory.length]);
+    let cancelled = false;
+    (async () => {
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) {
+        setIsLoading(false);
+        return;
+      }
+      const all: Medication[] = [];
+      let cursor: string | undefined;
+      try {
+        for (let i = 0; i < 500; i++) {
+          const page = await productsService.getCursorInventory(pharmacyId, { cursor, limit: 200 });
+          all.push(...page.medications);
+          if (!page.has_more || !page.next_cursor) break;
+          cursor = page.next_cursor;
+        }
+      } catch {
+        // devuelve lo cargado hasta el momento
+      }
+      if (!cancelled) {
+        setItems(all);
+        setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const groups = useMemo(() => {
-    const map = new Map<number, { vat: number; items: Medication[]; totalStock: number; totalValue: number }>();
+    const map = new Map<number, { vat: number; items: Medication[]; totalStock: number; totalValue: number; totalBase: number; totalIva: number }>();
 
-    for (const med of inventory) {
+    for (const med of items) {
       const vat = med.vat ?? 0;
-      const existing = map.get(vat) || { vat, items: [], totalStock: 0, totalValue: 0 };
+      const existing = map.get(vat) || { vat, items: [], totalStock: 0, totalValue: 0, totalBase: 0, totalIva: 0 };
+      const b = taxBreakdown(med.price, vat, med.basePrice);
       existing.items.push(med);
       existing.totalStock += med.stock;
       existing.totalValue += med.price * med.stock;
+      existing.totalBase += b.saleNoVat * med.stock;
+      existing.totalIva += b.iva * med.stock;
       map.set(vat, existing);
     }
 
     return Array.from(map.values()).sort((a, b) => b.vat - a.vat);
-  }, [inventory]);
+  }, [items]);
 
   const globalTotal = useMemo(
     () => groups.reduce((s, g) => s + g.totalValue, 0),
+    [groups]
+  );
+
+  const globalBase = useMemo(
+    () => groups.reduce((s, g) => s + g.totalBase, 0),
+    [groups]
+  );
+
+  const globalIva = useMemo(
+    () => groups.reduce((s, g) => s + g.totalIva, 0),
     [groups]
   );
 
@@ -144,7 +204,7 @@ export default function StockTaxBreakdown({
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  if (isLoading && inventory.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
@@ -188,7 +248,7 @@ export default function StockTaxBreakdown({
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Productos</span>
-                <span className="text-2xl font-black text-slate-800">{inventory.length}</span>
+                <span className="text-2xl font-black text-slate-800">{items.length}</span>
               </div>
             </div>
             <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
@@ -198,7 +258,7 @@ export default function StockTaxBreakdown({
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unidades en stock</span>
                 <span className="text-2xl font-black text-slate-800">
-                  {inventory.reduce((acc, med) => acc + med.stock, 0)}
+                  {items.reduce((acc, med) => acc + med.stock, 0)}
                 </span>
               </div>
             </div>
@@ -218,7 +278,12 @@ export default function StockTaxBreakdown({
           {/* Valor Total Global del Inventario */}
           <div className="bg-white text-slate-800 border border-slate-200 rounded-[2.5rem] p-8 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
             <span className="text-lg font-black uppercase tracking-wider">Valor Total del Inventario</span>
-            <span className="text-3xl font-black text-blue-600">{formatPrice(globalTotal)}</span>
+            <div className="text-right">
+              <span className="text-3xl font-black text-blue-600">{formatPrice(globalTotal)}</span>
+              <span className="block text-[11px] font-medium text-slate-400 mt-0.5">
+                Base {formatPrice(globalBase)} · IVA {formatPrice(globalIva)}
+              </span>
+            </div>
           </div>
         </div>
       )}

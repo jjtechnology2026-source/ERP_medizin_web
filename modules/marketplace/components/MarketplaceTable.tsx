@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { HiOutlineEye, HiOutlineCheck, HiOutlineX } from "react-icons/hi";
+import { HiOutlineEye, HiOutlineCheck, HiOutlineX, HiOutlineChatAlt2 } from "react-icons/hi";
 import { Order } from "../../orders/types/orders";
 import { MarketplaceOrderService } from "../services/OrderService";
 import { MarketplaceOrderSummary } from "../types/mqtt-orders";
@@ -15,6 +15,7 @@ interface MarketplaceTableProps {
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onFocus?: (id: string) => void;
+  onChat?: (orderId: string, clientName?: string) => void;
 }
 
 export default function MarketplaceTable({ 
@@ -24,7 +25,8 @@ export default function MarketplaceTable({
   onView,
   onAccept,
   onReject,
-  onFocus
+  onFocus,
+  onChat
 }: MarketplaceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -79,7 +81,7 @@ export default function MarketplaceTable({
                       </td>
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-2">
-                          <Tooltip content="Aceptar Orden">
+                          <Tooltip content="Finalizar Orden">
                             <button 
                               onClick={() => onAccept?.(qOrder.orderId)}
                               className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
@@ -89,18 +91,36 @@ export default function MarketplaceTable({
                           </Tooltip>
                           <Tooltip content="Ver Detalles">
                             <button 
-                              onClick={() => onFocus?.(qOrder.orderId)}
+                              onClick={() => {
+                                if ((qOrder as any)._source === "redis") {
+                                  onView({
+                                    id: qOrder.orderId,
+                                    client: { name: qOrder.clientName, direccion: qOrder.clientAddress || "", documento: qOrder.clientIdNumber || "" },
+                                    date: qOrder.createdAt || new Date().toISOString(),
+                                    saleType: qOrder.saleType || "Marketplace",
+                                    saleStatus: "Pending",
+                                    medications: (qOrder.items || []).map((item) => ({
+                                      name: item.name,
+                                      quantity: item.quantity,
+                                      price: item.price ?? 0,
+                                    })),
+                                    totalreal: qOrder.total,
+                                  } as any);
+                                } else {
+                                  onFocus?.(qOrder.orderId);
+                                }
+                              }}
                               className="p-2.5 bg-white border border-blue-500 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                             >
                               <HiOutlineEye size={18} />
                             </button>
                           </Tooltip>
-                          <Tooltip content="Rechazar Orden">
+                          <Tooltip content="Chat con Cliente">
                             <button 
-                              onClick={() => onReject?.(qOrder.orderId)}
-                              className="p-2.5 bg-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all active:scale-95"
+                              onClick={() => onChat?.(qOrder.orderId, qOrder.clientName)}
+                              className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all active:scale-95"
                             >
-                              <HiOutlineX size={18} />
+                              <HiOutlineChatAlt2 size={18} />
                             </button>
                           </Tooltip>
                         </div>
@@ -135,7 +155,7 @@ export default function MarketplaceTable({
                       </td>
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-2">
-                          <Tooltip content="Aceptar Orden">
+                          <Tooltip content="Finalizar Orden">
                             <button 
                               onClick={() => onAccept?.(order.id)}
                               className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
@@ -151,12 +171,12 @@ export default function MarketplaceTable({
                               <HiOutlineEye size={18} />
                             </button>
                           </Tooltip>
-                          <Tooltip content="Rechazar Orden">
+                          <Tooltip content="Chat con Cliente">
                             <button 
-                              onClick={() => onReject?.(order.id)}
-                              className="p-2.5 bg-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all active:scale-95"
+                              onClick={() => onChat?.(order.id, order.client?.name)}
+                              className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all active:scale-95"
                             >
-                              <HiOutlineX size={18} />
+                              <HiOutlineChatAlt2 size={18} />
                             </button>
                           </Tooltip>
                         </div>

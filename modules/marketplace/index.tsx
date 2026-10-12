@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { HiOutlineRefresh } from "react-icons/hi";
 import { useSearchParams } from "next/navigation";
 import MarketplaceStats from "./components/MarketplaceStats";
 import MarketplaceFilters from "./components/MarketplaceFilters";
 import MarketplaceTable from "./components/MarketplaceTable";
 import MarketplaceDetailModal from "./components/MarketplaceDetailModal";
+import ChatModal from "./components/ChatModal";
 import { useMarketplaceOrders } from "./hooks/useMarketplace";
 
 export default function MarketplaceOrdersFeature() {
@@ -29,6 +31,8 @@ export default function MarketplaceOrdersFeature() {
     handleReject,
     handleViewRealtimeOrder,
   } = useMarketplaceOrders(orderQuery);
+
+  const [chatInfo, setChatInfo] = useState<{ orderId: string; clientName?: string } | null>(null);
 
   return (
     <div className="flex flex-col gap-10 p-4 md:p-8 min-h-full bg-[#FBFCFE]">
@@ -55,9 +59,18 @@ export default function MarketplaceOrdersFeature() {
         onAccept={handleAccept}
         onReject={handleReject}
         onFocus={handleViewRealtimeOrder}
+        onChat={(orderId, clientName) => setChatInfo({ orderId, clientName })}
       />
 
       <MarketplaceDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+
+      {chatInfo && (
+        <ChatModal
+          orderId={chatInfo.orderId}
+          clientName={chatInfo.clientName}
+          onClose={() => setChatInfo(null)}
+        />
+      )}
     </div>
   );
 }

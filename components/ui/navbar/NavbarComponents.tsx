@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
-import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle, HiOutlineRefresh } from "react-icons/hi";
+import { HiSearch, HiX, HiOutlineBell, HiOutlineUserCircle, HiOutlineLockClosed, HiOutlineClipboardList, HiOutlineLogout, HiOutlineShoppingCart, HiOutlineUser, HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineCheckCircle, HiOutlineExclamationCircle } from "react-icons/hi";
 import { motion } from "framer-motion";
 import { useNotifications } from "@/modules/core/providers/NotificationProvider";
 import { cn } from "@/modules/core/utils/ui";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 export const SearchBar = ({ value, onChange }: any) => (
   <div className="relative flex-1 max-w-md hidden md:block group">
@@ -14,41 +15,47 @@ export const SearchBar = ({ value, onChange }: any) => (
 );
 
 export const CurrencySwitch = () => {
-  const { isDollar, getEffectiveRate, toggleCurrency, setManualRate, fetchRate, isLoading } = useCurrencyStore();
-  const effectiveRate = getEffectiveRate();
+  const { isDollar, toggleCurrency, fetchRate, isLoading, rateSource,
+    setRateSource, manualRate, setManualRate } = useCurrencyStore();
+  const rate = useCurrencyStore((s) => s.getEffectiveRate());
+  const initialized = useCurrencyStore((s) => s.initialized);
+  const profile = useAuthStore((s) => s.profile);
 
-  const handleSyncRate = async () => {
-    await fetchRate();
-    const currentRate = useCurrencyStore.getState().rate;
-    if (currentRate > 0) {
-      setManualRate(currentRate);
-    }
-  };
+  const displayRate = !initialized ? null : rate;
+  const isDigital = profile?.usesDigitalBilling ?? false;
 
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">Tasa:</span>
-        <input
-          type="number"
-          step="0.01"
-          min="1"
-          value={effectiveRate || ""}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value);
-            if (!isNaN(val) && val > 0) {
-              setManualRate(val);
-            } else if (e.target.value === "") {
-              setManualRate(0);
-            }
-          }}
-          className="w-24 bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all shadow-sm"
-        />
+        {rateSource === "manual" ? (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={manualRate || ""}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setManualRate(isNaN(v) ? 0 : v);
+            }}
+            onFocus={(e) => e.target.select()}
+            className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-amber-600 text-center shadow-sm tabular-nums outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            placeholder="0.00"
+          />
+        ) : (
+          <span className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-blue-600 text-center shadow-sm tabular-nums">
+            {displayRate === null ? (
+              <span className="text-slate-300 animate-pulse">---</span>
+            ) : (
+              `${rate.toFixed(2)}`
+            )}
+          </span>
+        )}
         <span className="text-[11px] font-bold text-slate-500 select-none">Bs</span>
         <button
-          onClick={handleSyncRate}
+          onClick={fetchRate}
           disabled={isLoading}
-          title="Sincronizar tasa oficial de Internet"
+          title="Sincronizar tasa oficial desde R4"
           className={cn(
             "p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-200/50 rounded-lg transition-all cursor-pointer flex items-center justify-center disabled:opacity-50",
             isLoading && "animate-spin text-blue-600"
@@ -56,6 +63,46 @@ export const CurrencySwitch = () => {
         >
           <HiOutlineRefresh size={14} />
         </button>
+      </div>
+
+      <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+        <button
+          onClick={() => setRateSource("api")}
+          className={cn(
+            "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+            rateSource === "api"
+              ? "bg-blue-600 text-white shadow"
+              : "text-slate-400 hover:text-blue-600"
+          )}
+        >
+          API
+        </button>
+        <button
+          onClick={() => setRateSource("manual")}
+          className={cn(
+            "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+            rateSource === "manual"
+              ? "bg-amber-500 text-white shadow"
+              : "text-slate-400 hover:text-amber-600"
+          )}
+        >
+          Manual
+        </button>
+      </div>
+
+      <div className="h-4 w-[1px] bg-slate-200" />
+
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider select-none",
+          isDigital
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+            : "bg-amber-50 text-amber-700 border border-amber-200"
+        )}
+        title={isDigital ? "Facturación electrónica activada" : "Facturación fiscal — máquina fiscal"}
+      >
+        {isDigital ? <HiOutlineCheckCircle size={14} /> : <HiOutlineExclamationCircle size={14} />}
+        {isDigital ? "Digital" : "Fiscal"}
       </div>
 
       <div className="h-4 w-[1px] bg-slate-200" />

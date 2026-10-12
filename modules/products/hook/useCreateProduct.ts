@@ -1,5 +1,8 @@
 import { useState, useCallback } from "react";
 import api from "@/modules/core/api/client";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { productsService } from "@/modules/products/api/products.service";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
 
 export interface MedicationData {
   brand: string;
@@ -15,11 +18,16 @@ export interface MedicationData {
   quantity: number;
   description: string;
   controlled: boolean;
-  vat: number;
+  vat?: number;
   antibiotic: boolean;
   minimum: number;
   image: string;
   detalle: string;
+  discount?: number;
+  basePrice?: number;
+  profitPercentage?: number;
+  lote?: string;
+  fechaVencimiento?: string;
 }
 
 export const useCreateMedication = () => {
@@ -53,16 +61,35 @@ export const useCreateMedication = () => {
           quantity: parseInt(baseData.stock) || 0,
           description: baseData.description || "",
           controlled: baseData.controlled || false,
-          vat: Math.round(parseFloat(baseData.vat)) || 0,
+          // Preserve absence: a blank VAT must not be coerced to an explicit 0,
+          // so the inventory row stays NULL and falls back to the catalog/default.
+          vat: baseData.vat === undefined || baseData.vat === null || baseData.vat === ""
+            ? undefined
+            : Number(baseData.vat),
           antibiotic: baseData.antibiotic || false,
           minimum: parseInt(baseData.minimum) || 0,
           image: mainImage,
           detalle: "",
+          discount: baseData.discount !== undefined ? parseFloat(baseData.discount) : undefined,
+          basePrice: baseData.basePrice !== undefined ? parseFloat(baseData.basePrice) : undefined,
+          profitPercentage: baseData.profitPercentage !== undefined ? parseFloat(baseData.profitPercentage) : undefined,
+          lote: typeof baseData.lote === "string" && baseData.lote.trim() ? baseData.lote.trim() : undefined,
+          fechaVencimiento: typeof baseData.fechaVencimiento === "string" && baseData.fechaVencimiento.trim() ? baseData.fechaVencimiento.trim() : undefined,
         };
 
+        // El lote y el vencimiento son por-farmacia (inventario), no del catálogo universal: se envían solo en el increase.
+        // basePrice/profitPercentage tampoco van al catálogo: el backend rechaza el pricing
+        // en `/Medications/Create`; el precio se deriva sólo en el inventory write.
+        const catalogPayload = {
+          ...payloadData,
+          basePrice: undefined,
+          profitPercentage: undefined,
+          lote: undefined,
+          fechaVencimiento: undefined,
+        };
         const { data: medResult } = await api.post(
           "/Medications/Create",
-          [payloadData]
+          [catalogPayload]
         );
 
         const uploadedImages = await Promise.all(
@@ -70,6 +97,42 @@ export const useCreateMedication = () => {
             api.post("/admin/MedicationImage/Upload", imgFile).then((res) => res.data)
           )
         );
+
+        // Ligar inventario de la farmacia vía HTTP increase (el backend ya no suscribe insert_inventory por MQTT).
+        // El gate es (qty>0 || hasPricing): un alta sin stock pero con precio también debe ligar (PRICING-2).
+        // Un fallo de ligado NO debe reportarse como éxito (2.9): se deja propagar al catch externo.
+        const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+        const quantityVal = parseInt(baseData.stock) || 0;
+        const shouldLink = shouldWriteInventory({
+          stockDelta: quantityVal,
+          submitted: {
+            price: payloadData.price,
+            minimum: payloadData.minimum,
+            discount: payloadData.discount,
+            basePrice: payloadData.basePrice,
+            profitPercentage: payloadData.profitPercentage,
+            vat: payloadData.vat,
+          },
+          existing: null,
+        });
+        if (pharmacyId && payloadData.barCode && shouldLink) {
+          await productsService.increaseInventory(pharmacyId, [
+            buildIncreaseItem(
+              {
+                barCode: payloadData.barCode,
+                price: payloadData.price,
+                minimum: payloadData.minimum,
+                discount: payloadData.discount,
+                basePrice: payloadData.basePrice,
+                profitPercentage: payloadData.profitPercentage,
+                vat: payloadData.vat,
+                lote: payloadData.lote,
+                fechaVencimiento: payloadData.fechaVencimiento,
+              },
+              quantityVal
+            ),
+          ]);
+        }
 
         return { success: true, medication: Array.isArray(medResult) && medResult.length > 0 ? medResult[0] : medResult, images: uploadedImages };
       } catch (err: any) {

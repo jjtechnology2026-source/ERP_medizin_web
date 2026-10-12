@@ -1,6 +1,7 @@
 "use client";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useRouter } from "next/navigation";
 import { 
   HiOutlineCash, 
@@ -26,9 +27,10 @@ export default function CashierSessionCard() {
     clearMessages,
     sessionInvoices,
     sessionTransactions,
-    currentRate,
     load,
   } = useCashierWorkflowStore();
+
+  const currentRate = useCurrencyStore((s) => s.getEffectiveRate());
 
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId ?? profile?.id_group;

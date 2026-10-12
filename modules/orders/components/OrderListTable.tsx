@@ -1,12 +1,10 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
-  HiOutlineEye, HiOutlineDocumentText, HiOutlinePencilAlt, 
-  HiOutlineRefresh, HiX, HiOutlineExternalLink 
+  HiOutlineEye, HiOutlineRefresh, HiX, HiOutlineExternalLink 
 } from "react-icons/hi";
 import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
-import NoteModal from "./NoteModal";
 import OrderFilters from "./OrderFilters";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
@@ -23,6 +21,9 @@ interface OrdersPageProps {
   };
   setFilters: React.Dispatch<React.SetStateAction<any>>;
   onRefresh: () => void;
+  total: number;
+  fetchNextPage?: () => void;
+  hasNextPage?: boolean;
 }
 
 // --- COMPONENTES ATÓMICOS ---
@@ -40,9 +41,10 @@ const ActionButton = ({ icon, color, onClick }: { icon: React.ReactNode, color: 
   );
 };
 
+
 // --- COMPONENTE PRINCIPAL ---
 
-export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh }: OrdersPageProps) {
+export default function OrdersPage({ orders, loading, filters, setFilters, onRefresh, total, fetchNextPage, hasNextPage }: OrdersPageProps) {
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
@@ -54,13 +56,11 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
   };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
-  const [noteType, setNoteType] = useState<'Crédito' | 'Débito'>('Crédito');
-  const [noteOrderId, setNoteOrderId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const colSpan = 8;
 
-  // 1. Ordenar por fecha (Más recientes primero)
+  // 1. Ordernar por fecha (Más recientes primero)
   const sortedOrders = useMemo(() => {
     return [...orders].sort((a, b) => {
       const dateA = new Date(a.date || (a as any).fecha || Date.now()).getTime();
@@ -79,9 +79,17 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
     });
   }, [sortedOrders, filters.status]);
 
-  // 3. Lógica de Paginación
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const currentOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  // 3. Pagination — reset on filter changes via key or explicit effect
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  const currentOrders = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredOrders.slice(start, start + itemsPerPage);
+  }, [filteredOrders, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.status]);
 
   const filterClass = "px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 flex items-center gap-2 hover:border-blue-400 transition-all min-w-[140px] outline-none shadow-sm";
 
@@ -103,7 +111,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
         onFiltersChange={setFilters} 
         onReset={() => {
           setFilters({ date_start: "", date_end: "", type_sale: "", status: "" });
-          setCurrentPage(1);
         }}
       />
 
@@ -113,16 +120,16 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
           <table className="w-full text-left relative min-w-[1000px]">
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
               <tr>
-                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles", "N. Credito", "N. Debito"].map((h) => (
+                {["ID", "Nombres", "Dirección", "Fecha", "Tipo", "Total", "Status", "Detalles"].map((h) => (
                   <th key={h} className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={10} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
+                <tr><td colSpan={colSpan} className="text-center py-20 text-slate-400 font-medium">Cargando datos...</td></tr>
               ) : !loading && filteredOrders.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
+                <tr><td colSpan={colSpan} className="text-center py-20 text-slate-500 font-medium">{getNoDataMessage()}</td></tr>
               ) : currentOrders.map((order) => (
                 <tr key={order.id || (order as any).idOrder} className="hover:bg-blue-50/40 transition-colors group">
                   <td className="px-6 py-4 text-xs font-mono text-slate-400">{(order.id || (order as any).idOrder || "")?.slice(0, 8)}...</td>
@@ -158,15 +165,13 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
                     </span>
                   </td>
                   <td className="px-6 py-4"><ActionButton onClick={() => setSelectedOrder(order)} icon={<HiOutlineEye size={18}/>} color="blue" /></td>
-                  <td className="px-6 py-4"><ActionButton onClick={() => { setNoteType('Crédito'); setNoteOrderId(order.id); setIsNoteModalOpen(true); }} icon={<HiOutlineDocumentText size={18}/>} color="emerald" /></td>
-                  <td className="px-6 py-4"><ActionButton onClick={() => { setNoteType('Débito'); setNoteOrderId(order.id); setIsNoteModalOpen(true); }} icon={<HiOutlinePencilAlt size={18}/>} color="amber" /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* --- PAGINACIÓN --- */}
+        {/* --- PAGINATION --- */}
         <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
           <p className="text-xs font-bold text-slate-400">
             Mostrando {currentOrders.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
@@ -192,7 +197,14 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
             </div>
             <button 
               disabled={currentPage === totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)} 
+              onClick={() => {
+                setCurrentPage(p => p + 1);
+                // ponytail: pre-fetch when approaching the edge of loaded data (2 pages ahead)
+                const next = currentPage + 1;
+                if ((next + 1) * itemsPerPage > orders.length && hasNextPage && fetchNextPage) {
+                  fetchNextPage();
+                }
+              }} 
               className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
             >
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,15 +217,6 @@ export default function OrdersPage({ orders, loading, filters, setFilters, onRef
 
       {/* --- MODAL DETALLES --- */}
       <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
-
-      {/* --- MODAL CONFIRMACIÓN NOTAS --- */}
-      <NoteModal 
-        isOpen={isNoteModalOpen} 
-        type={noteType} 
-        orderId={noteOrderId} 
-        onClose={() => setIsNoteModalOpen(false)} 
-        onConfirm={() => setIsNoteModalOpen(false)} 
-      />
     </div>
   );
 }

@@ -2,24 +2,30 @@
 import { useState, useCallback } from "react";
 import { HiX, HiUpload, HiCheck, HiExclamation, HiOutlineDownload, HiOutlineDocumentDownload } from "react-icons/hi";
 import { productsService } from "@/modules/products/api/products.service";
-import type { BulkProductRow } from "@/modules/products/types/products.types";
+import { useProductsStore } from "@/modules/products/store/products.store";
+import type { BulkProductRow, Medication } from "@/modules/products/types/products.types";
+import { isValidProfit, bulkSellingPrice } from "@/modules/products/lib/pricing";
+import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
+import { toIsoDate } from "@/modules/products/lib/date";
 
 interface BulkImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
+  pharmacyId?: string;
 }
 
 export default function BulkImportDialog({
   isOpen,
   onClose,
   onComplete,
+  pharmacyId,
 }: BulkImportDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [products, setProducts] = useState<BulkProductRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: string[]; created: Medication[]; inventoryUpdated: number } | null>(null);
 
   const downloadTemplate = async () => {
     try {
@@ -34,8 +40,11 @@ export default function BulkImportDialog({
         "Categoría",
         "Subcategoría",
         "Descripción",
-        "Precio (USD)",
+        "Precio Base (USD)",
+        "Ganancia (%)",
         "Stock",
+        "Lote",
+        "Vencimiento (AAAA-MM-DD)",
         "Stock Mínimo",
         "IVA (%)",
         "Controlado (SI/NO)",
@@ -53,8 +62,11 @@ export default function BulkImportDialog({
           "Categoría": "malestar general",
           "Subcategoría": "Dolor",
           "Descripción": "Medicamento para el alivio del dolor y la fiebre",
-          "Precio (USD)": "5.50",
+          "Precio Base (USD)": "5.50",
+          "Ganancia (%)": "20",
           "Stock": "100",
+          "Lote": "L-2026-001",
+          "Vencimiento (AAAA-MM-DD)": "2027-12-31",
           "Stock Mínimo": "10",
           "IVA (%)": "16",
           "Controlado (SI/NO)": "NO",
@@ -80,63 +92,97 @@ export default function BulkImportDialog({
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
+      const workbook = XLSX.read(data, { type: "array", cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+      function findColKey(row: Record<string, unknown>, keys: string[]): string | undefined {
+        const rowKeys = Object.keys(row);
+        for (const key of keys) {
+          const normalizedKey = key.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim();
+          // First try exact match
+          let match = rowKeys.find(
+            rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() === normalizedKey
+          );
+          // Then try substring match (e.g. "Stock Inicial" matches "stock")
+          if (!match) {
+            match = rowKeys.find(
+              rk => rk.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim().includes(normalizedKey)
+            );
+          }
+          if (match) return match;
+        }
+        return undefined;
+      }
+
+      function getCol(row: Record<string, unknown>, keys: string[]): string {
+        const match = findColKey(row, keys);
+        return match ? String(row[match] || "").trim() : "";
+      }
+
+      function getRawCol(row: Record<string, unknown>, keys: string[]): unknown {
+        const match = findColKey(row, keys);
+        return match ? row[match] : undefined;
+      }
 
       const parsed: BulkProductRow[] = [];
       const errs: string[] = [];
 
       rows.forEach((row, i) => {
         const line = i + 2;
-        const name = String(
-          row["Nombre Comercial"] || 
-          row["name"] || 
-          row["Nombre"] || 
-          row["NOMBRE"] || 
-          ""
-        ).trim();
+        const name = getCol(row, ["Nombre Comercial", "name", "Nombre", "NOMBRE"]);
 
         if (!name) {
           errs.push(`Fila ${line}: El "Nombre Comercial" es requerido.`);
           return;
         }
 
-        const barCode = String(
-          row["Código de Barras"] || 
-          row["barcode"] || 
-          row["barCode"] || 
-          row["Código"] || 
-          row["CODIGO"] || 
-          ""
-        ).trim();
+        const barCode = getCol(row, ["Código de Barras", "barcode", "barCode", "Código", "CODIGO"]);
 
         if (!barCode) {
           errs.push(`Fila ${line} (${name}): El "Código de Barras" es requerido.`);
           return;
         }
 
-        const priceRaw = String(row["Precio (USD)"] || row["price"] || row["PRECIO"] || "").trim();
-        const stockRaw = String(row["Stock"] || row["stock"] || row["STOCK"] || "").trim();
-        const minRaw = String(row["Stock Mínimo"] || row["minimum"] || row["MINIMO"] || "").trim();
-        const vatRaw = String(row["IVA (%)"] || row["vat"] || row["IVA"] || "").trim();
+        const priceRaw = getCol(row, ["Precio Base (USD)", "Precio (USD)", "Precio", "price", "PRECIO", "precio base"]);
+        const profitRaw = getCol(row, ["Ganancia (%)", "Ganancia", "profit", "GANANCIA", "ganancia"]);
+        const stockRaw = getCol(row, ["Stock", "Stock Inicial", "stock", "STOCK"]);
+        const minRaw = getCol(row, ["Stock Mínimo", "Mínimo Stock", "Mínimo", "minimum", "MINIMO", "minimo"]);
+        const vatRaw = getCol(row, ["IVA (%)", "IVA", "vat"]);
+        const loteRaw = getCol(row, ["Lote", "lote", "LOTE"]);
+        const fechaVencimiento = toIsoDate(getRawCol(row, ["Vencimiento"]));
+
+        const base = priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined;
+        const profitPct = profitRaw ? parseFloat(profitRaw.replace(",", ".")) : undefined;
+        const vatPct = vatRaw ? parseInt(vatRaw, 10) : undefined;
+        const effectiveProfit = profitPct ?? 0;
+        if (!isValidProfit(effectiveProfit)) {
+          errs.push(`Fila ${line} (${name}): la utilidad debe ser ≥ 0 y < 100%.`);
+          return;
+        }
+        // Precio de venta = costo / (1 - utilidad) + IVA (margen sobre precio de venta)
+        const sellingPrice = bulkSellingPrice(base, effectiveProfit, vatPct);
 
         parsed.push({
           name,
-          brand: String(row["Marca"] || row["brand"] || row["MARCA"] || "").trim(),
+          brand: getCol(row, ["Marca", "brand", "MARCA"]),
           barCode,
-          activeIngredient: String(row["Principio Activo"] || row["activeIngredient"] || row["PRINCIPIO_ACTIVO"] || "").trim(),
-          dosage: String(row["Dosis"] || row["dosage"] || row["DOSIS"] || "").trim(),
-          tablets: String(row["Presentación/Tabletas"] || row["tablets"] || row["Tabletas"] || "").trim(),
-          category: String(row["Categoría"] || row["category"] || row["Categoria"] || "").trim(),
-          subcategory: String(row["Subcategoría"] || row["subcategory"] || row["SUBCATEGORIA"] || "").trim(),
-          description: String(row["Descripción"] || row["description"] || row["DESCRIPCION"] || "").trim(),
-          price: priceRaw ? parseFloat(priceRaw.replace(",", ".")) : undefined,
+          activeIngredient: getCol(row, ["Principio Activo", "activeIngredient", "PRINCIPIO_ACTIVO"]),
+          dosage: getCol(row, ["Dosis", "dosage", "DOSIS"]),
+          tablets: getCol(row, ["Presentación/Tabletas", "Presentación", "tablets", "Tabletas"]),
+          category: getCol(row, ["Categoría", "category", "Categoria"]),
+          subcategory: getCol(row, ["Subcategoría", "subcategory", "SUBCATEGORIA"]),
+          description: getCol(row, ["Descripción", "description", "DESCRIPCION"]),
+          price: sellingPrice,
           stock: stockRaw ? parseInt(stockRaw, 10) : undefined,
           minimum: minRaw ? parseInt(minRaw, 10) : undefined,
-          vat: vatRaw ? parseInt(vatRaw, 10) : undefined,
-          controlled: String(row["Controlado (SI/NO)"] || row["controlled"] || "").trim().toUpperCase() === "SI",
-          antibiotic: String(row["Antibiótico (SI/NO)"] || row["antibiotic"] || "").trim().toUpperCase() === "SI",
+          vat: vatPct,
+          basePrice: base,
+          profitPercentage: profitPct,
+          lote: loteRaw || undefined,
+          fechaVencimiento,
+          controlled: String(getCol(row, ["Controlado (SI/NO)", "controlled", "CONTROLADO"]) || "").trim().toUpperCase() === "SI",
+          antibiotic: String(getCol(row, ["Antibiótico (SI/NO)", "antibiotic", "ANTIBIOTICO"]) || "").trim().toUpperCase() === "SI",
         });
       });
 
@@ -169,7 +215,64 @@ export default function BulkImportDialog({
     const res = await productsService.bulkImportWithProgress(products, (current, total, name) => {
       setProgress({ current, total, productName: name || "" });
     });
-    setResult(res);
+    if (res.created.length > 0) {
+      useProductsStore.getState().addToInventory(res.created);
+    }
+
+    let inventoryCount = 0;
+    if (!pharmacyId) {
+      res.errors.push("Inventario no actualizado: falta pharmacyId en la sesión.");
+    } else if (res.created.length > 0) {
+      // Link a row when it has stock OR pricing (PRICING-3), not only stock > 0.
+      const linkable = res.created.filter((p) =>
+        shouldWriteInventory({
+          stockDelta: p.stock ?? 0,
+          submitted: {
+            price: p.price,
+            minimum: p.minimum,
+            discount: p.discount,
+            basePrice: p.basePrice,
+            profitPercentage: p.profitPercentage,
+            vat: p.vat,
+          },
+          existing: null,
+        })
+      );
+      if (linkable.length === 0) {
+        res.errors.push("Ningún producto con stock o precio: no se ligó inventario a la farmacia.");
+      } else {
+        try {
+          // ponytail: el backend ya no suscribe insert_inventory por MQTT (es HTTP-driven);
+          // ligar inventario vía HTTP increase para que la fila aparezca en la farmacia.
+          await productsService.increaseInventory(
+            pharmacyId,
+            linkable.map((p) =>
+              buildIncreaseItem(
+                {
+                  barCode: p.barCode,
+                  price: p.price,
+                  minimum: p.minimum,
+                  discount: p.discount,
+                  basePrice: p.basePrice,
+                  profitPercentage: p.profitPercentage,
+                  vat: p.vat,
+                  lote: p.lote,
+                  fechaVencimiento: p.fechaVencimiento,
+                },
+                p.stock ?? 0
+              )
+            )
+          );
+          inventoryCount = linkable.length;
+        } catch (err: any) {
+          res.errors.push(
+            `Error al ligar inventario: ${err?.response?.data?.message || err?.message || "Error desconocido"}`
+          );
+        }
+      }
+    }
+
+    setResult({ ...res, inventoryUpdated: inventoryCount });
     setIsSaving(false);
     if (res.errors.length === 0) {
       setTimeout(() => {
@@ -324,9 +427,19 @@ export default function BulkImportDialog({
 
           {result && (
             <div className="text-center py-6 space-y-4">
-              <HiCheck className="mx-auto text-green-500" size={48} />
+              {result.success > 0 ? (
+                <HiCheck className="mx-auto text-green-500" size={48} />
+              ) : (
+                <HiExclamation className="mx-auto text-red-500" size={48} />
+              )}
               <p className="text-lg font-black text-slate-800">
-                {result.success} productos creados exitosamente
+                {result.success > 0
+                  ? result.inventoryUpdated > 0
+                    ? `${result.success} productos creados, ${result.inventoryUpdated} con inventario actualizado`
+                    : pharmacyId
+                      ? `${result.success} productos creados exitosamente`
+                      : `${result.success} productos creados (inventario no actualizado: falta farmacia)`
+                  : "No se pudieron crear productos"}
               </p>
               {result.errors.length > 0 && (
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-left">

@@ -13,9 +13,10 @@ export interface Medication {
   stock: number;
   description: string;
   controlled: boolean;
-  vat: number;
+  vat?: number;
   antibiotic: boolean;
   minimum: number;
+  discount?: number;
 }
 
 export interface Client {
@@ -25,14 +26,22 @@ export interface Client {
   email: string;
   direccion: string;
   phone: string;
+  retencion?: string;
+  tipo_documento?: string;
 }
 
-export interface Payment {
-  runtimeType: string;
-  amount: number;
-  reference?: string;
-  bank?: string;
-}
+export interface CashPaymentData { amount: number; currency?: { VES?: Record<string, never> } }
+export interface DollarsPaymentData { amount: number }
+export interface CardPaymentData { amount: number; punto?: string; type?: string; reference?: string }
+export interface MobilePaymentData { amount: number; reference?: string; bank?: string }
+export interface BiopagoPaymentData { amount: number; reference?: string; bank?: string }
+
+export type Payment =
+  | { Cash: CashPaymentData }
+  | { Dollars: DollarsPaymentData }
+  | { Card: CardPaymentData }
+  | { Mobile: MobilePaymentData }
+  | { Biopago: BiopagoPaymentData };
 
 export interface Facturacion {
   success: boolean;
@@ -43,6 +52,7 @@ export interface Facturacion {
     trackingid: string;
     urlpdf: string;
     fecha: string;
+    serie: string | null;
   } | null;
   error: any;
 }

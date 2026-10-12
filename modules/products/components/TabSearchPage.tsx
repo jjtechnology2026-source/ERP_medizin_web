@@ -1,9 +1,10 @@
 "use client";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { HiSearch, HiX, HiPlus } from "react-icons/hi";
+import { HiSearch, HiX, HiPlus, HiOutlineRefresh } from "react-icons/hi";
 import { useProductsStore } from "@/modules/products/store/products.store";
-import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { productsService } from "@/modules/products/api/products.service";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
 
 export default function CatalogSearchPage({
@@ -11,8 +12,7 @@ export default function CatalogSearchPage({
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { inventory, catalog, fetchCatalog, setCurrentMedicine, setEditMode } = useProductsStore();
-  const { medicinesCatalog } = useAuthStore();
+  const { inventory, catalog, fetchCatalog, isLoading, setCurrentMedicine, setEditMode } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
   const [query, setQuery] = useState("");
@@ -57,42 +57,18 @@ export default function CatalogSearchPage({
   const catalogList = useMemo(() => {
     const map = new Map<string, Medication>();
 
-    if (Array.isArray(medicinesCatalog)) {
-      medicinesCatalog.forEach((m: any) => {
-        if (m.barCode) {
-          map.set(m.barCode, {
-            name: m.name || "",
-            activeIngredient: m.activeIngredient || "",
-            dosage: m.dosage || "",
-            tablets: m.tablets || "",
-            brand: m.brand || "",
-            barCode: m.barCode,
-            category: m.category || "",
-            subcategory: m.subcategory || "",
-            price: Number(m.price) || 0,
-            stock: Number(m.stock) || 0,
-            quantity: Number(m.quantity) || 0,
-            minimum: Number(m.minimum) || 5,
-            vat: Number(m.vat) || 16,
-            controlled: !!m.controlled,
-            antibiotic: !!m.antibiotic,
-            image: m.image && typeof m.image === "string" && m.image.startsWith("http") ? m.image : "",
-            description: m.description || "",
-          });
-        }
-      });
-    }
-
-    catalog.forEach(m => {
+    catalog.forEach((m, idx) => {
       if (m.barCode) map.set(m.barCode, m);
+      else map.set(`cat-${idx}`, m);
     });
 
-    inventory.forEach(m => {
+    inventory.forEach((m, idx) => {
       if (m.barCode) map.set(m.barCode, m);
+      else map.set(`inv-${idx}`, m);
     });
 
     return Array.from(map.values());
-  }, [inventory, catalog, medicinesCatalog]);
+  }, [inventory, catalog]);
 
   const [filterInStock, setFilterInStock] = useState<string>("all");
   const [filterBrand, setFilterBrand] = useState<string>("all");
@@ -112,17 +88,22 @@ export default function CatalogSearchPage({
     return Array.from(set).sort();
   }, [catalogList]);
 
+  const normalizeStr = (str: string | undefined | null) => {
+    if (!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  };
+
   const filteredResults = useMemo(() => {
-    const q = debouncedQuery.toLowerCase().trim();
+    const q = normalizeStr(debouncedQuery).trim();
     if (!q || q.length < 1) return [];
     let list = catalogList.filter(
       (m) =>
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.activeIngredient || "").toLowerCase().includes(q) ||
-        (m.barCode || "").toLowerCase().includes(q) ||
-        (m.brand || "").toLowerCase().includes(q) ||
-        (m.dosage || "").toLowerCase().includes(q) ||
-        (m.tablets || "").toLowerCase().includes(q)
+        normalizeStr(m.name).includes(q) ||
+        normalizeStr(m.activeIngredient).includes(q) ||
+        normalizeStr(m.barCode).includes(q) ||
+        normalizeStr(m.brand).includes(q) ||
+        normalizeStr(m.dosage).includes(q) ||
+        normalizeStr(m.tablets).includes(q)
     );
     if (filterInStock === "yes") list = list.filter(m => m.stock > 0);
     else if (filterInStock === "no") list = list.filter(m => m.stock <= 0);
@@ -145,12 +126,26 @@ export default function CatalogSearchPage({
     setShowSuggestions(false);
   };
 
-  const handleAccept = () => {
-    if (selectedMed) {
-      setCurrentMedicine(selectedMed);
-      setEditMode(false);
-      setView("STOCK_FEATURES");
+  const handleAccept = async () => {
+    if (!selectedMed) return;
+    // El catálogo nacional no trae precio (siempre 0): si el producto YA está en el
+    // inventario de la farmacia, usamos SU precio real para no arrancar el form en 0.
+    let med = selectedMed;
+    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+    if (pharmacyId && selectedMed.barCode) {
+      try {
+        const page = await productsService.getCursorInventory(pharmacyId, {
+          query: selectedMed.barCode,
+          limit: 10,
+        });
+        med = page.medications.find((m) => m.barCode === selectedMed.barCode) ?? selectedMed;
+      } catch {
+        // búsqueda best-effort: si falla, seguimos con el catálogo
+      }
     }
+    setCurrentMedicine(med);
+    setEditMode(false);
+    setView("STOCK_FEATURES");
   };
 
   const formatPrice = (price: number) => {
@@ -171,9 +166,20 @@ export default function CatalogSearchPage({
         <h1 className="text-3xl font-black text-slate-800 leading-tight">
           Agregar producto al inventario
         </h1>
-        <p className="text-blue-500 font-bold text-sm tracking-wide">
-          Busca en el catálogo nacional de medicamentos y agrégalo a tu stock con precio e IVA.
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-blue-500 font-bold text-sm tracking-wide">
+            Busca en el catálogo nacional de medicamentos y agrégalo a tu stock con precio e IVA.
+          </p>
+          {!isLoading && catalog.length > 0 && (
+            <button
+              onClick={() => fetchCatalog(true)}
+              className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors cursor-pointer"
+              title="Recargar catálogo"
+            >
+              <HiOutlineRefresh size={14} /> Recargar catálogo
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="relative max-w-3xl" ref={searchRef}>
@@ -238,6 +244,43 @@ export default function CatalogSearchPage({
         )}
       </div>
 
+      {isLoading && catalogList.length === 0 && (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-3">
+            <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span className="text-sm font-bold text-slate-400">Cargando catálogo de productos...</span>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && catalogList.length === 0 && (
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-12 text-center">
+          <p className="text-sm font-bold text-slate-400">No se pudo cargar el catálogo de productos.</p>
+          <p className="text-xs text-slate-300 mt-2">Verifica tu conexión o intenta nuevamente.</p>
+          <button
+            onClick={() => fetchCatalog()}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-black text-blue-600 uppercase hover:text-blue-700 transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {isLoading && catalog.length > 0 && (
+        <div className="flex items-center gap-3 py-3 px-2">
+          <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-xs font-bold text-blue-500">
+            Cargando catálogo... {catalog.length.toLocaleString()} productos
+          </span>
+        </div>
+      )}
+
       {debouncedQuery && (
         <div className="space-y-4">
           {filteredResults.length > 0 && (
@@ -281,18 +324,18 @@ export default function CatalogSearchPage({
           )}
 
           {paginatedResults.length > 0 && (
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+            <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="bg-slate-800 text-white">
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Nombre</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Principio Activo</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Dosis</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Presentación</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Marca</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Precio</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">Stock</th>
+                    <tr className="bg-white border-b border-slate-100">
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Nombre</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Principio Activo</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Dosis</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Presentación</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Marca</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Precio</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
