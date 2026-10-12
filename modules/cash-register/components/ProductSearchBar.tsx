@@ -3,9 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import { HiQrcode } from "react-icons/hi";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useProductsStore } from "@/modules/products/store/products.store";
-<<<<<<< HEAD
-import { useProductSearch } from "@/modules/products/hooks/useProductSearch";
-=======
 import { productsService } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
@@ -16,48 +13,18 @@ const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
   { label: "Con stock", value: "in" },
   { label: "Sin stock", value: "out" },
 ];
->>>>>>> eecc2606daf202432d794b4b47ae953fa4d72a31
 
 export default function ProductSearchBar() {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addMedication } = useCurrentOrderStore();
-<<<<<<< HEAD
-  const { inventory } = useProductsStore();
-  
-  const { query, setQuery, results, reset } = useProductSearch({
-    inventory,
-    pageSize: 10,
-    onlyInStock: true,
-  });
-
-  const [showDropdown, setShowDropdown] = useState(false);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleAdd = (med?: any) => {
-    const code = med?.barCode || barcode.trim();
-    if (!code) return;
-
-    const product = med || inventory.find((m) => m.barCode === code);
-    if (!product) {
-=======
   const { findInventoryItem } = useProductsStore();
 
   const [results, setResults] = useState<Medication[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Por defecto solo productos con existencia (no sirve mostrar Stock: 0).
   const [stockFilter, setStockFilter] = useState<"in" | "out" | null>("in");
 
   const searchSeqRef = useRef(0);
@@ -71,7 +38,6 @@ export default function ProductSearchBar() {
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  // Búsqueda server-side con debounce en el texto del input.
   useEffect(() => {
     const text = barcode.trim();
     setError(null);
@@ -106,12 +72,11 @@ export default function ProductSearchBar() {
           stockFilter: stockFilter ?? undefined,
         });
         if (seq === searchSeqRef.current) {
-          setResults(
-            [...res.medications].sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0)),
-          );
+          setResults(Array.isArray(res.medications) ? res.medications : []);
         }
-      } catch {
+      } catch (e: any) {
         if (seq === searchSeqRef.current) {
+          setError(e?.message || "Error al buscar productos");
           setResults([]);
         }
       } finally {
@@ -119,36 +84,49 @@ export default function ProductSearchBar() {
           setIsSearching(false);
         }
       }
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
   }, [barcode, stockFilter]);
 
-  const handleAdd = async () => {
-    const code = barcode.trim();
-    if (!code) return;
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-    const med = await findInventoryItem(code);
-    if (!med) {
->>>>>>> eecc2606daf202432d794b4b47ae953fa4d72a31
+  const handleSelect = (med: Medication) => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    handleAdd(med);
+  };
+
+  const handleAdd = async (med?: Medication | null) => {
+    const code = med?.barCode || barcode.trim();
+    if (!code) return;
+    let product = med;
+    if (!product) {
+      product = await findInventoryItem(code);
+    }
+    if (!product) {
       setBarcode("");
-      reset();
+      setResults([]);
       setShowDropdown(false);
       return;
     }
-
     const result = addMedication(product, 1);
     if (!result.success) {
-      setError(result.error || "No se pudo agregar el producto");
-      inputRef.current?.focus();
+      setError(result.error ?? "No se pudo agregar el producto");
       return;
     }
     setError(null);
     setBarcode("");
-<<<<<<< HEAD
-    setQuery("");
-    reset();
-=======
->>>>>>> eecc2606daf202432d794b4b47ae953fa4d72a31
+    setResults([]);
     setShowDropdown(false);
     inputRef.current?.focus();
   };
@@ -161,20 +139,9 @@ export default function ProductSearchBar() {
       } else {
         handleAdd();
       }
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
     }
-  };
-
-  const handleSelect = (med: Medication) => {
-    const result = addMedication(med, 1);
-    if (!result.success) {
-      setError(result.error || "No se pudo agregar el producto");
-      inputRef.current?.focus();
-      return;
-    }
-    setError(null);
-    setBarcode("");
-    setShowDropdown(false);
-    inputRef.current?.focus();
   };
 
   return (
@@ -188,21 +155,6 @@ export default function ProductSearchBar() {
           <input
             ref={inputRef}
             type="text"
-<<<<<<< HEAD
-            value={barcode || query}
-            onChange={(e) => {
-              const val = e.target.value;
-              setBarcode(val);
-              setQuery(val);
-              setShowDropdown(val.trim().length > 0);
-            }}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if ((barcode || query).trim().length > 0) {
-                setShowDropdown(true);
-              }
-            }}
-=======
             value={barcode}
             onChange={(e) => {
               setBarcode(e.target.value);
@@ -214,6 +166,9 @@ export default function ProductSearchBar() {
                 clearTimeout(blurTimerRef.current);
                 blurTimerRef.current = null;
               }
+              if (barcode.trim().length >= 2) {
+                setShowDropdown(true);
+              }
             }}
             onBlur={() => {
               blurTimerRef.current = setTimeout(() => {
@@ -221,39 +176,10 @@ export default function ProductSearchBar() {
                 setShowDropdown(false);
               }, 150);
             }}
->>>>>>> eecc2606daf202432d794b4b47ae953fa4d72a31
             placeholder="Código del producto o nombre del producto"
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-400"
             autoFocus
           />
-<<<<<<< HEAD
-          {showDropdown && results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 max-h-80 overflow-y-auto">
-              {results.map((med, idx) => (
-                <button
-                  key={med.barCode || idx}
-                  onClick={() => handleAdd(med)}
-                  className="w-full text-left px-4 py-3 hover:bg-blue-50/50 transition-colors border-b border-slate-50 last:border-0"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-700 truncate">{med.name}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{med.activeIngredient} • {med.brand}</p>
-                      <p className="text-[10px] text-slate-400 font-mono">{med.barCode}</p>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <p className="text-xs font-black text-blue-600">Bs {med.price.toFixed(2)}</p>
-                      <p className={`text-[9px] font-bold ${med.stock > 0 ? "text-emerald-600" : "text-slate-300"}`}>
-                        {med.stock > 0 ? `${med.stock} stock` : "Sin stock"}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-=======
-
           {showDropdown && (
             <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
               <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 bg-slate-50/70">
@@ -305,11 +231,9 @@ export default function ProductSearchBar() {
               </div>
             </div>
           )}
-
           {error && (
             <p className="mt-1 text-[10px] font-bold text-red-500">{error}</p>
           )}
->>>>>>> eecc2606daf202432d794b4b47ae953fa4d72a31
         </div>
         <button
           onClick={() => handleAdd()}
