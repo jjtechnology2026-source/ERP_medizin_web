@@ -109,6 +109,19 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    const check = () => {
+      if (loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+        void performSearch(query, true, nextCursor);
+      }
+    };
+    const id = setInterval(check, 500);
+    return () => clearInterval(id);
+  }, [query, hasMore, isLoadingMore, nextCursor, performSearch]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
