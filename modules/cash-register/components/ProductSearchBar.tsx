@@ -28,13 +28,11 @@ export default function ProductSearchBar() {
   const [error, setError] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<"in" | "out" | null>("in");
 
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
   const searchSeqRef = useRef(0);
-  const loadMoreSeqRef = useRef(0);
+  
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fetchingRef = useRef(false);
+  
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -50,61 +48,56 @@ export default function ProductSearchBar() {
       setResults([]);
       setShowDropdown(false);
       setIsSearching(false);
-      setNextCursor(null);
-      setHasMore(false);
+
       return;
     }
     if (query.length < 2) {
       setResults([]);
       setShowDropdown(false);
       setIsSearching(false);
-      setNextCursor(null);
-      setHasMore(false);
+
       return;
     }
 
-    const seq = append ? ++loadMoreSeqRef.current : ++searchSeqRef.current;
+    const seq = ++searchSeqRef.current;
     const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
     if (!pharmacyId) {
-      if ((!append && seq === searchSeqRef.current) || (append && seq === loadMoreSeqRef.current)) {
+      if (seq === searchSeqRef.current) {
         setResults([]);
         setIsSearching(false);
-        setIsLoadingMore(false);
+        ;
       }
       return;
     }
 
     if (append) {
-      setIsLoadingMore(true);
+      
     } else {
       setIsSearching(true);
       setResults([]);
-      setNextCursor(null);
-      setHasMore(false);
+
     }
 
     try {
       const res = await productsService.getCursorInventory(pharmacyId, {
         query,
-        limit: 10,
+        limit: 50,
         stockFilter: stockFilter ?? undefined,
-        cursor: append ? cursor || undefined : undefined,
+        cursor: undefined,
       });
-      if ((!append && seq === searchSeqRef.current) || (append && seq === loadMoreSeqRef.current)) {
+      if (seq === searchSeqRef.current) {
         const meds = Array.isArray(res.medications) ? res.medications : [];
-        setResults((prev) => (append ? [...prev, ...meds] : meds));
-        setNextCursor(res.next_cursor ?? null);
-        setHasMore(!!res.has_more || !!res.next_cursor);
+        setResults(meds);
       }
     } catch (e: any) {
-      if ((!append && seq === searchSeqRef.current) || (append && seq === loadMoreSeqRef.current)) {
+      if (seq === searchSeqRef.current) {
         setError(e?.message || "Error al buscar productos");
         if (!append) setResults([]);
       }
     } finally {
-      if ((!append && seq === searchSeqRef.current) || (append && seq === loadMoreSeqRef.current)) {
+      if (seq === searchSeqRef.current) {
         setIsSearching(false);
-        setIsLoadingMore(false);
+        ;
       }
     }
   }, [stockFilter]);
@@ -116,8 +109,7 @@ export default function ProductSearchBar() {
       setResults([]);
       setShowDropdown(false);
       setIsSearching(false);
-      setNextCursor(null);
-      setHasMore(false);
+
       return;
     }
     setShowDropdown(true);
@@ -137,23 +129,9 @@ export default function ProductSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || fetchingRef.current || isLoadingMore || !hasMore || !nextCursor) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-      fetchingRef.current = true;
-      performSearch(barcode.trim(), true, nextCursor).finally(() => {
-        fetchingRef.current = false;
-      });
-    }
-  }, [barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [handleScroll, showDropdown]);
+
+
 
   const handleSelect = (med: Medication) => {
     if (blurTimerRef.current) {
@@ -174,8 +152,7 @@ export default function ProductSearchBar() {
       setBarcode("");
       setResults([]);
       setShowDropdown(false);
-      setNextCursor(null);
-      setHasMore(false);
+
       return;
     }
     const result = addMedication(product, 1);
@@ -187,8 +164,6 @@ export default function ProductSearchBar() {
     setBarcode("");
     setResults([]);
     setShowDropdown(false);
-    setNextCursor(null);
-    setHasMore(false);
     inputRef.current?.focus();
   };
 
@@ -260,7 +235,7 @@ export default function ProductSearchBar() {
                   </button>
                 ))}
               </div>
-              <div ref={scrollRef} className="max-h-[60vh] overflow-y-auto overscroll-y-contain">
+              <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto overscroll-y-contain">
                 {isSearching && results.length === 0 && (
                   <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
                 )}
@@ -288,9 +263,7 @@ export default function ProductSearchBar() {
                     </div>
                   </button>
                 ))}
-                {isLoadingMore && (
-                  <div className="px-4 py-2 text-xs font-bold text-slate-400 text-center">Cargando más...</div>
-                )}
+                
               </div>
             </div>
           )}
