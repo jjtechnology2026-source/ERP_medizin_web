@@ -28,11 +28,12 @@ export default function ProductSearchBar() {
   const [error, setError] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<"in" | "out" | null>("in");
 
-  
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const searchSeqRef = useRef(0);
-  
+  const loadingMoreRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -42,74 +43,74 @@ export default function ProductSearchBar() {
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  const performSearch = useCallback(async (text: string, append = false, cursor?: string | null) => {
-    const query = text.trim();
-    if (!query) {
-      setResults([]);
-      setShowDropdown(false);
-      setIsSearching(false);
-
-      return;
-    }
-    if (query.length < 2) {
-      setResults([]);
-      setShowDropdown(false);
-      setIsSearching(false);
-
-      return;
-    }
-
-    const seq = ++searchSeqRef.current;
-    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-    if (!pharmacyId) {
-      if (seq === searchSeqRef.current) {
+  const performSearch = useCallback(
+    async (text: string, append = false, cursor?: string | null) => {
+      const query = text.trim();
+      if (query.length < 2) {
         setResults([]);
+        setShowDropdown(false);
         setIsSearching(false);
-        ;
+        setIsLoadingMore(false);
+        setNextCursor(null);
+        setHasMore(false);
+        return;
       }
-      return;
-    }
 
-    if (append) {
-      
-    } else {
-      setIsSearching(true);
-      setResults([]);
+      const seq = ++searchSeqRef.current;
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) return;
 
-    }
+      if (append) {
+        if (loadingMoreRef.current) return;
+        loadingMoreRef.current = true;
+        setIsLoadingMore(true);
+      } else {
+        setIsSearching(true);
+        setResults([]);
+        setNextCursor(null);
+        setHasMore(false);
+      }
 
-    try {
-      const res = await productsService.getCursorInventory(pharmacyId, {
-        query,
-        limit: 50,
-        stockFilter: stockFilter ?? undefined,
-        cursor: undefined,
-      });
-      if (seq === searchSeqRef.current) {
-        const meds = Array.isArray(res.medications) ? res.medications : [];
-        setResults(meds);
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          query,
+          limit: 10,
+          stockFilter: stockFilter ?? undefined,
+          cursor: append && cursor ? cursor : undefined,
+        });
+
+        if (seq === searchSeqRef.current) {
+          const meds = Array.isArray(res.medications) ? res.medications : [];
+          setResults((prev) => (append ? [...prev, ...meds] : meds));
+          setNextCursor(res.next_cursor ?? null);
+          setHasMore(!!res.has_more || !!res.next_cursor);
+        }
+      } catch (e: any) {
+        if (seq === searchSeqRef.current && !append) {
+          setError(e?.message || "Error al buscar productos");
+        }
+      } finally {
+        if (seq === searchSeqRef.current) {
+          setIsSearching(false);
+          setIsLoadingMore(false);
+        }
+        if (append) {
+          loadingMoreRef.current = false;
+        }
       }
-    } catch (e: any) {
-      if (seq === searchSeqRef.current) {
-        setError(e?.message || "Error al buscar productos");
-        if (!append) setResults([]);
-      }
-    } finally {
-      if (seq === searchSeqRef.current) {
-        setIsSearching(false);
-        ;
-      }
-    }
-  }, [stockFilter]);
+    },
+    [stockFilter]
+  );
 
   useEffect(() => {
     const text = barcode.trim();
     setError(null);
-    if (!text || text.length < 2) {
+    if (text.length < 2) {
       setResults([]);
       setShowDropdown(false);
       setIsSearching(false);
-
+      setNextCursor(null);
+      setHasMore(false);
       return;
     }
     setShowDropdown(true);
@@ -129,9 +130,24 @@ export default function ProductSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
+    const threshold = 40;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - threshold) {
+      const text = barcode.trim();
+      if (text.length >= 2) {
+        performSearch(text, true, nextCursor);
+      }
+    }
+  }, [barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
 
-
-
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [handleScroll, showDropdown]);
 
   const handleSelect = (med: Medication) => {
     if (blurTimerRef.current) {
@@ -152,7 +168,8 @@ export default function ProductSearchBar() {
       setBarcode("");
       setResults([]);
       setShowDropdown(false);
-
+      setNextCursor(null);
+      setHasMore(false);
       return;
     }
     const result = addMedication(product, 1);
@@ -164,6 +181,8 @@ export default function ProductSearchBar() {
     setBarcode("");
     setResults([]);
     setShowDropdown(false);
+    setNextCursor(null);
+    setHasMore(false);
     inputRef.current?.focus();
   };
 
@@ -192,26 +211,10 @@ export default function ProductSearchBar() {
             ref={inputRef}
             type="text"
             value={barcode}
-            onChange={(e) => {
-              setBarcode(e.target.value);
-              setError(null);
-            }}
+            onChange={(e) => { setBarcode(e.target.value); setError(null); }}
             onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if (blurTimerRef.current) {
-                clearTimeout(blurTimerRef.current);
-                blurTimerRef.current = null;
-              }
-              if (barcode.trim().length >= 2) {
-                setShowDropdown(true);
-              }
-            }}
-            onBlur={() => {
-              blurTimerRef.current = setTimeout(() => {
-                blurTimerRef.current = null;
-                setShowDropdown(false);
-              }, 150);
-            }}
+            onFocus={() => { if (barcode.trim().length >= 2) setShowDropdown(true); }}
+            onBlur={() => { setTimeout(() => setShowDropdown(false), 150); }}
             placeholder="Código del producto o nombre del producto"
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-400"
             autoFocus
@@ -263,7 +266,9 @@ export default function ProductSearchBar() {
                     </div>
                   </button>
                 ))}
-                
+                {isLoadingMore && (
+                  <div className="px-4 py-2 text-xs font-bold text-slate-400 text-center">Cargando más...</div>
+                )}
               </div>
             </div>
           )}
