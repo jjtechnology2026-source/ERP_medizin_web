@@ -19,6 +19,7 @@ export default function ProductSearchBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { addMedication } = useCurrentOrderStore();
   const { findInventoryItem } = useProductsStore();
 
@@ -266,6 +267,7 @@ export default function ProductSearchBar() {
                     </div>
                   </button>
                 ))}
+                <div ref={sentinelRef} className="h-1" />
                 {isLoadingMore && (
                   <div className="px-4 py-2 text-xs font-bold text-slate-400 text-center">Cargando más...</div>
                 )}

@@ -30,6 +30,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
   const searchSeqRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const formatPrice = (price: number) => {
     if (isDollar) return `$ ${price.toFixed(2)}`;
@@ -205,6 +206,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               </tbody>
             </table>
           )}
+          <div ref={sentinelRef} className="h-1" />
           {isLoadingMore && (
             <div className="py-3 text-center text-xs font-bold text-slate-400">Cargando más...</div>
           )}
