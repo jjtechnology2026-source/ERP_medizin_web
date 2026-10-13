@@ -199,7 +199,7 @@ export default function ProductSearchBar() {
                   </button>
                 ))}
               </div>
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-[70vh] overflow-y-auto">
                 {isSearching && (
                   <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
                 )}
