@@ -134,7 +134,7 @@ export default function ProductSearchBar() {
     const el = scrollRef.current;
     if (!el || loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
     const threshold = 40;
-    if (el.scrollTop + el.clientHeight + 5 >= Math.floor(el.scrollHeight - 20)) {
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80 || el.scrollTop + el.clientHeight >= el.scrollHeight - 5) {
       const text = barcode.trim();
       if (text.length >= 2) {
         performSearch(text, true, nextCursor);
