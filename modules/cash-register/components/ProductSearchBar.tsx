@@ -120,7 +120,6 @@ export default function ProductSearchBar() {
     }, 250);
     return () => clearTimeout(timer);
   }, [barcode, stockFilter, performSearch]);
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -131,24 +130,42 @@ export default function ProductSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
-    const threshold = 40;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80 || el.scrollTop + el.clientHeight >= el.scrollHeight - 5) {
-      const text = barcode.trim();
-      if (text.length >= 2) {
-        performSearch(text, true, nextCursor);
-      }
-    }
-  }, [barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
+  useEffect(() => {
+    if (!showDropdown) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !loadingMoreRef.current && !isLoadingMore && hasMore && nextCursor) {
+          const text = barcode.trim();
+          if (text.length >= 2) {
+            performSearch(text, true, nextCursor);
+          }
+        }
+      },
+      { root: scrollRef.current, rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showDropdown, barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
 
   useEffect(() => {
+    if (!showDropdown) return;
     const el = scrollRef.current;
     if (!el) return;
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [handleScroll, showDropdown]);
+    const check = () => {
+      if (loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+        const text = barcode.trim();
+        if (text.length >= 2) {
+          performSearch(text, true, nextCursor);
+        }
+      }
+    };
+    const id = setInterval(check, 500);
+    return () => clearInterval(id);
+  }, [showDropdown, barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
 
   const handleSelect = (med: Medication) => {
     if (blurTimerRef.current) {
@@ -212,10 +229,19 @@ export default function ProductSearchBar() {
             ref={inputRef}
             type="text"
             value={barcode}
-            onChange={(e) => { setBarcode(e.target.value); setError(null); }}
+            onChange={(e) => {
+              setBarcode(e.target.value);
+              setError(null);
+            }}
             onKeyDown={handleKeyDown}
-            onFocus={() => { if (barcode.trim().length >= 2) setShowDropdown(true); }}
-            onBlur={() => { setTimeout(() => setShowDropdown(false), 150); }}
+            onFocus={() => {
+              if (barcode.trim().length >= 2) {
+                setShowDropdown(true);
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => setShowDropdown(false), 150);
+            }}
             placeholder="Código del producto o nombre del producto"
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-400"
             autoFocus
