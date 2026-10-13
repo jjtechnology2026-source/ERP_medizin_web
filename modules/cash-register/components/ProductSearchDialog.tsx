@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { HiX, HiSearch } from "react-icons/hi";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication } from "@/modules/products/types/products.types";
+import { productsService } from "@/modules/products/api/products.service";
+import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 
 const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
   { label: "Todos", value: null },
@@ -13,42 +15,102 @@ const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
 ];
 
 export default function ProductSearchDialog({ onClose }: { onClose: () => void }) {
-  const {
-    inventory,
-    isLoading,
-    hasMore,
-    page,
-    searchInventory,
-    setPage,
-    stockFilter,
-    setStockFilter,
-  } = useProductsStore();
+  const { stockFilter, setStockFilter } = useProductsStore();
 
   const { addMedication } = useCurrentOrderStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
 
   const [query, setQuery] = useState("");
+  const [inventory, setInventory] = useState<Medication[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const searchSeqRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Busqueda server-side con debounce (dispara tambien la primera pagina al abrir).
+  const formatPrice = (price: number) => {
+    if (isDollar) return `$ ${price.toFixed(2)}`;
+    return `Bs ${(price * rate).toFixed(2)}`;
+  };
+
+  const performSearch = useCallback(
+    async (text: string, append = false, cursor?: string | null) => {
+      const q = text.trim();
+      const seq = ++searchSeqRef.current;
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) return;
+
+      if (append) {
+        if (loadingMoreRef.current) return;
+        loadingMoreRef.current = true;
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+        setInventory([]);
+        setNextCursor(null);
+        setHasMore(false);
+      }
+
+      try {
+        const res = await productsService.getCursorInventory(pharmacyId, {
+          query: q || undefined,
+          limit: 10,
+          stockFilter: stockFilter ?? undefined,
+          cursor: append && cursor ? cursor : undefined,
+        });
+
+        if (seq === searchSeqRef.current) {
+          const meds = Array.isArray(res.medications) ? res.medications : [];
+          setInventory((prev) => (append ? [...prev, ...meds] : meds));
+          setNextCursor(res.next_cursor ?? null);
+          setHasMore(!!res.has_more || !!res.next_cursor);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        if (seq === searchSeqRef.current) {
+          setIsLoading(false);
+          setIsLoadingMore(false);
+        }
+        if (append) {
+          loadingMoreRef.current = false;
+        }
+      }
+    },
+    [stockFilter]
+  );
+
   useEffect(() => {
     const t = setTimeout(() => {
-      void searchInventory(query);
+      void performSearch(query, false, null);
     }, 300);
     return () => clearTimeout(t);
-  }, [query, searchInventory]);
+  }, [query, stockFilter, performSearch]);
 
-  // Al cerrar se limpia el filtro para no filtrar el inventario de Productos.
   useEffect(() => {
     return () => {
       setStockFilter(null);
     };
   }, [setStockFilter]);
 
-  const formatPrice = (price: number) => {
-    if (isDollar) return `$ ${price.toFixed(2)}`;
-    return `Bs ${(price * rate).toFixed(2)}`;
-  };
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
+    const threshold = 40;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - threshold) {
+      void performSearch(query, true, nextCursor);
+    }
+  }, [query, hasMore, isLoadingMore, nextCursor, performSearch]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   const handleSelect = (med: Medication) => {
     addMedication(med, 1);
@@ -94,7 +156,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
           {inventory.length === 0 ? (
             <div className="py-12 text-center text-sm font-bold text-slate-300">
               {isLoading ? "Buscando..." : query ? "Sin resultados" : "Escribe para buscar productos"}
@@ -112,7 +174,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               <tbody className="divide-y divide-slate-50">
                 {inventory.map((med, i) => (
                   <tr
-                    key={med.barCode || i}
+                    key={`${med.barCode || i}-${i}`}
                     onClick={() => handleSelect(med)}
                     className="hover:bg-blue-50/50 cursor-pointer transition-colors"
                   >
@@ -143,29 +205,10 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
               </tbody>
             </table>
           )}
+          {isLoadingMore && (
+            <div className="py-3 text-center text-xs font-bold text-slate-400">Cargando más...</div>
+          )}
         </div>
-
-        {inventory.length > 0 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400">Página {page}</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setPage(page - 1)}
-                disabled={page <= 1 || isLoading}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
-                disabled={!hasMore || isLoading}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all"
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
