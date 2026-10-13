@@ -119,7 +119,7 @@ export default function Navbar({
   }, [setIsNotifOpen, setIsProfileOpen]);
 
   return (
-    <nav className="bg-white sticky top-0 w-full py-3 px-3 lg:py-4 lg:px-8 flex justify-between items-center border-b border-slate-100/60 z-[60] backdrop-blur-md bg-white/90 gap-2 lg:gap-10">
+    <nav className="bg-white sticky top-0 w-full py-2 px-1.5 lg:py-4 lg:px-8 flex justify-between items-center border-b border-slate-100/60 z-[60] backdrop-blur-md bg-white/90 gap-1 lg:gap-10">
       
       {/* Notifications Modal */}
       <NotificationsDialog 
@@ -128,15 +128,15 @@ export default function Navbar({
       />
 
       {/* Izquierda: Logo + Hamburguesa (Móvil) */}
-      <div className="flex items-center gap-4">
-        <Logo />
+      <div className="flex items-center gap-2">
         <button
           onClick={toggleSidebar}
-          className="lg:hidden text-slate-500 hover:text-blue-600 transition-colors p-2 rounded-xl hover:bg-slate-50"
+          className="lg:hidden text-slate-500 hover:text-blue-600 transition-colors p-2.5 rounded-xl hover:bg-slate-50 relative z-20 -ml-0.5 mr-1"
           aria-label="Abrir menú"
         >
           <HiMenuAlt2 size={22} />
         </button>
+        <Logo />
       </div>
 
       {/* CENTRO: Hamburguesa Desktop + Buscador */}
