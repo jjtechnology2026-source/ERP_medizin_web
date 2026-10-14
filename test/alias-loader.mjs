@@ -18,6 +18,12 @@ const REDIRECTS = new Map([
   ["@/modules/products/api/products.service", path.join(FIXTURES, "products-service-mock.mjs")],
   ["@/modules/products/types/products.types", path.join(FIXTURES, "products-types-mock.mjs")],
   ["@/modules/core/mqtt/advanced-service", path.join(FIXTURES, "mqtt-advanced-service-mock.mjs")],
+  // Store del cajero: el HTTP real se reemplaza por un fake fiel al backend
+  // arreglado (P1 de `cash-session-attribution`). Ver `test:session-binding-load`.
+  [
+    "@/modules/cash-register/api/cashier-accountant.service",
+    path.join(FIXTURES, "cashier-service-mock.mjs"),
+  ],
 ]);
 
 const EXTENSIONS = [

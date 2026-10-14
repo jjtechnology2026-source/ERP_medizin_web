@@ -10,6 +10,11 @@ import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import {
+  resolveAuthorizedCajaId,
+  describeSessionResolutionError,
+  describeSessionBindingMismatch,
+} from "@/modules/cash-register/lib/cash-session-binding";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -62,6 +67,16 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     const assignedCaja = useAuthStore.getState().profile?.cajaId;
 
+    // P2 cash-session-attribution: el terminal se ata a SU caja y nunca opera
+    // sobre la sesión de otra. Fuente única: la caja asignada al agente
+    // (`agents.cajaId`), que es lo único que el backend autoriza para un
+    // `caja_id`. Derivarla de la sesión o de la selección era circular (B1): el
+    // segundo `load()` de una cajera sin caja asignada mandaba un `caja_id` que
+    // el backend rechaza con 403 y dejaba el terminal bloqueado sin poder vender.
+    const boundCajaId = resolveAuthorizedCajaId(assignedCaja);
+
+    let sessionResolutionError: string | null = null;
+
     const [cashBoxes, rawSession] = await Promise.all([
       (async () => {
         try {
@@ -73,15 +88,28 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       })(),
       (async () => {
         try {
-          return await cashierAccountantService.fetchActiveSession();
+          return await cashierAccountantService.fetchActiveSession(boundCajaId ?? undefined);
         } catch (e: any) {
+          const bindingMessage = describeSessionResolutionError(e);
+          if (bindingMessage) {
+            // 409 (ambigüedad) o 403 (caja no asignada): ruidoso y sin
+            // fallback a la búsqueda por usuario.
+            sessionResolutionError = bindingMessage;
+            console.error("❌ [Store load] fetchActiveSession binding rejected:", bindingMessage);
+            return null;
+          }
           console.error("❌ [Store load] fetchActiveSession failed:", e.response?.data || e.message);
           return null;
         }
       })(),
     ]);
 
-    const activeSession = rawSession && (rawSession.id || rawSession.cashBoxId) ? rawSession : null;
+    const resolvedSession = rawSession && (rawSession.id || rawSession.cashBoxId) ? rawSession : null;
+
+    // Gate de atadura: si el backend devolvió una sesión de otra caja (o no hay
+    // caja atada que la confirme), se rechaza explícitamente.
+    const bindingMismatch = describeSessionBindingMismatch(resolvedSession, boundCajaId);
+    const activeSession = bindingMismatch ? null : resolvedSession;
 
     let sessionInvoices: any[] = [];
     let sessionTransactions: any[] = [];
@@ -111,6 +139,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({
       isLoading: false,
+      errorMessage: sessionResolutionError ?? bindingMismatch,
       cashBoxes,
       activeSession,
       sessionInvoices,
