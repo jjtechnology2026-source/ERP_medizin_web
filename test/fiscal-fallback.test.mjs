@@ -9,6 +9,7 @@ import {
   buildFallbackInvoice,
   applyFallbackInvoiceToOrder,
   buildFallbackZReport,
+  caracasCalendarDate,
   buildFallbackNote,
   recordFallbackZ,
   isFallbackZ,
@@ -119,6 +120,28 @@ test("buildFallbackZReport: sin sessionInvoices igual queda poblado", () => {
   assert.equal(z.invoices, null);
   assert.equal(z.total_sales, 0);
   assert.equal(z.fallback, true);
+});
+
+test("buildFallbackZReport: fiscal_date es el dia calendario de Caracas, no el UTC (20:00-24:00)", () => {
+  // 21:44 Caracas del 30/09 = 01:44Z del 01/10 (UTC ya es el dia siguiente).
+  const lateNight = buildFallbackZReport({
+    now: new Date("2026-10-01T01:44:22.000Z"),
+    pharmacyId: "PH1",
+  });
+  assert.equal(lateNight.fiscal_date, "2026-09-30");
+  assert.equal(lateNight.fiscal_serial, `PH1-2026-09-30-${lateNight.z_number}`);
+
+  // 23:59 Caracas del 29/09 = 03:59Z del 30/09.
+  const justBeforeMidnight = buildFallbackZReport({
+    now: new Date("2026-09-30T03:59:00.000Z"),
+    pharmacyId: "PH1",
+  });
+  assert.equal(justBeforeMidnight.fiscal_date, "2026-09-29");
+
+  // El helper exportado es la unica fuente de la conversion (no depende del TZ
+  // del proceso; este test corre con TZ=UTC).
+  assert.equal(caracasCalendarDate(new Date("2026-10-01T01:44:22.000Z")), "2026-09-30");
+  assert.equal(caracasCalendarDate(new Date("2026-09-30T04:00:00.000Z")), "2026-09-30");
 });
 
 test("buildFallbackZReport: base/IVA/exento/IGTF exactos por linea", () => {
@@ -375,7 +398,8 @@ test("runZReportFallback: reintenta createZReport con el Z sintetizado y registr
   assert.equal(typeof calls[0].payload.z_number, "number");
   assert.match(calls[0].payload.fiscal_serial, /^PH1-\d{4}-\d{2}-\d{2}-\d+$/);
   assert.match(calls[0].payload.fiscal_date, /^\d{4}-\d{2}-\d{2}$/);
-  assert.deepEqual(calls[0].payload.invoices, { count: 2, doc_from: "A-1", doc_to: "A-2" });
+  // Sin `invoices`: el backend deriva rango y bloque documental de las facturas reales.
+  assert.equal("invoices" in calls[0].payload, false);
   assert.equal(outcome.report.zNumber, 999);
   assert.equal(outcome.fallback.fallback, true);
   assert.equal(recorded.length, 1);

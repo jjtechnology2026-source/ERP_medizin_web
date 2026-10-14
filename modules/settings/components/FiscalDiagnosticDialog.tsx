@@ -9,6 +9,8 @@ interface FiscalDiagnosticDialogProps {
 
 interface HealthInfo {
   status?: string;
+  version?: string;
+  fiscal_brand?: string;
   serial_port?: string;
   baudrate?: number;
   timeout_seconds?: number;
@@ -135,7 +137,9 @@ export default function FiscalDiagnosticDialog({ onClose }: FiscalDiagnosticDial
               <div>
                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Servicio</p>
                 <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-100">
+                  {row("Versión del servicio", health?.version)}
                   {row("Estado", health?.status)}
+                  {row("Marca fiscal", health?.fiscal_brand)}
                   {row("Puerto serial", health?.serial_port)}
                   {row("Baudrate", health?.baudrate)}
                   {row("Timeout (s)", health?.timeout_seconds)}

@@ -531,7 +531,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 </p>
                 <p className="text-sm font-bold text-red-700 mt-1">
                   Cobrado{" "}
-                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossSales)} vs facturado{" "}
                   {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
                 </p>
                 <p className="text-[11px] text-red-500/80 mt-1">
@@ -571,7 +571,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 </p>
                 <p className="text-sm font-bold text-red-700 mt-1">
                   Cobrado{" "}
-                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
+                  {formatMoney(zSummary.grossSales)} vs facturado{" "}
                   {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
                 </p>
               </div>

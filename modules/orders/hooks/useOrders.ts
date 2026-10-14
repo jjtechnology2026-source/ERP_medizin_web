@@ -1,12 +1,51 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/modules/core/api/client";
+import {
+  businessDayStartIso,
+  businessDayEndIso,
+} from "@/modules/core/utils/date";
+
+/**
+ * Whole-scope return totals, broken down per product. `name` is
+ * `detalle_nota_credito.descripcion`, the same string the UI sees as
+ * `medications[].name`; `quantity` is exact and `amount_usd` is in the same
+ * USD unit as `medications[].price * quantity`. Voided notes and orders outside
+ * the sale scope are already excluded, and the rows sum to `sales_returned`, so
+ * consumers only subtract: they must not re-derive or re-scale.
+ */
+export interface SearchOrdersReturn {
+  name: string;
+  quantity: number;
+  amount_usd: number;
+}
+
+/**
+ * Whole-scope money totals returned alongside the first page. They describe the
+ * entire filtered set (per the backend's `search_orders_scope_sql`), not the
+ * pages loaded so far, and are expressed in USD.
+ *
+ * `sales` is already net: `sales_gross - sales_returned`. `sales_gross` sums
+ * `totalreal` over Completed/Paid orders; `sales_returned` is the sum of the
+ * valid credit notes of those same orders.
+ */
+export interface SearchOrdersTotals {
+  orders: number;
+  products: number;
+  units: number;
+  sales: number;
+  sales_gross: number;
+  sales_returned: number;
+  /** Per-product returns; absent on older backends, in which case totals are gross. */
+  returns?: SearchOrdersReturn[] | null;
+}
 
 export interface SearchOrdersResponse {
   orders: any[];
   next_cursor: string | null;
   has_more: boolean;
   total: number;
+  totals?: SearchOrdersTotals | null;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -51,10 +90,10 @@ export function useOrders(idGroup: string, idPharmacy: string) {
         cleanParams.id_pharmacy = filters.id_pharmacy;
       }
       if (filters.date_start) {
-        cleanParams["date.start"] = new Date(filters.date_start).toISOString();
+        cleanParams["date.start"] = businessDayStartIso(filters.date_start);
       }
       if (filters.date_end) {
-        cleanParams["date.end"] = new Date(filters.date_end).toISOString();
+        cleanParams["date.end"] = businessDayEndIso(filters.date_end);
       }
       if (filters.type_sale) {
         cleanParams.type_sale = filters.type_sale;
@@ -117,6 +156,11 @@ export function useOrders(idGroup: string, idPharmacy: string) {
 
   const total = query.data?.pages[0]?.total ?? 0;
 
+  // Scope totals only need the first page: every page carries the same
+  // whole-filter-set figures, so reading page 0 keeps them stable while the
+  // infinite list keeps loading more rows.
+  const totals = query.data?.pages[0]?.totals ?? null;
+
   return {
     orders,
     loading: query.isLoading,
@@ -126,6 +170,7 @@ export function useOrders(idGroup: string, idPharmacy: string) {
     // being prefetched.
     isRefetching: query.isRefetching,
     total,
+    totals,
     setFilters,
     filters,
     refresh: () => query.refetch(),

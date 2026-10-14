@@ -1,4 +1,8 @@
 import { AuditLogEntry, AuditLogFilters } from "../types";
+import {
+  businessDayStartIso,
+  businessDayEndIso,
+} from "@/modules/core/utils/date";
 
 export const AuditService = {
   buildParams(filters: AuditLogFilters, page: number, limit: number) {
@@ -12,10 +16,10 @@ export const AuditService = {
     };
 
     if (filters.startDate) {
-      params.start_date = new Date(filters.startDate).toISOString();
+      params.start_date = businessDayStartIso(filters.startDate);
     }
     if (filters.endDate) {
-      params.end_date = new Date(filters.endDate).toISOString();
+      params.end_date = businessDayEndIso(filters.endDate);
     }
 
     return params;

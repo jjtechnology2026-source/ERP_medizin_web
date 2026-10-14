@@ -123,6 +123,13 @@ export interface FallbackZReport {
   fallback: true;
 }
 
+// Fecha fiscal = dia calendario de Caracas (UTC-4 fijo, sin DST desde 2016).
+// No usar la zona del equipo: un cierre a las 21:44 local ya es el dia UTC
+// siguiente y etiquetaria el Z un dia tarde (incidente DETODOFARMACY C.A).
+export function caracasCalendarDate(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Caracas" });
+}
+
 export function buildFallbackZReport(input?: {
   sessionInvoices?: FallbackZInvoice[];
   pharmacyId?: string;
@@ -130,7 +137,7 @@ export function buildFallbackZReport(input?: {
 }): FallbackZReport {
   const now = input?.now ?? new Date();
   const invoices = input?.sessionInvoices ?? [];
-  const fiscal_date = now.toISOString().slice(0, 10);
+  const fiscal_date = caracasCalendarDate(now);
   const z_number = Number(`${String(now.getHours()).padStart(2, "0")}${String(
     now.getMinutes(),
   ).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`);

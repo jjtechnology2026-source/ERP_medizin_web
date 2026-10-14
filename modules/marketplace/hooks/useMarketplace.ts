@@ -4,6 +4,10 @@ import { useMqttOrders } from "../providers/MqttOrdersProvider";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { Order } from "@/modules/orders/types/orders";
+import {
+  businessDayStartIso,
+  businessDayEndIso,
+} from "@/modules/core/utils/date";
 
 export function useMarketplaceOrders(initialSelectedOrderId?: string) {
   const { profile } = useAuthStore();
@@ -53,8 +57,8 @@ export function useMarketplaceOrders(initialSelectedOrderId?: string) {
       id_group: profile.id_group,
       id_pharmacy: profile.pharmacyId || "",
       ...(filters.status && { status: filters.status }),
-      ...(filters.date_start && { "date.start": new Date(filters.date_start).toISOString() }),
-      ...(filters.date_end && { "date.end": new Date(filters.date_end).toISOString() }),
+      ...(filters.date_start && { "date.start": businessDayStartIso(filters.date_start) }),
+      ...(filters.date_end && { "date.end": businessDayEndIso(filters.date_end) }),
     }).toString();
   }, [profile, filters.status, filters.date_start, filters.date_end]);
 

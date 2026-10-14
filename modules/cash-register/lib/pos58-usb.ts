@@ -124,17 +124,18 @@ async function disconnect(): Promise<void> {
   }
 }
 
-// requestDevice SOLO abre el selector dentro de un gesto del usuario, y ese
-// gesto expira tras los awaits del flujo fiscal. Por eso hay que enganchar la
-// impresora en el mismo click del cobro, antes de la llamada HTTP.
-// ponytail: si no esta emparejada, pide permiso AHORA; una vez emparejada queda
-// silencioso. Si molesta el selector en cada venta, mover a agotar Permissions API.
+// Deja lista la POS80 SOLO si ya esta emparejada, sin abrir el selector WebUSB.
+// El selector (requestDevice) abre un dialogo del navegador y NO debe aparecer
+// en cada venta: solo al emparejar (Configuracion) o cuando el fallback No Fiscal
+// realmente necesita imprimir y la impresora no esta emparejada.
 export async function prepairPrinter(): Promise<void> {
   if (!isWebUsbSupported()) return;
   try {
-    await connect(true);
+    // prompt=false: usa la impresora ya emparejada; si no hay, no molesta.
+    await connect(false);
   } catch {
-    // Sin impresora disponible: el flujo fiscal continua; el fallback reporta el error.
+    // Sin impresora emparejada: el flujo fiscal continua y, si falla, el
+    // fallback pedira el dispositivo en ese momento.
   }
 }
 

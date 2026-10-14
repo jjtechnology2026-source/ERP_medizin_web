@@ -60,6 +60,25 @@ type StatusCarrier = { saleStatus?: string | null; sale_status?: string | null }
 const normalizeSaleStatus = (order: StatusCarrier | null | undefined): string =>
   String(order?.saleStatus ?? order?.sale_status ?? "").trim().toLowerCase();
 
+/** The five status buckets the stats counters expose, plus `null` for anything unknown. */
+type SaleStatusBucket = "completed" | "pending" | "paid" | "cancelled" | "failed";
+
+/**
+ * Maps an order's sale status onto the bucket its counter uses. This is the single
+ * classification shared by the per-status counters and by `totalSales`, so a status
+ * can never be revenue on one code path and a non-sale on another. `null` means the
+ * status is absent or unrecognized: it is counted in no bucket and is NOT revenue.
+ */
+const classifySaleStatus = (order: StatusCarrier | null | undefined): SaleStatusBucket | null => {
+  const status = normalizeSaleStatus(order);
+  if (status === "completed" || status === "completada" || status === "entregada") return "completed";
+  if (status === "pending" || status === "pendiente") return "pending";
+  if (status === "paid") return "paid";
+  if (status === "cancelled" || status === "cancelada" || status === "canceled") return "cancelled";
+  if (status === "pipelinefailed") return "failed";
+  return null;
+};
+
 export class OrderService {
   /**
    * Calculates the correct total for an order by summing its medications.
@@ -82,6 +101,12 @@ export class OrderService {
   /**
    * Calculates global statistics for an array of orders.
    * This includes total sales volume and counts for different statuses and sale types.
+   *
+   * `totalSales` only counts orders whose status is a sale (Completed/Paid), reusing
+   * the exact classification behind the counters; Cancelled, Pending, PipelineFailed
+   * and unknown statuses contribute nothing. The amount per order is still
+   * `calculateOrderTotal`; returns are not subtracted here because they are not
+   * attributable per order in this payload.
    * @param orders Array of orders to analyze.
    * @returns An OrderStats object containing the calculated metrics.
    */
@@ -89,8 +114,7 @@ export class OrderService {
     return orders.reduce(
       (stats, order) => {
         const total = this.calculateOrderTotal(order);
-        
-        stats.totalSales += total;
+
         stats.totalOrders += 1;
 
         // Normalize exactly like OrderListTable.statusKey, including the legacy
@@ -104,12 +128,19 @@ export class OrderService {
         // fold into `pendingOrders`: a paid order is money already collected with the
         // sale not yet finished, so it must stay individually visible -- that is the
         // state where losing sight of an order costs actual money.
-        const status = normalizeSaleStatus(order);
-        if (status === "completed" || status === "completada" || status === "entregada") stats.completedOrders += 1;
-        else if (status === "pending" || status === "pendiente") stats.pendingOrders += 1;
+        const status = classifySaleStatus(order);
+        if (status === "completed") stats.completedOrders += 1;
+        else if (status === "pending") stats.pendingOrders += 1;
         else if (status === "paid") stats.paidOrders += 1;
-        else if (status === "cancelled" || status === "cancelada" || status === "canceled") stats.cancelledOrders += 1;
-        else if (status === "pipelinefailed") stats.failedOrders += 1;
+        else if (status === "cancelled") stats.cancelledOrders += 1;
+        else if (status === "failed") stats.failedOrders += 1;
+
+        // Only a completed or paid sale is revenue. The same classification that
+        // decides the counter decides whether the amount counts, so a Cancelled,
+        // Pending or PipelineFailed order can never inflate `totalSales`.
+        if (status === "completed" || status === "paid") {
+          stats.totalSales += total;
+        }
 
         const saleType = order.saleType?.toLowerCase();
         if (saleType === "delivery") stats.deliveryOrders += 1;
