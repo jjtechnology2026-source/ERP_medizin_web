@@ -2,6 +2,7 @@
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
+import { resolveAuthorizedCajaId } from "@/modules/cash-register/lib/cash-session-binding";
 import { useRouter } from "next/navigation";
 import { 
   HiOutlineCash, 
@@ -37,6 +38,17 @@ export default function CashierSessionCard() {
 
   const hasApprovedSession = activeSession?.approvalStatus === "approved";
   const hasPendingSession = activeSession?.approvalStatus === "pending";
+
+  // P2 cash-session-attribution: la caja a la que este terminal está atado,
+  // visible para que una atadura equivocada salte a la vista del cajero. Fuente
+  // única: la caja asignada al usuario (`agents.cajaId`), lo único que el backend
+  // autoriza para consultar por caja.
+  const boundCajaId = resolveAuthorizedCajaId(profile?.cajaId);
+  const boundCajaLabel = boundCajaId
+    ? activeSession?.cashBoxName ||
+      cashBoxes.find((cb) => cb.id === boundCajaId)?.name ||
+      boundCajaId
+    : null;
 
   const totalSold = sessionInvoices.reduce((sum, inv) => sum + inv.totalVes, 0);
   const invoiceCount = sessionInvoices.length;
@@ -76,6 +88,41 @@ export default function CashierSessionCard() {
           Actualizar
         </button>
       </div>
+
+      {/* Atadura caja↔terminal (P2 cash-session-attribution) */}
+      {boundCajaId ? (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
+            Este terminal está atado a la caja
+          </span>
+          <span
+            className="text-[10px] font-black text-[#0055ff] bg-[#f0f7ff] border border-blue-100/60 px-2.5 py-1 rounded-full"
+            title={boundCajaId}
+          >
+            {boundCajaLabel}
+          </span>
+          {activeSession?.id && (
+            <span className="text-[10px] font-bold text-slate-400 font-mono" title={activeSession.id}>
+              Sesión {activeSession.id.slice(0, 8)}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider">
+            Sin caja asignada a este usuario
+          </span>
+          <span className="text-[10px] font-bold text-amber-600">
+            La sesión se resuelve por usuario; con más de una caja abierta el
+            sistema va a pedir que se elija una, en vez de adivinar.
+          </span>
+          {activeSession?.id && (
+            <span className="text-[10px] font-bold text-slate-400 font-mono" title={activeSession.id}>
+              Sesión {activeSession.id.slice(0, 8)}
+            </span>
+          )}
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between">

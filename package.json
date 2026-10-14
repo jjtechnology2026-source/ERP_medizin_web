@@ -16,6 +16,8 @@
     "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
     "test:inventory": "node --experimental-strip-types --test test/inventory-write.test.mjs",
     "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs",
+    "test:session-binding": "node --experimental-strip-types --test test/cash-session-binding.test.mjs",
+    "test:session-binding-load": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/cashier-workflow-load.test.mjs",
     "test:date-utils": "TZ=America/Caracas node --experimental-strip-types --test test/date-utils.test.mjs"
   },
   "dependencies": {

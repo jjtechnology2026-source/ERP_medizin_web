@@ -33,6 +33,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { addChatMessage } from "@/modules/core/store/chat.store";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import api from "@/modules/core/api/client";
+import { describeSessionResolutionError } from "@/modules/cash-register/lib/cash-session-binding";
 
 const MqttOrdersContext = createContext<MqttOrdersContextValue | null>(null);
 
@@ -375,7 +376,13 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
         // Construir orden completa y enviar al backend
         (async () => {
           try {
-            const sessionResponse = await api.get("/admin/sesiones/activa");
+            // Si este terminal tiene caja asignada, se pide ESA sesión: es lo único
+            // que el backend autoriza para un `caja_id` (P1). Sin caja asignada se
+            // resuelve por usuario y una ambigüedad real vuelve como 409, que se
+            // reporta abajo en vez de registrarse una venta en la caja equivocada.
+            const sessionResponse = await api.get("/admin/sesiones/activa", {
+              params: profile?.cajaId ? { caja_id: profile.cajaId } : undefined,
+            });
             const sesionCajaId = sessionResponse.data?.data?.sesion?.id;
             if (!sesionCajaId) {
               console.error("[MqttOrdersProvider] No hay sesión de caja activa — orden queda en cola");
@@ -482,7 +489,22 @@ export function MqttOrdersProvider({ children }: { children: React.ReactNode }) 
               message: `La orden #${orderId.slice(-8)} fue registrada. Stock actualizado.`
             });
           } catch (e: any) {
-            console.error("[MqttOrdersProvider] insertorder falló", e?.response?.status, e?.response?.data);
+            // Una orden pagada NUNCA se descarta en silencio: si no se pudo
+            // registrar, el cajero tiene que verlo. Antes esto solo iba a consola
+            // y con el 409 nuevo (más de una sesión abierta) la orden quedaba
+            // pagada, sin registrar y sin que nadie se enterara.
+            const status = e?.response?.status;
+            const sessionMessage = describeSessionResolutionError(e);
+            console.error("[MqttOrdersProvider] insertorder falló", status, e?.response?.data);
+            setFeedback({
+              type: "error",
+              title: "La orden no se pudo registrar",
+              message:
+                sessionMessage ??
+                `La orden #${orderId.slice(-8)} sigue en cola sin registrar (error ${
+                  status ?? "de red"
+                }). Revisá la caja y reintentá antes de cobrar de nuevo.`,
+            });
           }
         })();
         return;
