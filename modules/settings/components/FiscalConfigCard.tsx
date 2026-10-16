@@ -11,6 +11,7 @@ import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-w
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { buildSessionSummary } from "@/modules/cash-register/lib/z-report";
 import { runXReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { canSavePort, resolveInitialPort, savePortBlockReason } from "@/modules/settings/lib/fiscal-port";
 
 // Implementaciones fiscales reales cableadas al servicio (service_fiscal).
 // El value es la marca que usa el cliente para enrutar a /bematech/* o a las
@@ -33,10 +34,12 @@ const FISCAL_SUPPORT_DATA = [
 const FISCAL_PORT_STORAGE_KEY = "fiscal-serial-port";
 
 // Puerto persistido en localStorage: sobrevive al refresh aunque el
-// servicio fiscal no responda en ese momento.
+// servicio fiscal no responda en ese momento. Nunca se inventa un puerto: sin
+// valor guardado el selector arranca vacío (ver lib/fiscal-port.ts), porque un
+// device que el servicio no enumeró no se puede abrir.
 function getStoredPort(): string {
-  if (typeof window === "undefined") return "99";
-  return window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY) ?? "99";
+  if (typeof window === "undefined") return "";
+  return resolveInitialPort(window.localStorage.getItem(FISCAL_PORT_STORAGE_KEY));
 }
 
 function persistPort(serialPort: string) {
@@ -235,8 +238,12 @@ export default function FiscalConfigCard() {
   };
 
   const handleSavePort = async () => {
-    if (!port) {
-      chatToast.show("Selecciona un puerto de la lista antes de guardar.");
+    // Solo se guarda un puerto enumerado por el servicio fiscal: mandar uno que
+    // no existe (el sentinel "99" se normaliza a COM99 en Windows) termina en un
+    // 503 con el traceback crudo de pyserial.
+    const blockReason = savePortBlockReason(port, availablePorts);
+    if (blockReason) {
+      chatToast.show(blockReason);
       return;
     }
     setPortStatus("saving");
@@ -347,6 +354,9 @@ export default function FiscalConfigCard() {
     setTimeout(() => setPos58Status("idle"), 4000);
   };
 
+  // Motivo visible (si lo hay) de por que todavia no se puede guardar el puerto.
+  const portBlockReason = savePortBlockReason(port, availablePorts);
+
   return (
     <>
     <div className="flex flex-col gap-8 w-full">
@@ -391,8 +401,10 @@ export default function FiscalConfigCard() {
                 onChange={(e) => setPort(e.target.value)}
                 className="w-full p-5 bg-[#E9E9E9] border-none rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-bold text-slate-600 appearance-none pr-12"
               >
-                {availablePorts.length === 0 && (
-                  <option value="">No hay puertos detectados</option>
+                {!canSavePort(port, availablePorts) && (
+                  <option value="" disabled>
+                    {availablePorts.length === 0 ? "No hay puertos detectados" : "Seleccioná un puerto"}
+                  </option>
                 )}
                 {availablePorts.map((p) => (
                   <option key={p.device} value={p.device}>
@@ -406,6 +418,9 @@ export default function FiscalConfigCard() {
               <div className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-slate-500">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
               </div>
+              {portBlockReason && (
+                <p className="text-[11px] font-black text-amber-600 ml-1">{portBlockReason}</p>
+              )}
               {availablePorts.length > 0 && (
                 <p className="text-[11px] font-bold text-slate-400 ml-1">
                   Puertos detectados por el servicio fiscal (USB/Serial según conexión). ★ = impresora fiscal identificada. Usá "Detectar impresora" para conectar automáticamente.
