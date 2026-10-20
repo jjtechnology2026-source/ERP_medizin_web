@@ -6,6 +6,7 @@ import {
   isSessionBoundToCaja,
   describeSessionBindingMismatch,
   describeSessionResolutionError,
+  decideSessionAutoOpen,
 } from "../modules/cash-register/lib/cash-session-binding.ts";
 import * as binding from "../modules/cash-register/lib/cash-session-binding.ts";
 
@@ -165,4 +166,75 @@ test("describeSessionBindingMismatch: null cuando no hay caja atada (sin asignar
 
 test("describeSessionBindingMismatch: null cuando todavía no hay sesión resuelta", () => {
   assert.equal(describeSessionBindingMismatch(null, "caja:abc"), null);
+});
+
+// --- decideSessionAutoOpen: la jornada arranca sin que el cajero abra nada ---
+//
+// El backend aprueba la apertura del agente de la farmacia, así que el POS puede
+// abrir la caja solo. Se abre únicamente cuando la caja es inequívoca; con varias
+// cajas y sin asignación no se adivina (abrir la caja equivocada mueve el efectivo
+// de otra persona) y la tarjeta de turno deja elegir.
+
+test("decideSessionAutoOpen: abre la caja asignada al agente", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: "caja:asignada",
+    availableCajaIds: ["caja:asignada", "caja:otra"],
+  });
+  assert.deepEqual(decision, { open: true, cajaId: "asignada", reason: "assigned_caja" });
+});
+
+test("decideSessionAutoOpen: abre la unica caja de la farmacia sin asignacion", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: null,
+    availableCajaIds: ["caja:solo"],
+  });
+  assert.deepEqual(decision, { open: true, cajaId: "solo", reason: "single_caja" });
+});
+
+test("decideSessionAutoOpen: no adivina entre varias cajas sin asignacion", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: null,
+    availableCajaIds: ["caja:a", "caja:b"],
+  });
+  assert.deepEqual(decision, { open: false, reason: "ambiguous" });
+});
+
+test("decideSessionAutoOpen: no abre cuando ya hay sesion activa", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: true,
+    boundCajaId: "caja:asignada",
+    availableCajaIds: ["caja:asignada"],
+  });
+  assert.deepEqual(decision, { open: false, reason: "session_present" });
+});
+
+test("decideSessionAutoOpen: no abre si la farmacia no tiene cajas", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: "caja:asignada",
+    availableCajaIds: [],
+  });
+  assert.deepEqual(decision, { open: false, reason: "no_caja" });
+});
+
+test("decideSessionAutoOpen: un solo intento por montaje", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: "caja:asignada",
+    availableCajaIds: ["caja:asignada"],
+    alreadyAttempted: true,
+  });
+  assert.deepEqual(decision, { open: false, reason: "already_attempted" });
+});
+
+test("decideSessionAutoOpen: la caja asignada que no esta en la lista no se abre", () => {
+  const decision = decideSessionAutoOpen({
+    hasActiveSession: false,
+    boundCajaId: "caja:fantasma",
+    availableCajaIds: ["caja:a", "caja:b"],
+  });
+  assert.deepEqual(decision, { open: false, reason: "ambiguous" });
 });

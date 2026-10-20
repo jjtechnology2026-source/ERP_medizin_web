@@ -13,7 +13,7 @@ import CustomerDataDialog from "@/modules/cash-register/components/CustomerDataD
 import PaymentDialog from "@/modules/cash-register/components/PaymentDialog";
 
 export default function CashRegisterFeature() {
-  const { load, activeSession, isLoading } = useCashierWorkflowStore();
+  const { load, ensureSession, activeSession, isLoading } = useCashierWorkflowStore();
   const { data: session } = useSession();
 
   // pharmacyId directamente de la sesión de NextAuth (valor confirmado en logs)
@@ -23,10 +23,14 @@ export default function CashRegisterFeature() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
   useEffect(() => {
-    if (pharmacyId) {
-      load(pharmacyId);
-    }
-  }, [pharmacyId, load]);
+    if (!pharmacyId) return;
+    // Carga la sesión de la caja del terminal y, si no hay ninguna, la abre sola
+    // cuando la caja es inequívoca. El cajero entra y ya puede vender.
+    (async () => {
+      await load(pharmacyId);
+      await ensureSession();
+    })();
+  }, [pharmacyId, load, ensureSession]);
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6 bg-[#f8fafc] min-h-full">

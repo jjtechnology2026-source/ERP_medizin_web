@@ -14,12 +14,14 @@ import {
   resolveAuthorizedCajaId,
   describeSessionResolutionError,
   describeSessionBindingMismatch,
+  decideSessionAutoOpen,
 } from "@/modules/cash-register/lib/cash-session-binding";
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
   currentRate: number;
   load: (pharmacyId?: string) => Promise<void>;
+  ensureSession: () => Promise<void>;
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
   registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; fiscalFallback?: boolean; printError?: string } | null>;
@@ -48,6 +50,10 @@ const initialState: CashierWorkflowState & { currentRate: number } = {
   currentRate: 0,
   fiscalAvailable: null,
 };
+
+// Un solo intento de auto-apertura por montaje del POS: evita reintentos en
+// cada `load()` cuando la caja no se puede abrir (inactiva, sin cajas, etc.).
+let autoOpenAttempted = false;
 
 export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) => ({
   ...initialState,
@@ -173,6 +179,43 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       const mensaje = error.response?.data?.message || "Error al solicitar apertura de caja";
       console.error("❌ [openSession] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
+    }
+  },
+
+  /**
+   * Abre la caja sola al entrar al POS cuando la caja del terminal es
+   * inequívoca, para que la jornada arranque sin que el cajero tenga que abrir
+   * nada ni esperar una aprobación. El backend aprueba la apertura del agente de
+   * la farmacia, así que la sesión queda operativa de inmediato.
+   *
+   * Un solo intento por montaje: si falla (por ejemplo, la caja está inactiva),
+   * no se reintenta en cada `load()` y la tarjeta de turno sigue ofreciendo el
+   * botón manual.
+   */
+  ensureSession: async () => {
+    const { activeSession, cashBoxes } = get();
+    const assignedCaja = useAuthStore.getState().profile?.cajaId;
+    const decision = decideSessionAutoOpen({
+      hasActiveSession: Boolean(activeSession?.id),
+      boundCajaId: resolveAuthorizedCajaId(assignedCaja),
+      availableCajaIds: cashBoxes.map((cb) => cb.id),
+      alreadyAttempted: autoOpenAttempted,
+    });
+
+    if (!decision.open) return;
+
+    autoOpenAttempted = true;
+    set({ isSubmitting: true });
+    try {
+      await cashierAccountantService.openSession(decision.cajaId);
+      await get().load();
+    } catch (error: any) {
+      console.warn(
+        "[ensureSession] no se pudo abrir la caja automáticamente:",
+        error?.response?.data?.message || error?.message,
+      );
+    } finally {
+      set({ isSubmitting: false });
     }
   },
 

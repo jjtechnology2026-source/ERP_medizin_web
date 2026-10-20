@@ -28,7 +28,18 @@ Commits en inglés con Conventional Commits, push a la rama que despliega cada s
 | T5 | S2 | `pnpm build` verde en los dos proyectos | feat/mara-pos-identity | (evidencia) |
 | T6 | S4 | Push a `master` / `main` y verificación del deploy en Railway | master / main | (evidencia) |
 
+## Addendum — caja lista al iniciar la jornada
+
+S5 — "verifica que ya mañana cuando la gente comience a utilizar el sistema ya esté lo guiada en las cajas, es decir que no tengan que abrirla ... si no es que ya puedan trabajar de una sola vez".
+La apertura de caja no puede dejar a nadie afuera el primer día de la jornada: si la caja del terminal es inequívoca, el POS la abre solo y el backend aprueba la apertura del agente de la farmacia.
+
+| ID | Spec | Qué | Commit |
+| --- | --- | --- | --- |
+| T7 | S5 | Backend: la apertura se aprueba sola también cuando el agente pertenece a la farmacia de la caja (no solo con `agents.cajaId`), con test de integración | `feat(caja): aprobar la apertura del agente de la farmacia` |
+| T8 | S5 | ERP: `decideSessionAutoOpen` + `ensureSession`; el POS abre la caja asignada (o la única caja) al entrar | `feat(caja): abrir la caja del terminal al entrar al POS` |
+
 ## Log
 
 L1 — Pedido original (voz, 20/10/2026): "yo te voy a pasar una carpeta donde hay unos SVG y unos PNG para que la actualice lo que es la identidad visual en vez de ser Mazing se daba Maraposo, creo que se llama algo así pero quiero que todo busca bien, todo busca excelente como tener una nueva presentación ahora con esos colores y mejor dicho con esa nueva identidad visual necesito que hagas tanto en este proyecto como en el proyecto administrativo, el administrador de farmacias también aplique lo mismo es decir esos colores van a cambiar identidad visual, es muy importante cuando termines me avisas haces Geek Comic haces un push y verificas que todo se monte en Railway".
 L2 — Los assets entregados (`mara/SVG/MARA POS (1).svg`, `(2).svg` y 4 PNG 1080×1080) confirman el nombre "Mara POS" y la tagline "Agiliza · Controla · Escala"; los colores se toman de los SVG y del degradado de las piezas sociales.
+L3 — La caja se abre sola cuando es inequívoca; con varias cajas y sin asignación se mantiene la elección manual, que ahora también queda aprobada al instante.

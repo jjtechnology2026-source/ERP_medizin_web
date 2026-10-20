@@ -121,3 +121,47 @@ export function describeSessionResolutionError(error: unknown): string | null {
 
   return null;
 }
+
+/**
+ * Decide si el POS debe abrir la caja solo, sin que el cajero toque nada.
+ *
+ * El objetivo operativo es que al empezar la jornada nadie quede afuera por una
+ * solicitud de apertura pendiente: el backend ya aprueba automáticamente la
+ * apertura del agente de la farmacia, así que la sesión puede nacer aprobada y
+ * el cajero vender de una.
+ *
+ * Se abre solo cuando la caja es inequívoca: la caja asignada al agente o,
+ * cuando no hay asignación, la única caja de la farmacia. Con varias cajas y sin
+ * asignación no se adivina —abrir la caja equivocada mueve el efectivo de otra
+ * persona— y la tarjeta de turno deja elegir; esa apertura también queda
+ * aprobada al instante.
+ */
+export type SessionAutoOpenDecision =
+  | {
+      open: false;
+      reason: "already_attempted" | "session_present" | "no_caja" | "ambiguous";
+    }
+  | { open: true; cajaId: string; reason: "assigned_caja" | "single_caja" };
+
+export function decideSessionAutoOpen(input: {
+  hasActiveSession: boolean;
+  boundCajaId: string | null;
+  availableCajaIds: string[];
+  alreadyAttempted?: boolean;
+}): SessionAutoOpenDecision {
+  if (input.alreadyAttempted) return { open: false, reason: "already_attempted" };
+  if (input.hasActiveSession) return { open: false, reason: "session_present" };
+
+  const available = input.availableCajaIds
+    .map((id) => normalizeCajaId(id))
+    .filter((id): id is string => Boolean(id));
+  const bound = normalizeCajaId(input.boundCajaId);
+
+  if (bound && available.includes(bound)) {
+    return { open: true, cajaId: bound, reason: "assigned_caja" };
+  }
+  if (available.length === 1) {
+    return { open: true, cajaId: available[0], reason: "single_caja" };
+  }
+  return { open: false, reason: available.length === 0 ? "no_caja" : "ambiguous" };
+}
