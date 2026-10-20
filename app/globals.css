@@ -6,6 +6,16 @@
   --primary: #0057FF;
   --primary-hover: #0046CC;
   --primary-light: #E6F0FF;
+
+  /* Mara POS brand palette */
+  --brand-blue: #0057FF;
+  --brand-ink: #1A2E35;
+  --brand-teal: #134B4F;
+  --brand-emerald: #019C96;
+  --brand-surface: #F5F5F5;
+  --brand-muted: #64748B;
+  --brand-gradient: linear-gradient(135deg, #1A2E35 0%, #134B4F 55%, #019C96 100%);
+  --brand-gradient-deep: linear-gradient(160deg, #101F26 0%, #0F3B3E 58%, #017F7A 100%);
 }
 
 @theme inline {
@@ -14,6 +24,11 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-light: var(--primary-light);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-emerald: var(--brand-emerald);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-surface: var(--brand-surface);
   --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
 }
@@ -48,4 +63,24 @@ body {
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Mara POS brand surfaces */
+.brand-gradient {
+  background: var(--brand-gradient);
+}
+
+.brand-gradient-deep {
+  background: var(--brand-gradient-deep);
+}
+
+.brand-glow {
+  box-shadow: 0 24px 60px -24px rgba(26, 46, 53, 0.55);
+}
+
+.brand-text-gradient {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
