@@ -109,7 +109,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#005eff] text-white font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(0,94,255,0.3)] hover:bg-blue-600 transition-all text-sm disabled:opacity-50 active:scale-[0.98]"
+              className="w-full bg-[#0057FF] text-white font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(0,94,255,0.3)] hover:bg-blue-600 transition-all text-sm disabled:opacity-50 active:scale-[0.98]"
             >
               {isLoading ? "Iniciando sesión..." : "Acceder al Panel"}
             </button>
@@ -128,7 +128,7 @@ export default function LoginForm() {
 
           <p className="text-center text-xs text-slate-400 pt-6 font-bold">
             ¿No tienes una cuenta?{" "}
-            <Link href="/register" className="text-[#005eff] font-black hover:underline underline-offset-4">
+            <Link href="/register" className="text-[#0057FF] font-black hover:underline underline-offset-4">
               Regístrate ahora
             </Link>
           </p>

@@ -20,11 +20,12 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Inventario | Medizin",
-  description: "Aplicación de gestión de inventario para Farmacias de Medizin.",
+  title: "Inventario | Mara POS",
+  description:
+    "Mara POS: inventario y punto de venta para farmacias. Agiliza, controla y escala.",
   icons: {
-    icon: "/icon-medizin.svg",
-    apple: "/icon-medizin.svg",
+    icon: "/mara-icon.svg",
+    apple: "/mara-icon.svg",
   },
 };
 

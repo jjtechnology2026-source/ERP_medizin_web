@@ -22,7 +22,7 @@ function cn(...inputs: ClassValue[]) {
 
 const Logo = () => (
   <div className="flex items-center gap-3 shrink-0">
-    <img src="/Logo.svg" alt="Medizin" className="w-[100px] sm:w-[120px] lg:w-[150px] h-auto object-contain" />
+    <img src="/mara-wordmark.svg" alt="Mara POS" className="w-[104px] sm:w-[124px] lg:w-[152px] h-auto object-contain" />
   </div>
 );
 

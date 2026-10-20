@@ -103,7 +103,7 @@ export default function InventoryList({
 
   const loadLogoAsPng = async (): Promise<string | null> => {
     try {
-      const response = await fetch("/Logo.svg");
+      const response = await fetch("/mara-wordmark.svg");
       if (!response.ok) return null;
       const svgText = await response.text();
       const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });

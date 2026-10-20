@@ -12,10 +12,10 @@ export default function LoadingOverlay({
       <div className="flex flex-col items-center gap-8 animate-in fade-in zoom-in duration-500">
         <div className="relative">
           {/* Spinner Exterior */}
-          <div className="w-24 h-24 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin" />
+          <div className="w-24 h-24 border-4 border-slate-100 border-t-[#0057FF] rounded-full animate-spin" />
           
           <div className="absolute inset-0 flex items-center justify-center">
-            <img src="/Logo.svg" alt="Logo" className="w-10 h-10 object-contain animate-pulse" />
+            <img src="/mara-mark.svg" alt="Mara POS" className="w-11 h-11 object-contain animate-pulse" />
           </div>
         </div>
 
@@ -27,7 +27,7 @@ export default function LoadingOverlay({
       
       {/* Barra de progreso decorativa abajo */}
       <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-50">
-        <div className="h-full bg-blue-600 animate-loading-bar" />
+        <div className="h-full brand-gradient animate-loading-bar" />
       </div>
     </div>
   );

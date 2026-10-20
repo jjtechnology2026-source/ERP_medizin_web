@@ -224,7 +224,7 @@ export default function ProductSearchBar() {
         </div>
         <button
           onClick={handleAdd}
-          className="px-8 py-3 bg-[#0055ff] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
+          className="px-8 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
         >
           ENTER - Agregar
         </button>

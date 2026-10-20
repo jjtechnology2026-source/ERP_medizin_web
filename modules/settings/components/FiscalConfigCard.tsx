@@ -501,7 +501,7 @@ export default function FiscalConfigCard() {
               <button
                 onClick={handleSavePort}
                 disabled={portStatus === "saving"}
-                className="px-10 py-5 bg-[#005eff] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+                className="px-10 py-5 bg-[#0057FF] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
               >
                 {portStatus === "saving"
                   ? "Guardando..."

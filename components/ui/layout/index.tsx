@@ -55,7 +55,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return (
       <LoadingOverlay
         message="Cargando sistema..."
-        // subtext="Estamos preparando tu panel Medizin"
+        // subtext="Estamos preparando tu panel Mara POS"
       />
     );
   }

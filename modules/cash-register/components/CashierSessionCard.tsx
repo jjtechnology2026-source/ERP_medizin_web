@@ -77,12 +77,12 @@ export default function CashierSessionCard() {
       {/* Encabezado del Turno */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
-          <span className="w-1.5 h-4 bg-[#0055ff] rounded-full inline-block"></span>
+          <span className="w-1.5 h-4 bg-[#0057FF] rounded-full inline-block"></span>
           Turno del cajero
         </h2>
         <button
           onClick={handleRefresh}
-          className="text-xs font-bold text-[#0055ff] hover:text-blue-800 transition-colors flex items-center gap-1.5"
+          className="text-xs font-bold text-[#0057FF] hover:text-blue-800 transition-colors flex items-center gap-1.5"
         >
           <HiRefresh className="animate-hover-spin" size={14} />
           Actualizar
@@ -96,7 +96,7 @@ export default function CashierSessionCard() {
             Este terminal está atado a la caja
           </span>
           <span
-            className="text-[10px] font-black text-[#0055ff] bg-[#f0f7ff] border border-blue-100/60 px-2.5 py-1 rounded-full"
+            className="text-[10px] font-black text-[#0057FF] bg-[#f0f7ff] border border-blue-100/60 px-2.5 py-1 rounded-full"
             title={boundCajaId}
           >
             {boundCajaLabel}
@@ -164,7 +164,7 @@ export default function CashierSessionCard() {
           <button
             onClick={openSession}
             disabled={!selectedCashBoxId || isSubmitting}
-            className="px-5 py-2 bg-[#0055ff] text-white rounded-xl font-black text-xs hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2 bg-[#0057FF] text-white rounded-xl font-black text-xs hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Enviando..." : "Solicitar Apertura"}
           </button>
@@ -192,14 +192,14 @@ export default function CashierSessionCard() {
           {/* Fila del Titulo de Sesion Activa y Cierre */}
           <div className="flex items-center justify-between mb-3.5 flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <HiCheckCircle size={18} className="text-[#0055ff]" />
-              <span className="text-xs font-black text-[#0055ff] tracking-tight">
+              <HiCheckCircle size={18} className="text-[#0057FF]" />
+              <span className="text-xs font-black text-[#0057FF] tracking-tight">
                 Sesion activa en prueba
               </span>
             </div>
             <button
               onClick={() => router.push("/cierre-caja")}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-[#0055ff] text-[#0055ff] hover:bg-blue-50/50 rounded-full font-black text-[10px] tracking-wide shadow-sm hover:scale-[1.02] active:scale-95 transition-all"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-[#0057FF] text-[#0057FF] hover:bg-blue-50/50 rounded-full font-black text-[10px] tracking-wide shadow-sm hover:scale-[1.02] active:scale-95 transition-all"
             >
               <HiOutlinePrinter size={13} />
               Ir a cierre

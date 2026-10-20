@@ -31,14 +31,14 @@ export default function CashRegisterFeature() {
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6 bg-[#f8fafc] min-h-full">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-black text-[#0055ff] tracking-tight">
+        <h1 className="text-2xl md:text-3xl font-black text-[#0057FF] tracking-tight">
           Caja de ventas
         </h1>
       </header>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#0055ff] border-t-transparent" />
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#0057FF] border-t-transparent" />
         </div>
       ) : (
         <div className="flex flex-col gap-6 max-w-7xl w-full mx-auto">

@@ -23,7 +23,7 @@ export default function OrderTabs() {
       ))}
       <button
         onClick={newOrder}
-        className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0055ff] text-white hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shadow-xs shrink-0"
+        className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0057FF] text-white hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shadow-xs shrink-0"
         title="Nueva Orden"
       >
         <HiPlus size={13} />

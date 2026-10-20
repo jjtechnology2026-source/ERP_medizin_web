@@ -11,7 +11,7 @@ export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void })
   const order = getCurrentOrder();
 
   return (
-    <div className="bg-[#0055ff] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="bg-[#0057FF] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       {/* Izquierda: Cantidad de Productos */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-blue-100 uppercase tracking-wide">
@@ -29,10 +29,10 @@ export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void })
             Total de venta:
           </span>
           <div className="bg-white rounded-xl px-4 py-2 flex items-center gap-1.5 shadow-sm">
-            <span className="text-[9px] font-black bg-[#0055ff]/10 text-[#0055ff] px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+            <span className="text-[9px] font-black bg-[#0057FF]/10 text-[#0057FF] px-1.5 py-0.5 rounded-md uppercase tracking-wider">
               {isDollar ? "USD" : "Bs"}
             </span>
-            <span className="text-base font-black text-[#0055ff] font-mono leading-none">
+            <span className="text-base font-black text-[#0057FF] font-mono leading-none">
               {isDollar ? totals.total.toFixed(2) : totals.totalBs.toFixed(2)}
             </span>
           </div>
@@ -50,7 +50,7 @@ export default function CheckoutBar({ onCheckout }: { onCheckout?: () => void })
           <button
             onClick={onCheckout}
             disabled={!order?.medications.length}
-            className="flex items-center gap-1.5 px-6 py-2.5 bg-white text-[#0055ff] disabled:text-slate-400 disabled:bg-white/80 font-black text-xs rounded-full hover:scale-105 active:scale-95 transition-all shadow-md disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-1.5 px-6 py-2.5 bg-white text-[#0057FF] disabled:text-slate-400 disabled:bg-white/80 font-black text-xs rounded-full hover:scale-105 active:scale-95 transition-all shadow-md disabled:cursor-not-allowed cursor-pointer"
           >
             <HiCheck size={16} />
             Procesar

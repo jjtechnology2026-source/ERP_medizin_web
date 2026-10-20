@@ -206,7 +206,7 @@ export default function CashClosurePage() {
       <header className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-slate-800">
-            Cierre de <span className="text-[#005eff]">Caja</span>
+            Cierre de <span className="text-[#0057FF]">Caja</span>
           </h1>
           <p className="text-slate-500 mt-1">
             {activeSession ? `Sesión: ${activeSession.id}` : "Resumen detallado de transacciones del día."}
@@ -224,7 +224,7 @@ export default function CashClosurePage() {
           <button
             onClick={handleCloseSession}
             disabled={!activeSession || isSubmitting}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#005eff] hover:bg-[#004cd4] text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#0057FF] hover:bg-[#004cd4] text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <HiOutlineLockClosed className="text-xl" />
             {isSubmitting ? "Cerrando..." : "Cerrar Turno"}
@@ -254,7 +254,7 @@ export default function CashClosurePage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
           <section className="lg:col-span-3 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-8">
             <div className="flex items-center gap-3 mb-8">
-              <div className="p-3 bg-blue-50 text-[#005eff] rounded-2xl">
+              <div className="p-3 bg-blue-50 text-[#0057FF] rounded-2xl">
                 <HiOutlineCalculator size={24} />
               </div>
               <h2 className="text-2xl font-black text-slate-800 tracking-tight">Ventas Totales</h2>
@@ -282,7 +282,7 @@ export default function CashClosurePage() {
 
             <section className="mt-8 pt-8 border-t border-slate-200">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-[#005eff]/10 text-[#005eff] rounded-2xl">
+                <div className="p-3 bg-[#0057FF]/10 text-[#0057FF] rounded-2xl">
                   <HiOutlineCalculator size={24} />
                 </div>
                 <h2 className="text-2xl font-black text-slate-800">Resumen Fiscal</h2>
@@ -450,9 +450,9 @@ export default function CashClosurePage() {
           </section>
 
           <aside className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-[2.5rem] border-2 border-[#005eff]/5 shadow-xl shadow-blue-500/5 p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#005eff]/5 rounded-full -mr-16 -mt-16" />
-              <h3 className="text-xs font-black text-[#005eff] uppercase tracking-[0.2em] mb-10 flex items-center gap-2">
+            <div className="bg-white rounded-[2.5rem] border-2 border-[#0057FF]/5 shadow-xl shadow-blue-500/5 p-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#0057FF]/5 rounded-full -mr-16 -mt-16" />
+              <h3 className="text-xs font-black text-[#0057FF] uppercase tracking-[0.2em] mb-10 flex items-center gap-2">
                 Balance de Caja
               </h3>
 
@@ -463,7 +463,7 @@ export default function CashClosurePage() {
                     <span className="text-3xl font-black text-slate-900 tracking-tighter">
                       {theoreticalBalanceVes.toFixed(2)}
                     </span>
-                    <span className="text-[#005eff] font-bold text-lg font-mono">Bs.</span>
+                    <span className="text-[#0057FF] font-bold text-lg font-mono">Bs.</span>
                   </div>
                 </div>
 

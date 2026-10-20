@@ -66,12 +66,12 @@ export default function RecentInvoicesCard() {
       {/* Encabezado del Listado */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-          <span className="w-1.5 h-4 bg-[#0055ff] rounded-full inline-block"></span>
+          <span className="w-1.5 h-4 bg-[#0057FF] rounded-full inline-block"></span>
           Documentos del turno
         </h3>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total facturado:</span>
-          <span className="text-xs font-black text-[#0055ff] font-mono bg-blue-50/50 border border-blue-100/50 px-3 py-1 rounded-xl">
+          <span className="text-xs font-black text-[#0057FF] font-mono bg-blue-50/50 border border-blue-100/50 px-3 py-1 rounded-xl">
             Bs {totalSold.toFixed(2)}
           </span>
         </div>
@@ -164,7 +164,7 @@ export default function RecentInvoicesCard() {
                 onClick={() => setCurrentPage(i + 1)}
                 className={`w-6 h-6 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
                   currentPage === i + 1
-                    ? "bg-[#0055ff] text-white border-[#0055ff] shadow-xs"
+                    ? "bg-[#0057FF] text-white border-[#0057FF] shadow-xs"
                     : "bg-white text-slate-600 border-slate-200/60 hover:bg-slate-50"
                 }`}
               >
