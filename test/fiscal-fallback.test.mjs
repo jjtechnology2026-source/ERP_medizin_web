@@ -19,6 +19,7 @@ import { WIDTH } from "../modules/cash-register/lib/pos58-ticket.ts";
 import {
   runOrderFallback,
   runZReportFallback,
+  persistFallbackZ,
   runNoteFallback,
   buildSaleReprintTicket,
 } from "../modules/cash-register/lib/fiscal-fallback-flow.ts";
@@ -407,7 +408,30 @@ test("runZReportFallback: reintenta createZReport con el Z sintetizado y registr
   assert.equal(recorded[0].fiscalDate, "2026-09-10");
 });
 
-test("runZReportFallback: si el reintento falla, registra el marcador con los valores sintetizados", async () => {
+test("runZReportFallback: si el primer intento ya devolvio el Z, no se re-registra sintetico", async () => {
+  const calls = [];
+  const recorded = [];
+  const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
+    pharmacyId: "PH1",
+    sessionInvoices: [],
+    initialResult: { success: true, report: { fiscalDate: "2026-10-19", zNumber: 128 } },
+    createZReport: async (pharmacyId, payload) => {
+      calls.push(payload);
+      return { success: true, report: { fiscalDate: "2026-10-19", zNumber: 999 } };
+    },
+    print: async () => ({ printed: true, via: "jspdf" }),
+    record: (marker) => { recorded.push(marker); },
+  });
+  // Un Z real no se pisa con los identificadores sinteticos del fallback.
+  assert.equal(calls.length, 0);
+  assert.equal(outcome.persisted, true);
+  assert.equal(outcome.report.zNumber, 128);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].zNumber, 128);
+});
+
+test("runZReportFallback: si el reintento falla, el Z NO se marca como registrado", async () => {
   const recorded = [];
   const outcome = await runZReportFallback({
     header: { name: "F", rif: "J-1" },
@@ -419,10 +443,94 @@ test("runZReportFallback: si el reintento falla, registra el marcador con los va
     record: (marker) => { recorded.push(marker); },
   });
   assert.equal(outcome.report, null);
+  assert.equal(outcome.persisted, false);
+  // El marcador local alimenta el historial: afirmar un Z que no existe es
+  // justamente lo que dejo pasar el incidente de DETODOFARMACY (Z impreso,
+  // libro vacio, nadie se entera).
+  assert.equal(recorded.length, 0);
+});
+
+test("runZReportFallback: un rechazo del backend se reporta con su motivo, no como exito", async () => {
+  const recorded = [];
+  const prints = [];
+  const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
+    pharmacyId: "PH1",
+    sessionInvoices: [{ controlNumber: "A-1", totalVes: 100 }],
+    initialResult: { success: false, report: null },
+    createZReport: async () => ({
+      success: false,
+      statusCode: 409,
+      message: "Ya existe un reporte Z que cubre este período (fiscal_date <= 2026-10-19)",
+      report: null,
+    }),
+    print: async () => { prints.push("ticket"); return { printed: true, via: "jspdf" }; },
+    record: (marker) => { recorded.push(marker); },
+  });
+  // El ticket fisico se imprime igual: es la evidencia del cierre.
+  assert.equal(prints.length, 1);
+  assert.equal(outcome.persisted, false);
+  assert.match(outcome.persistError, /Ya existe un reporte Z/);
+  assert.equal(recorded.length, 0);
+});
+
+test("runZReportFallback: reconcilia contra el backend cuando la escritura queda ambigua", async () => {
+  const recorded = [];
+  const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
+    pharmacyId: "PH1",
+    sessionInvoices: [],
+    initialResult: { success: false, report: null },
+    // La escritura pudo completarse y perderse la respuesta (timeout de red).
+    createZReport: async () => { throw new Error("timeout"); },
+    findPersistedZ: async ({ fiscalDate, zNumber }) => ({ fiscalDate, zNumber }),
+    print: async () => ({ printed: true, via: "jspdf" }),
+    record: (marker) => { recorded.push(marker); },
+  });
+  assert.equal(outcome.persisted, true);
+  assert.equal(outcome.reconciled, true);
+  assert.equal(outcome.report.zNumber, outcome.fallback.z_number);
   assert.equal(recorded.length, 1);
-  assert.equal(recorded[0].pharmacyId, "PH1");
   assert.equal(recorded[0].zNumber, outcome.fallback.z_number);
-  assert.equal(recorded[0].fiscalDate, outcome.fallback.fiscal_date);
+});
+
+test("runZReportFallback: si la reconciliacion no encuentra el Z, sigue siendo fallo", async () => {
+  const outcome = await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
+    pharmacyId: "PH1",
+    sessionInvoices: [],
+    initialResult: { success: false, report: null },
+    createZReport: async () => { throw new Error("timeout"); },
+    findPersistedZ: async () => null,
+    print: async () => ({ printed: true, via: "jspdf" }),
+    record: () => {},
+  });
+  assert.equal(outcome.persisted, false);
+  assert.match(outcome.persistError, /timeout|no se pudo/i);
+});
+
+test("persistFallbackZ: reintenta el registro sin reimprimir el ticket", async () => {
+  const calls = [];
+  const fallback = buildFallbackZReport({
+    now: new Date("2026-10-20T01:42:56.000Z"),
+    pharmacyId: "PH1",
+  });
+  const result = await persistFallbackZ({
+    pharmacyId: "PH1",
+    fallback,
+    createZReport: async (pharmacyId, payload) => {
+      calls.push({ pharmacyId, payload });
+      return {
+        success: true,
+        report: { zNumber: payload.z_number, fiscalDate: payload.fiscal_date },
+      };
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.z_number, fallback.z_number);
+  assert.equal(calls[0].payload.fiscal_date, "2026-10-19");
+  assert.equal(result.persisted, true);
+  assert.equal(result.report.zNumber, fallback.z_number);
 });
 
 // --- C4: note persistence retry on the fallback path ---

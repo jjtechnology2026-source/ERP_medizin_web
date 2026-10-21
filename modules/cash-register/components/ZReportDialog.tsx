@@ -18,7 +18,7 @@ import {
   recordFallbackZ,
   type FallbackZReport,
 } from "@/modules/cash-register/lib/fiscal-fallback";
-import { runZReportFallback, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { runZReportFallback, persistFallbackZ, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { buildZSummary } from "@/modules/cash-register/lib/z-report";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
@@ -124,7 +124,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
 
   const runFallback = useCallback(
     async (initialResult: { success: boolean; report?: CreatedZReport | null }) => {
-      const { fallback, report: persisted } = await runZReportFallback({
+      const outcome = await runZReportFallback({
         header,
         pharmacyId,
         sessionInvoices,
@@ -135,16 +135,70 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         rate,
         initialResult,
         createZReport: fiscalZReportService.createZReport,
+        findPersistedZ: (identity) =>
+          fiscalZReportService.findZReport(identity.pharmacyId, {
+            fiscalDate: identity.fiscalDate,
+            zNumber: identity.zNumber,
+          }),
         print: printNoFiscalTicket,
         record: recordFallbackZ,
       });
-      setFallbackZ(fallback);
+      setFallbackZ(outcome.fallback);
       setFiscalFallback(true);
-      if (persisted) setReport(persisted);
+      if (outcome.report) setReport(outcome.report);
+
+      // El ticket ya salio por la POS80: el cierre existe en papel. Si no quedo
+      // registrado hay que decirlo en la cara, porque esa venta no va a
+      // aparecer en el libro de ventas (incidente DETODOFARMACY).
+      if (!outcome.persisted) {
+        setErrorMessage(
+          `El reporte Z #${outcome.fallback.z_number} se imprimió pero NO quedó registrado en el sistema. La venta del día no aparecerá en el libro hasta que se registre.`,
+        );
+        setErrorDetails(outcome.persistError ?? null);
+        setStep("error");
+        return;
+      }
+
+      setErrorMessage("");
+      setErrorDetails(null);
       setStep("result");
     },
     [header, pharmacyId, sessionInvoices, zSummary, deviationsByMethod, rate],
   );
+
+  // Reintento de REGISTRO: no vuelve a imprimir el ticket (ya esta impreso) y
+  // no recalcula montos: reenvia el mismo Z sintetizado del cierre.
+  const retryPersist = useCallback(async () => {
+    if (!fallbackZ) return;
+    setStep("loading");
+    const result = await persistFallbackZ({
+      pharmacyId,
+      fallback: fallbackZ,
+      createZReport: fiscalZReportService.createZReport,
+      findPersistedZ: (identity) =>
+        fiscalZReportService.findZReport(identity.pharmacyId, {
+          fiscalDate: identity.fiscalDate,
+          zNumber: identity.zNumber,
+        }),
+    });
+
+    if (result.persisted) {
+      recordFallbackZ({
+        pharmacyId,
+        fiscalDate: result.report?.fiscalDate || fallbackZ.fiscal_date,
+        zNumber: result.report?.zNumber || fallbackZ.z_number,
+      });
+      if (result.report) setReport(result.report);
+      setErrorMessage("");
+      setErrorDetails(null);
+      setStep("result");
+      return;
+    }
+
+    setErrorMessage(`El reporte Z #${fallbackZ.z_number} sigue sin registrarse.`);
+    setErrorDetails(result.persistError ?? null);
+    setStep("error");
+  }, [fallbackZ, pharmacyId]);
 
   // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
   // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
@@ -503,7 +557,16 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 <p className="text-xs font-mono font-bold text-red-600 break-all">{errorDetails}</p>
               </div>
             )}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
+              {fallbackZ && (
+                <button
+                  type="button"
+                  onClick={retryPersist}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all"
+                >
+                  Registrar el Z ahora
+                </button>
+              )}
               <button
                 type="button"
                 onClick={async () => { await prepairPrinter(); setStep(usesDigitalBilling ? "loading" : "form"); }}
@@ -531,7 +594,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 </p>
                 <p className="text-sm font-bold text-red-700 mt-1">
                   Cobrado{" "}
-                  {formatMoney(zSummary.grossSales)} vs facturado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
                   {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
                 </p>
                 <p className="text-[11px] text-red-500/80 mt-1">
@@ -571,7 +634,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 </p>
                 <p className="text-sm font-bold text-red-700 mt-1">
                   Cobrado{" "}
-                  {formatMoney(zSummary.grossSales)} vs facturado{" "}
+                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
                   {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
                 </p>
               </div>

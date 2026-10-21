@@ -48,23 +48,8 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export function paymentLabel(method?: string, currency?: string): string {
-  const m = (method || "").toLowerCase();
-  if (m === "dollars" || m === "dolares" || m === "usd" || currency === "USD") return "Dolares";
-  // Normaliza por subcadena los valores reales del backend (EFECTIVO,
-  // TRANSFERENCIA, PUNTO_DE_VENTA, PAGOMOVIL, ZELLE) y las variantes de enum
-  // (TarjetaDebito, TarjetaCredito, PuntoDeVenta, PagoMovil, Biopago, Cheque...).
-  if (m.includes("punto") || m.includes("tarjeta") || m.includes("debito") || m.includes("credito")) {
-    return "Punto de Venta";
-  }
-  if (m.includes("pagomovil") || m.includes("pago_movil") || m.includes("movil") || m === "mobile") {
-    return "Pago Movil";
-  }
-  if (m.includes("transferencia") || m.includes("transfer")) return "Transferencia";
-  if (m.includes("zelle")) return "Zelle";
-  if (m.includes("biopago")) return "Biopago";
-  if (m.includes("efectivo") || m === "cash") return "Efectivo Bs";
-  if (m.includes("cheque")) return "Cheque";
-  return PAYMENT_LABELS[m] || "Otro";
+  if (method === "dollars" || currency === "USD") return "Efectivo USD";
+  return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
 }
 
 interface FallbackOrderShape {
@@ -243,6 +228,16 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
 export interface ZFallbackResultLike<TReport> {
   success: boolean;
   report?: TReport | null;
+  message?: string | null;
+  statusCode?: number | null;
+}
+
+/** Identidad con la que el fallback intento registrar el Z en el backend. */
+export interface ZFallbackZIdentity {
+  pharmacyId: string;
+  fiscalDate: string;
+  zNumber: number;
+  fiscalSerial: string;
 }
 
 export interface ZFallbackInputs<
@@ -265,13 +260,27 @@ export interface ZFallbackInputs<
     pharmacyId: string,
     payload: CreateZReportDto,
   ) => Promise<ZFallbackResultLike<TReport>>;
+  /**
+   * Consulta el backend para saber si el Z realmente quedo registrado. Se usa
+   * solo cuando la escritura fue ambigua (rechazo sin datos o error de
+   * transporte): la respuesta puede perderse despues de escribirse.
+   */
+  findPersistedZ?: (identity: ZFallbackZIdentity) => Promise<TReport | null>;
   print: PrintFn;
   record: (marker: FallbackZMarker) => void;
 }
 
-export interface ZFallbackOutcome<TReport> {
-  fallback: FallbackZReport;
+export interface ZFallbackPersistOutcome<TReport> {
   report: TReport | null;
+  /** false = el ticket se imprimio pero el Z NO quedo registrado. */
+  persisted: boolean;
+  /** true = el fallo fue ambiguo y el backend confirmo que el Z existe. */
+  reconciled?: boolean;
+  persistError?: string;
+}
+
+export interface ZFallbackOutcome<TReport> extends ZFallbackPersistOutcome<TReport> {
+  fallback: FallbackZReport;
 }
 
 /** Totales del reporte (Z y X comparten el mismo desglose). */
@@ -320,31 +329,104 @@ export async function runZReportFallback<
     legend: NO_FISCAL,
   });
 
-  // Reintento unico de persistencia con los identificadores sintetizados.
-  // ponytail: se reintenta siempre en el fallback; un 5xx con escritura
-  // parcial podria duplicar el Z. Acotar a statusCode===0 si aparece.
-  let report: TReport | null = inputs.initialResult.report ?? null;
+  // Primer intento: si ya devolvio el Z, esta registrado. Reintentar con los
+  // identificadores sinteticos sobreescribiria un Z real (o chocaria por
+  // solapamiento), asi que no se toca.
+  if (inputs.initialResult.report) {
+    const report = inputs.initialResult.report;
+    inputs.record({
+      pharmacyId: inputs.pharmacyId,
+      fiscalDate: report.fiscalDate || fallback.fiscal_date,
+      zNumber: report.zNumber || fallback.z_number,
+    });
+    return { fallback, report, persisted: true };
+  }
+
+  const persist = await persistFallbackZ({
+    pharmacyId: inputs.pharmacyId,
+    fallback,
+    createZReport: inputs.createZReport,
+    findPersistedZ: inputs.findPersistedZ,
+  });
+
+  // El marcador local hace que el historial muestre el Z como "No Fiscal".
+  // Marcarlo sin que exista en el backend es afirmar algo falso: por eso solo
+  // se registra cuando la persistencia quedo confirmada.
+  if (persist.persisted && persist.report) {
+    inputs.record({
+      pharmacyId: inputs.pharmacyId,
+      fiscalDate: persist.report.fiscalDate || fallback.fiscal_date,
+      zNumber: persist.report.zNumber || fallback.z_number,
+    });
+  }
+
+  return { fallback, ...persist };
+}
+
+/**
+ * Registra el Z sintetizado del fallback, sin imprimir nada.
+ *
+ * Es la unica ruta de persistencia: la usa el flujo normal y el reintento manual
+ * de la pantalla de error, para que un Z ya impreso nunca quede sin registrar.
+ */
+export async function persistFallbackZ<
+  TReport extends { fiscalDate?: string | null; zNumber?: number | null },
+>(inputs: {
+  pharmacyId: string;
+  fallback: FallbackZReport;
+  createZReport: (
+    pharmacyId: string,
+    payload: CreateZReportDto,
+  ) => Promise<ZFallbackResultLike<TReport>>;
+  findPersistedZ?: (identity: ZFallbackZIdentity) => Promise<TReport | null>;
+}): Promise<ZFallbackPersistOutcome<TReport>> {
+  const { fallback, pharmacyId } = inputs;
+  let failure = "";
+
   try {
-    const retry = await inputs.createZReport(inputs.pharmacyId, {
+    const retry = await inputs.createZReport(pharmacyId, {
       z_number: fallback.z_number,
       fiscal_serial: fallback.fiscal_serial,
       fiscal_date: fallback.fiscal_date,
-      // ponytail: sin `invoices`, el backend deriva el bloque documental y el
-      // rango `(cierre anterior, ahora]` de las facturas reales. Enviarlo lo
+      // Sin `invoices`: el backend deriva el bloque documental y el rango
+      // `(cierre anterior, ahora]` de las facturas reales. Enviarlo lo
       // sobreescribiria con los datos de sesion del POS.
     });
-    if (retry.success && retry.report) report = retry.report;
-  } catch {
-    // el servicio normaliza los errores HTTP; esto cubre fallos de transporte
+    if (retry.success && retry.report) {
+      return { report: retry.report, persisted: true };
+    }
+    failure =
+      retry.message?.trim() ||
+      `El backend no devolvio el reporte Z (HTTP ${retry.statusCode ?? 0}).`;
+  } catch (error) {
+    // El servicio normaliza los errores HTTP; esto cubre fallos de transporte
+    // (incluida una escritura que se completo y perdio la respuesta).
+    failure =
+      error instanceof Error && error.message
+        ? error.message
+        : "Error de transporte al registrar el reporte Z.";
   }
 
-  inputs.record({
-    pharmacyId: inputs.pharmacyId,
-    fiscalDate: report?.fiscalDate || fallback.fiscal_date,
-    zNumber: report?.zNumber || fallback.z_number,
-  });
+  // Antes de declarar el fallo, preguntar al backend si el Z existe: una
+  // escritura puede completarse y perderse la respuesta (timeout de red). Sin
+  // esta reconciliacion el POS pediria reintentar un Z que ya esta guardado.
+  if (inputs.findPersistedZ) {
+    try {
+      const existing = await inputs.findPersistedZ({
+        pharmacyId,
+        fiscalDate: fallback.fiscal_date,
+        zNumber: fallback.z_number,
+        fiscalSerial: fallback.fiscal_serial,
+      });
+      if (existing) {
+        return { report: existing, persisted: true, reconciled: true };
+      }
+    } catch {
+      // La reconciliacion fallida no puede tapar el motivo original.
+    }
+  }
 
-  return { fallback, report };
+  return { report: null, persisted: false, persistError: failure };
 }
 
 // --- Reporte X (No Fiscal) ---

@@ -366,6 +366,46 @@ export const fiscalZReportService = {
     }
   },
 
+  /**
+   * Busca un Z ya registrado por fecha fiscal + Nº Z.
+   *
+   * Reconciliacion del fallback "No Fiscal": una escritura puede completarse y
+   * perderse la respuesta (timeout de red). Antes de declarar que el Z no quedo
+   * registrado se pregunta por el documento, para no pedir un reintento que
+   * choque por solapamiento ni dejar un cierre fuera del libro.
+   */
+  async findZReport(
+    pharmacyId: string,
+    params: { fiscalDate: string; zNumber: number },
+  ): Promise<CreatedZReport | null> {
+    try {
+      const response = await api.get(
+        `/admin/farmacias/${encodeURIComponent(pharmacyId.trim())}/z-reports`,
+        {
+          params: {
+            fecha_desde: params.fiscalDate.trim(),
+            fecha_hasta: params.fiscalDate.trim(),
+            page: 1,
+            page_size: 50,
+          },
+        },
+      );
+      const body = readMap(response.data);
+      const reportes = body?.["reportes"];
+      if (!Array.isArray(reportes)) return null;
+      const found = reportes.find(
+        (item) =>
+          readInt(readMap(item)?.["z_number"] ?? readMap(item)?.["zNumber"]) ===
+          Number(params.zNumber),
+      );
+      return found ? parseCreatedZReport(found) : null;
+    } catch {
+      // Sin respuesta del listado no se puede afirmar nada: se devuelve null y
+      // el llamador trata el caso como "no registrado" (falla segura).
+      return null;
+    }
+  },
+
   async fetchZReport(params: {
     date: string;
     idPharmacy: string;
