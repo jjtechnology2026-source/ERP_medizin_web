@@ -11,7 +11,7 @@
 import { toBs2 } from "./money.ts";
 import { buildZSummary, type ZMethodLine } from "./z-report.ts";
 
-export type CierreMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago";
+export type CierreMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea";
 
 const METHOD_KEYS: CierreMethodKey[] = [
   "efectivo",
@@ -19,6 +19,7 @@ const METHOD_KEYS: CierreMethodKey[] = [
   "tarjeta",
   "pagomovil",
   "biopago",
+  "cashea",
 ];
 
 export interface CierreTransaction {
@@ -45,7 +46,7 @@ export interface CierreBalances {
 }
 
 export function emptyMethodTotals(): Record<CierreMethodKey, number> {
-  return { efectivo: 0, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0 };
+  return { efectivo: 0, dolares: 0, tarjeta: 0, pagomovil: 0, biopago: 0, cashea: 0 };
 }
 
 /**

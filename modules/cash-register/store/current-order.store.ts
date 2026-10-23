@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment } from "@/modules/cash-register/types/cashier.types";
+import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment, CasheaPayment } from "@/modules/cash-register/types/cashier.types";
 import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { toBs2 } from "@/modules/cash-register/lib/money";
@@ -69,6 +69,7 @@ function createDefaultPayments(): Record<PaymentMethod, Payment> {
     tarjeta: { type: "tarjeta", amount: 0, punto: "", cardType: "", reference: "" },
     pagomovil: { type: "pagomovil", amount: 0, reference: "", bank: "" },
     biopago: { type: "biopago", amount: 0, reference: "", bank: "" },
+    cashea: { type: "cashea", amount: 0 },
   };
 }
 
@@ -234,6 +235,8 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         newPayments[method] = { ...current, amount: share * effectiveRate } as MobilePayment;
       } else if (method === "biopago") {
         newPayments[method] = { ...current, amount: share * effectiveRate } as BiopagoPayment;
+      } else if (method === "cashea") {
+        newPayments[method] = { ...current, amount: share * effectiveRate } as CasheaPayment;
       }
     });
     set({ payments: newPayments });
@@ -293,6 +296,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount };
         case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
+        case "cashea":   return { method: "cashea", amount: p.amount };
         default:         return { method: "cash", currency: "VES", amount: p.amount };
       }
     });
