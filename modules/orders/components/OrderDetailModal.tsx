@@ -16,7 +16,7 @@ interface OrderDetailModalProps {
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Efectivo", dollars: "Dólares", card: "Tarjeta",
-  mobile: "Pago Móvil", biopago: "Biopago",
+  mobile: "Pago Móvil", biopago: "Biopago", cashea: "Cashea",
 };
 
 const FAILURE_STAGE_LABELS: Record<string, string> = {

@@ -17,6 +17,7 @@ import type {
   CardPayment,
   MobilePayment,
   BiopagoPayment,
+  CasheaPayment,
 } from "@/modules/cash-register/types/cashier.types";
 
 type ManualChangeType = "efectivoVes" | "efectivoUsd" | "movil" | "credito";
@@ -34,6 +35,7 @@ const PAYMENT_ICONS: Record<PaymentMethod, string> = {
   tarjeta: "\u{1F4B3}",
   pagomovil: "\u{1F4F1}",
   biopago: "\u{1F535}",
+  cashea: "\u{1F7E2}",
 };
 
 const VENEZUELAN_BANKS = [
@@ -450,6 +452,9 @@ export default function PaymentDialog({
                           </select>
                         </div>
                       </>
+                    )}
+                    {method === "cashea" && (
+                      <PaymentField label="Monto en Bs" value={String((payments.cashea as CasheaPayment).amount || "")} onChange={(v) => updatePayment("cashea", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("cashea")} rate={rate} />
                     )}
                   </div>
                 ))}

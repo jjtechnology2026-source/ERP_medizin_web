@@ -58,6 +58,8 @@ export function mapPaymentToFiscal(p: any, rate: number): FiscalPayloadPayment {
       return { method: "mobile_payment" as const, amount: p.amount, reference: p.reference || "" };
     case "biopago":
       return { method: "other" as const, amount: p.amount, reference: p.reference || "" };
+    case "cashea":
+      return { method: "other" as const, amount: p.amount };
     default:
       return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
   }

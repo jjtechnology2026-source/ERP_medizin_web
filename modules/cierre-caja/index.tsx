@@ -16,6 +16,7 @@ import {
   HiOutlineCurrencyDollar,
   HiOutlineDeviceMobile,
   HiOutlineFingerPrint,
+  HiOutlineClock,
   HiOutlineCalculator,
   HiOutlineInformationCircle,
   HiOutlineCheckCircle,
@@ -26,7 +27,7 @@ import {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago";
+type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea";
 
 interface PhysicalCount {
   efectivo_ves: number;
@@ -34,6 +35,7 @@ interface PhysicalCount {
   tarjeta_ves: number;
   pagomovil_ves: number;
   biopago_ves: number;
+  cashea_ves: number;
 }
 
 const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
@@ -42,6 +44,7 @@ const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
   tarjeta: <HiOutlineCreditCard />,
   pagomovil: <HiOutlineDeviceMobile />,
   biopago: <HiOutlineFingerPrint />,
+  cashea: <HiOutlineClock />,
 };
 
 const METHOD_LABELS: Record<PaymentMethodKey, string> = {
@@ -50,6 +53,7 @@ const METHOD_LABELS: Record<PaymentMethodKey, string> = {
   tarjeta: "Tarjetas",
   pagomovil: "Pago Móvil",
   biopago: "Biopago",
+  cashea: "Cashea",
 };
 
 const METHOD_COLORS: Record<PaymentMethodKey, string> = {
@@ -58,6 +62,7 @@ const METHOD_COLORS: Record<PaymentMethodKey, string> = {
   tarjeta: "text-purple-500",
   pagomovil: "text-pink-500",
   biopago: "text-orange-500",
+  cashea: "text-lime-500",
 };
 
 const METHOD_BG: Record<PaymentMethodKey, string> = {
@@ -66,6 +71,7 @@ const METHOD_BG: Record<PaymentMethodKey, string> = {
   tarjeta: "bg-purple-50",
   pagomovil: "bg-pink-50",
   biopago: "bg-orange-50",
+  cashea: "bg-lime-50",
 };
 
 // Cada metodo del desglose lee su monto del campo correspondiente del conteo
@@ -76,6 +82,7 @@ const COUNTED_FIELD_BY_METHOD: Record<PaymentMethodKey, keyof PhysicalCount> = {
   tarjeta: "tarjeta_ves",
   pagomovil: "pagomovil_ves",
   biopago: "biopago_ves",
+  cashea: "cashea_ves",
 };
 
 export default function CashClosurePage() {
@@ -99,6 +106,7 @@ export default function CashClosurePage() {
     tarjeta_ves: 0,
     pagomovil_ves: 0,
     biopago_ves: 0,
+    cashea_ves: 0,
   });
 
   // La clasificacion por metodo vive en el componente; la matematica del
@@ -127,7 +135,7 @@ export default function CashClosurePage() {
   const theoreticalBalanceVes = balances.theoreticalBalanceVes;
   const theoreticalBalanceUsd = balances.theoreticalBalanceUsd;
 
-  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves;
+  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves + physicalCount.cashea_ves;
   const physicalTotalUsd = physicalCount.efectivo_usd;
 
   const differenceVes = computeDifference(physicalTotalVes, theoreticalBalanceVes);
@@ -174,6 +182,7 @@ export default function CashClosurePage() {
         otros_ves: 0,
         pago_movil_ves: physicalCount.pagomovil_ves,
         biopago_ves: physicalCount.biopago_ves,
+        cashea_ves: physicalCount.cashea_ves,
         efectivo_usd: physicalCount.efectivo_usd,
         tarjeta_usd: 0,
         otros_usd: 0,
@@ -372,6 +381,16 @@ export default function CashClosurePage() {
                     className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Cashea Bs</label>
+                  <input
+                    type="number"
+                    value={physicalCount.cashea_ves || ""}
+                    onChange={(e) => handlePhysicalCountChange("cashea_ves", e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
             </div>
 
@@ -535,6 +554,7 @@ function mapTransactionToMethod(tx: any): PaymentMethodKey | null {
   if (method.includes("tarjeta") || method.includes("debito") || method.includes("credito")) return "tarjeta";
   if (method.includes("transferencia") || method.includes("movil")) return "pagomovil";
   if (method.includes("biopago")) return "biopago";
+  if (method.includes("cashea")) return "cashea";
   if (tx.currency === "USD") return "dolares";
   return null;
 }

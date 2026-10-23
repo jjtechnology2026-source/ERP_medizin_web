@@ -41,6 +41,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   pagomovil: "Pago Movil",
   pago_movil: "Pago Movil",
   biopago: "Biopago",
+  cashea: "Cashea",
   transfer: "Transferencia",
   transferencia: "Transferencia",
   cheque: "Cheque",

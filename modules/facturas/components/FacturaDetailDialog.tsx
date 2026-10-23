@@ -42,6 +42,7 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
     PUNTO_DE_VENTA: "bg-[#7C3AED]/10 text-[#7C3AED] border-[#7C3AED]/20",
     ZELLE: "bg-[#D97706]/10 text-[#D97706] border-[#D97706]/20",
     PAGOMOVIL: "bg-[#0891B2]/10 text-[#0891B2] border-[#0891B2]/20",
+    CASHEA: "bg-[#84CC16]/10 text-[#84CC16] border-[#84CC16]/20",
   };
 
   const d = detail;
