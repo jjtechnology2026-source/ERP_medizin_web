@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { HiQrcode } from "react-icons/hi";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useProductsStore } from "@/modules/products/store/products.store";
@@ -17,6 +17,9 @@ const STOCK_FILTERS: { label: string; value: "in" | "out" | null }[] = [
 export default function ProductSearchBar() {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { addMedication } = useCurrentOrderStore();
   const { findInventoryItem } = useProductsStore();
 
@@ -27,7 +30,11 @@ export default function ProductSearchBar() {
   // Por defecto solo productos con existencia (no sirve mostrar Stock: 0).
   const [stockFilter, setStockFilter] = useState<"in" | "out" | null>("in");
 
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const searchSeqRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
@@ -38,102 +45,187 @@ export default function ProductSearchBar() {
     return `Bs ${(price * rate).toFixed(2)}`;
   };
 
-  // Búsqueda server-side con debounce en el texto del input.
-  useEffect(() => {
-    const text = barcode.trim();
-    setError(null);
-    if (!text) {
-      setResults([]);
-      setShowDropdown(false);
-      setIsSearching(false);
-      return;
-    }
-    if (text.length < 2) {
-      setResults([]);
-      setShowDropdown(false);
-      setIsSearching(false);
-      return;
-    }
-    setShowDropdown(true);
-    setIsSearching(true);
-    const timer = setTimeout(async () => {
-      const seq = ++searchSeqRef.current;
-      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
-      if (!pharmacyId) {
-        if (seq === searchSeqRef.current) {
-          setResults([]);
-          setIsSearching(false);
-        }
+  const performSearch = useCallback(
+    async (text: string, append = false, cursor?: string | null) => {
+      const query = text.trim();
+      if (query.length < 2) {
+        setResults([]);
+        setShowDropdown(false);
+        setIsSearching(false);
+        setIsLoadingMore(false);
+        setNextCursor(null);
+        setHasMore(false);
         return;
       }
+
+      const seq = ++searchSeqRef.current;
+      const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+      if (!pharmacyId) return;
+
+      if (append) {
+        if (loadingMoreRef.current) return;
+        loadingMoreRef.current = true;
+        setIsLoadingMore(true);
+      } else {
+        setIsSearching(true);
+        setResults([]);
+        setNextCursor(null);
+        setHasMore(false);
+      }
+
       try {
         const res = await productsService.getCursorInventory(pharmacyId, {
-          query: text,
+          query,
           limit: 10,
           stockFilter: stockFilter ?? undefined,
+          cursor: append && cursor ? cursor : undefined,
         });
+
         if (seq === searchSeqRef.current) {
-          setResults(
-            [...res.medications].sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0)),
-          );
+          const meds = Array.isArray(res.medications)
+            ? [...res.medications].sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0))
+            : [];
+          setResults((prev) => (append ? [...prev, ...meds] : meds));
+          setNextCursor(res.next_cursor ?? null);
+          setHasMore(!!res.has_more || !!res.next_cursor);
         }
-      } catch {
-        if (seq === searchSeqRef.current) {
-          setResults([]);
+      } catch (e: any) {
+        if (seq === searchSeqRef.current && !append) {
+          setError(e?.message || "Error al buscar productos");
         }
       } finally {
         if (seq === searchSeqRef.current) {
           setIsSearching(false);
+          setIsLoadingMore(false);
+        }
+        if (append) {
+          loadingMoreRef.current = false;
         }
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [barcode, stockFilter]);
+    },
+    [stockFilter]
+  );
 
-  const handleAdd = async () => {
-    const code = barcode.trim();
-    if (!code) return;
-
-    const med = await findInventoryItem(code);
-    if (!med) {
-      setBarcode("");
+  // Búsqueda server-side con debounce en el texto del input.
+  useEffect(() => {
+    const text = barcode.trim();
+    setError(null);
+    if (text.length < 2) {
+      setResults([]);
+      setShowDropdown(false);
+      setIsSearching(false);
+      setNextCursor(null);
+      setHasMore(false);
       return;
     }
+    setShowDropdown(true);
+    const timer = setTimeout(() => {
+      performSearch(text, false, null);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [barcode, stockFilter, performSearch]);
 
-    const result = addMedication(med, 1);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Scroll infinito: al acercarse al final (sentinel) carga la siguiente página.
+  useEffect(() => {
+    if (!showDropdown) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !loadingMoreRef.current && !isLoadingMore && hasMore && nextCursor) {
+          const text = barcode.trim();
+          if (text.length >= 2) {
+            performSearch(text, true, nextCursor);
+          }
+        }
+      },
+      { root: scrollRef.current, rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showDropdown, barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
+
+  // Fallback por intervalo para navegadores/scroll que no disparan el observer.
+  useEffect(() => {
+    if (!showDropdown) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      if (loadingMoreRef.current || isLoadingMore || !hasMore || !nextCursor) return;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+        const text = barcode.trim();
+        if (text.length >= 2) {
+          performSearch(text, true, nextCursor);
+        }
+      }
+    };
+    const id = setInterval(check, 500);
+    return () => clearInterval(id);
+  }, [showDropdown, barcode, hasMore, isLoadingMore, nextCursor, performSearch]);
+
+  const handleSelect = (med: Medication) => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    handleAdd(med);
+  };
+
+  const handleAdd = async (med?: Medication | null) => {
+    const code = med?.barCode || barcode.trim();
+    if (!code) return;
+    let product = med;
+    if (!product) {
+      product = await findInventoryItem(code);
+    }
+    if (!product) {
+      setBarcode("");
+      setResults([]);
+      setShowDropdown(false);
+      setNextCursor(null);
+      setHasMore(false);
+      return;
+    }
+    const result = addMedication(product, 1);
     if (!result.success) {
-      setError(result.error || "No se pudo agregar el producto");
-      inputRef.current?.focus();
+      setError(result.error ?? "No se pudo agregar el producto");
       return;
     }
     setError(null);
     setBarcode("");
+    setResults([]);
     setShowDropdown(false);
+    setNextCursor(null);
+    setHasMore(false);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleAdd();
+      if (results.length > 0) {
+        handleAdd(results[0]);
+      } else {
+        handleAdd();
+      }
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
     }
-  };
-
-  const handleSelect = (med: Medication) => {
-    const result = addMedication(med, 1);
-    if (!result.success) {
-      setError(result.error || "No se pudo agregar el producto");
-      inputRef.current?.focus();
-      return;
-    }
-    setError(null);
-    setBarcode("");
-    setShowDropdown(false);
-    inputRef.current?.focus();
   };
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center gap-3 w-full">
+    <div ref={containerRef} className="flex flex-col md:flex-row md:items-center gap-3 w-full relative">
       <label className="text-xs font-black text-slate-600 whitespace-nowrap min-w-[130px] md:text-left">
         Código del Producto:
       </label>
@@ -165,7 +257,6 @@ export default function ProductSearchBar() {
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-400"
             autoFocus
           />
-
           {showDropdown && (
             <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
               <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 bg-slate-50/70">
@@ -185,8 +276,8 @@ export default function ProductSearchBar() {
                   </button>
                 ))}
               </div>
-              <div className="max-h-[60vh] overflow-y-auto">
-                {isSearching && (
+              <div ref={scrollRef} className="max-h-[60vh] overflow-y-auto">
+                {isSearching && results.length === 0 && (
                   <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
                 )}
                 {!isSearching && results.length === 0 && (
@@ -194,36 +285,38 @@ export default function ProductSearchBar() {
                     Sin resultados para «{barcode.trim()}»
                   </div>
                 )}
-                {!isSearching &&
-                  results.map((med, index) => (
-                    <button
-                      key={med.barCode || index}
-                      type="button"
-                      onClick={() => handleSelect(med)}
-                      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors cursor-pointer border-b border-slate-100 last:border-b-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-700 truncate">{med.name}</p>
-                        <p className="text-[10px] font-semibold text-slate-400 truncate">
-                          {[med.brand, med.activeIngredient, med.barCode].filter(Boolean).join(" • ")}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-black text-blue-600">{formatPrice(med.price ?? 0)}</p>
-                        <p className="text-[10px] font-semibold text-slate-400">Stock: {med.stock ?? 0}</p>
-                      </div>
-                    </button>
-                  ))}
+                {results.map((med, index) => (
+                  <button
+                    key={`${med.barCode || index}-${index}`}
+                    type="button"
+                    onClick={() => handleSelect(med)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors cursor-pointer border-b border-slate-100 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-700 truncate">{med.name}</p>
+                      <p className="text-[10px] font-semibold text-slate-400 truncate">
+                        {[med.brand, med.activeIngredient, med.barCode].filter(Boolean).join(" • ")}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-black text-blue-600">{formatPrice(med.price ?? 0)}</p>
+                      <p className="text-[10px] font-semibold text-slate-400">Stock: {med.stock ?? 0}</p>
+                    </div>
+                  </button>
+                ))}
+                <div ref={sentinelRef} className="h-1" />
+                {isLoadingMore && (
+                  <div className="px-4 py-2 text-xs font-bold text-slate-400 text-center">Cargando más...</div>
+                )}
               </div>
             </div>
           )}
-
           {error && (
             <p className="mt-1 text-[10px] font-bold text-red-500">{error}</p>
           )}
         </div>
         <button
-          onClick={handleAdd}
+          onClick={() => handleAdd()}
           className="px-8 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
         >
           ENTER - Agregar
