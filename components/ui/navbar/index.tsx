@@ -127,16 +127,16 @@ export default function Navbar({
         onClose={() => setIsNotifModalOpen(false)} 
       />
 
-      {/* Izquierda: Logo + Hamburguesa (Móvil) */}
-      <div className="flex items-center gap-4">
-        <Logo />
+      {/* Izquierda: Hamburguesa (Móvil) + Logo */}
+      <div className="flex items-center gap-2">
         <button
           onClick={toggleSidebar}
-          className="lg:hidden text-slate-500 hover:text-blue-600 transition-colors p-2 rounded-xl hover:bg-slate-50"
+          className="lg:hidden text-slate-500 hover:text-blue-600 transition-colors p-2.5 rounded-xl hover:bg-slate-50 relative z-20 -ml-0.5 mr-1"
           aria-label="Abrir menú"
         >
           <HiMenuAlt2 size={22} />
         </button>
+        <Logo />
       </div>
 
       {/* CENTRO: Hamburguesa Desktop + Buscador */}
