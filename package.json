@@ -14,7 +14,8 @@
     "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs",
     "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
     "test:inventory": "node --experimental-strip-types --test test/inventory-write.test.mjs",
-    "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs"
+    "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs",
+    "test:quote": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/quote-pdf.test.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

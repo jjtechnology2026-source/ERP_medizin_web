@@ -56,6 +56,18 @@ export interface CashierInvoiceLine {
   discount?: number;
 }
 
+export interface PendingQuote {
+  id: string;
+  quoteNumber: string;
+  clientName: string;
+  clientDocument: string;
+  date: string | null;
+  totalUsd: number;
+  totalVes: number;
+  rate: number;
+  saleStatus: string;
+}
+
 export interface CashierInvoiceDetail {
   id: string;
   controlNumber: string;
@@ -163,6 +175,8 @@ export interface CashierWorkflowState {
   selectedCashBoxId: string | null;
   errorMessage: string | null;
   infoMessage: string | null;
+  /** Último número de cotización guardado (COT-...) para mostrar en pantalla. */
+  lastQuoteNumber: string | null;
   /** null = sin verificar; true/false = resultado del ultimo chequeo de /health fiscal. */
   fiscalAvailable: boolean | null;
 }

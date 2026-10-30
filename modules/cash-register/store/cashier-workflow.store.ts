@@ -18,6 +18,7 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   selectCashBox: (id: string | null) => void;
   openSession: () => Promise<void>;
   registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; fiscalFallback?: boolean; printError?: string } | null>;
+  saveQuote: () => Promise<{ quoteNumber: string | null; ordenId: string; order: Record<string, any> } | null>;
   checkFiscalHealth: () => Promise<void>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
@@ -40,6 +41,7 @@ const initialState: CashierWorkflowState & { currentRate: number } = {
   selectedCashBoxId: null,
   errorMessage: null,
   infoMessage: null,
+  lastQuoteNumber: null,
   currentRate: 0,
   fiscalAvailable: null,
 };
@@ -263,6 +265,48 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
     } catch (error: any) {
       const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);
+      set({ isSubmitting: false, errorMessage: mensaje });
+      return null;
+    }
+  },
+
+  saveQuote: async () => {
+    const { activeSession } = get();
+    if (!activeSession?.id) {
+      set({ errorMessage: "No hay sesión de caja activa" });
+      return null;
+    }
+
+    const profile = useAuthStore.getState().profile;
+    if (!profile) {
+      set({ errorMessage: "No hay perfil de usuario" });
+      return null;
+    }
+
+    // Cotización: sin pagos, sin stock, sin fiscal ni printer. El rate/totales
+    // quedan congelados en el body (buildModelOrder con saleStatus="Quoted").
+    const order = useCurrentOrderStore.getState().buildModelOrder(profile, "Quoted");
+    if (!order) {
+      set({ errorMessage: "No hay productos en la orden" });
+      return null;
+    }
+
+    set({ isSubmitting: true, errorMessage: null });
+    try {
+      const result = await cashierAccountantService.submitQuote(order, activeSession.id);
+      set({
+        isSubmitting: false,
+        lastQuoteNumber: result.quoteNumber,
+        infoMessage: "Cotización guardada",
+      });
+      return { ...result, order };
+    } catch (error: any) {
+      const mensaje =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Error al guardar la cotización";
+      console.error("❌ [saveQuote] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
       return null;
     }
