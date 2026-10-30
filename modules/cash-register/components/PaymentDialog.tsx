@@ -10,6 +10,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import type {
   PaymentMethod,
   CashPayment,
@@ -65,7 +66,7 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
+  const { registerSale, saveQuote, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,6 +74,7 @@ export default function PaymentDialog({
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
   const [noFiscalOutcome, setNoFiscalOutcome] = useState(false);
   const [noFiscalPrintError, setNoFiscalPrintError] = useState<string | null>(null);
+  const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
 
   // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
   // vivo, la venta va directo al fallback POS80 sin intentar la fiscal.
@@ -331,6 +333,66 @@ export default function PaymentDialog({
     }
   };
 
+  // Guardar presupuesto: sin fiscal, sin printer, sin stock, sin crear cliente.
+  const handleSaveQuote = async () => {
+    setLocalError(null);
+    setError(null);
+    if (!activeSession) {
+      setLocalError("No hay sesión de caja activa.");
+      return;
+    }
+    if (totals.itemCount === 0) {
+      setLocalError("No hay productos en la orden.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await saveQuote();
+      if (!result || !result.quoteNumber) {
+        throw new Error("No se pudo guardar la cotización");
+      }
+
+      const profileData = useAuthStore.getState().profile;
+      const doc: QuoteDocument = {
+        header: {
+          name: String(profileData?.pharmacyName || profileData?.name_group || profileData?.name || ""),
+          rif: String(profileData?.rif || ""),
+          address: String(profileData?.pharmacyAddress || ""),
+          phone: String(profileData?.pharmacyPhone || ""),
+        },
+        client: {
+          name: String(result.order.client?.name || "Cliente General"),
+          documento: String(result.order.client?.documento || ""),
+          direccion: String(result.order.client?.direccion || ""),
+          phone: String(result.order.client?.phone || ""),
+        },
+        items: (result.order.medications ?? []).map((m: any) => ({
+          name: String(m.name || ""),
+          quantity: Number(m.quantity) || 0,
+          price: Number(m.price) || 0,
+          vat: Number(m.vat) || 0,
+        })),
+        rate: Number(result.order.rate) || rate,
+        quoteNumber: result.quoteNumber,
+        date: new Date().toISOString(),
+      };
+
+      await generateQuotePdf(doc);
+      setQuoteNumber(result.quoteNumber);
+    } catch (error: any) {
+      const mensaje =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Error al guardar la cotización";
+      setLocalError(mensaje);
+      setError(mensaje);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <>
     {createPortal(
@@ -347,6 +409,22 @@ export default function PaymentDialog({
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
               {localError || errorMessage}
+            </div>
+          </div>
+        )}
+
+        {quoteNumber && (
+          <div className="px-6 pb-3 flex-shrink-0">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm font-medium flex items-center justify-between gap-3">
+              <span>
+                Presupuesto guardado: <strong className="font-mono">{quoteNumber}</strong>
+              </span>
+              <button
+                onClick={onClose}
+                className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black hover:bg-emerald-700 transition-all"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         )}
@@ -579,6 +657,13 @@ export default function PaymentDialog({
           <div className="flex gap-3 pt-4 border-t border-slate-100">
             <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all">
               Cancelar
+            </button>
+            <button
+              onClick={handleSaveQuote}
+              disabled={isProcessing || !activeSession || totals.itemCount === 0}
+              className="flex-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? "Guardando..." : "Guardar presupuesto"}
             </button>
             <button
               onClick={handlePaymentSubmit}

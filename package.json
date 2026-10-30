@@ -19,7 +19,8 @@
     "test:session-binding": "node --experimental-strip-types --test test/cash-session-binding.test.mjs",
     "test:session-binding-load": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/cashier-workflow-load.test.mjs",
     "test:catalog": "node --experimental-strip-types --test test/catalog.test.mjs",
-    "test:date-utils": "TZ=America/Caracas node --experimental-strip-types --test test/date-utils.test.mjs"
+    "test:date-utils": "TZ=America/Caracas node --experimental-strip-types --test test/date-utils.test.mjs",
+    "test:quote": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/quote-pdf.test.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

@@ -29,8 +29,10 @@ interface CurrentOrderActions {
   getCurrentOrder: () => Order;
   getComputedTotals: () => { subtotal: number; totalVat: number; total: number; totalBs: number; itemCount: number; exemptTotal: number; taxableBase: number; vatByRate: Record<number, number>; exemptTotalBs: number; taxableBaseBs: number; vatByRateBs: Record<number, number>; totalVatBs: number };
   getPaymentsForInvoice: () => Payment[];
-  /** Construye un ModelOrder listo para POST /orders/local o /insertorder */
-  buildModelOrder: (profile: Record<string, any>) => Record<string, any> | null;
+  /** Construye un ModelOrder listo para POST /orders/local o /insertorder.
+   *  `saleStatus="Quoted"` arma una cotización: rate/totales/items congelados,
+   *  sin pagos ni campos fiscales. */
+  buildModelOrder: (profile: Record<string, any>, saleStatus?: "Completed" | "Quoted") => Record<string, any> | null;
   resetPayments: () => void;
   clearCurrentOrder: () => void;
 }
@@ -281,13 +283,17 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       .filter((p) => p.amount > 0);
   },
 
-  buildModelOrder: (profile) => {
+  buildModelOrder: (profile, saleStatus: "Completed" | "Quoted" = "Completed") => {
     const order = get().orders[get().currentOrderIndex];
     if (!order || order.medications.length === 0) return null;
 
-    const invoicePayments = get()
-      .activePaymentMethods.map((m) => get().payments[m])
-      .filter((p) => p.amount > 0);
+    const isQuote = saleStatus === "Quoted";
+
+    const invoicePayments = isQuote
+      ? []
+      : get()
+          .activePaymentMethods.map((m) => get().payments[m])
+          .filter((p) => p.amount > 0);
 
     const backendPayments = invoicePayments.map((p: any) => {
       switch (p.type) {
@@ -409,7 +415,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       notaCredito: null,
       numeroControlInterno: null,
       gender: order.gender || "Male",
-      saleStatus: "Completed",
+      saleStatus,
       isControlled: order.isControlled || false,
       saleType: "Local",
       address: order.address || "",
