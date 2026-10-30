@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { HiDocumentText } from "react-icons/hi";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import CashierSessionCard from "@/modules/cash-register/components/CashierSessionCard";
 import ProductSearchBar from "@/modules/cash-register/components/ProductSearchBar";
@@ -11,6 +12,7 @@ import CheckoutBar from "@/modules/cash-register/components/CheckoutBar";
 import RecentInvoicesCard from "@/modules/cash-register/components/RecentInvoicesCard";
 import CustomerDataDialog from "@/modules/cash-register/components/CustomerDataDialog";
 import PaymentDialog from "@/modules/cash-register/components/PaymentDialog";
+import PendingQuotesDialog from "@/modules/cash-register/components/PendingQuotesDialog";
 
 export default function CashRegisterFeature() {
   const { load, activeSession, isLoading } = useCashierWorkflowStore();
@@ -21,6 +23,7 @@ export default function CashRegisterFeature() {
 
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showPendingQuotes, setShowPendingQuotes] = useState(false);
 
   useEffect(() => {
     if (pharmacyId) {
@@ -34,6 +37,13 @@ export default function CashRegisterFeature() {
         <h1 className="text-2xl md:text-3xl font-black text-[#0055ff] tracking-tight">
           Caja de ventas
         </h1>
+        <button
+          onClick={() => setShowPendingQuotes(true)}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-[#0055ff] border border-blue-100 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
+        >
+          <HiDocumentText size={16} />
+          Cotizaciones
+        </button>
       </header>
 
       {isLoading ? (
@@ -73,6 +83,10 @@ export default function CashRegisterFeature() {
           onClose={() => setShowPaymentDialog(false)}
           onComplete={() => setShowPaymentDialog(false)}
         />
+      )}
+
+      {showPendingQuotes && (
+        <PendingQuotesDialog onClose={() => setShowPendingQuotes(false)} />
       )}
     </div>
   );

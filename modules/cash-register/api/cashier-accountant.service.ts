@@ -10,6 +10,7 @@ import type {
   CreateInvoicePayload,
   CloseSessionPayload,
   MovimientoCajaPayload,
+  PendingQuote,
 } from "@/modules/cash-register/types/cashier.types";
 
 function normalizeApprovalStatus(status: string): string {
@@ -178,6 +179,29 @@ function parseTransaction(raw: any): CashierTransaction {
   };
 }
 
+function parsePendingQuote(raw: any): PendingQuote {
+  const totalreal = Number(raw.totalreal ?? raw.total_real ?? 0);
+  const rate = Number(raw.rate ?? 0);
+  const saleStatus = typeof raw.sale_status === "string"
+    ? raw.sale_status
+    : (raw.sale_status && typeof raw.sale_status === "object"
+        ? Object.keys(raw.sale_status)[0] || ""
+        : "");
+  return {
+    id: String(raw.id ?? raw._id ?? raw.idOrder ?? ""),
+    quoteNumber: String(
+      raw.numero_control_interno ?? raw.numeroControlInterno ?? raw.numero_control ?? ""
+    ),
+    clientName: raw.client?.name ?? raw.cliente_nombre ?? "Cliente General",
+    clientDocument: raw.client?.documento ?? raw.cliente_documento ?? "",
+    date: raw.date ?? raw.fecha ?? null,
+    totalUsd: totalreal,
+    totalVes: totalreal * rate,
+    rate,
+    saleStatus,
+  };
+}
+
 export const cashierAccountantService = {
   async fetchCashBoxes(pharmacyId?: string): Promise<CashierCashBox[]> {
     const { data } = await api.get("/admin/cajas", {
@@ -255,6 +279,54 @@ async fetchCurrentRate(): Promise<number> {
       },
       ordenId: result?.id ?? result?.idOrder ?? "",
     };
+  },
+
+  /** Guarda una cotización (sale_status=Quoted) sin pipeline fiscal ni stock. */
+  async submitQuote(order: Record<string, any>, sesionCajaId?: string): Promise<{
+    quoteNumber: string | null;
+    ordenId: string;
+  }> {
+    const baseUrl = "/admin/Orders/cotizacion";
+    const url = sesionCajaId
+      ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
+      : baseUrl;
+    const { data } = await api.post(url, order);
+    const result = Array.isArray(data) ? data[0] : data;
+    return {
+      quoteNumber:
+        result?.numero_control_interno ??
+        result?.numeroControlInterno ??
+        result?.numero_control ??
+        null,
+      ordenId: result?.id ?? result?.idOrder ?? "",
+    };
+  },
+
+  /** Convierte una cotización Quoted en venta real (pipeline completo, sin re-insert). */
+  async convertQuote(orderId: string, sesionCajaId?: string): Promise<{
+    orderId: string;
+    accepted: boolean;
+  }> {
+    const baseUrl = `/admin/Orders/cotizacion/${encodeURIComponent(orderId)}/convertir`;
+    const url = sesionCajaId
+      ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
+      : baseUrl;
+    const { data } = await api.post(url);
+    return {
+      orderId: data?.order_id ?? data?.orderId ?? orderId,
+      accepted: data?.accepted ?? false,
+    };
+  },
+
+  /** Lista cotizaciones pendientes (Quoted) de la farmacia de la sesión. */
+  async fetchPendingQuotes(sesionCajaId?: string): Promise<PendingQuote[]> {
+    const baseUrl = "/admin/Orders/cotizacion";
+    const url = sesionCajaId
+      ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
+      : baseUrl;
+    const { data } = await api.get(url);
+    const items = Array.isArray(data) ? data : data?.data ?? data?.quotes ?? [];
+    return items.map(parsePendingQuote);
   },
 
   async fetchInvoiceDetail(id: string): Promise<CashierInvoiceDetail> {
