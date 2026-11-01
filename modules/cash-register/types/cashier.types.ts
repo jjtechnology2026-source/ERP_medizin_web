@@ -60,6 +60,40 @@ export interface CashierInvoiceLine {
   discount?: number;
 }
 
+/** Item shape of a quote line, mirroring the backend `orders.medications` row. */
+export interface QuoteMedication {
+  brand?: string;
+  activeIngredient?: string;
+  dosage?: string;
+  tablets?: string;
+  barCode?: string;
+  name?: string;
+  image?: string;
+  category?: string;
+  subcategory?: string;
+  price?: number;
+  quantity?: number | null;
+  stock?: number;
+  description?: string;
+  controlled?: boolean;
+  vat?: number;
+  antibiotic?: boolean;
+  minimum?: number;
+  discount?: number | null;
+}
+
+/** Client shape of a quote, mirroring the backend `orders.client` row. */
+export interface QuoteClient {
+  id?: string;
+  tipo_documento?: string;
+  documento?: string;
+  name?: string;
+  email?: string;
+  direccion?: string;
+  phone?: string;
+  retencion?: number | null;
+}
+
 export interface PendingQuote {
   id: string;
   quoteNumber: string;
@@ -70,6 +104,11 @@ export interface PendingQuote {
   totalVes: number;
   rate: number;
   saleStatus: string;
+  /** Full quote rows so the POS cart can hydrate the items, client and pharmacy. */
+  medications: QuoteMedication[];
+  client: QuoteClient;
+  idPharmacy?: string;
+  pharmacy?: string;
 }
 
 export interface CashierInvoiceDetail {

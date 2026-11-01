@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { HiX, HiOutlineRefresh } from "react-icons/hi";
 import { cashierAccountantService } from "@/modules/cash-register/api/cashier-accountant.service";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
+import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import type { PendingQuote } from "@/modules/cash-register/types/cashier.types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -36,7 +37,7 @@ function formatDate(date: string | null): string {
 }
 
 export default function PendingQuotesDialog({ onClose }: { onClose: () => void }) {
-  const { activeSession, load, errorMessage, setError, setInfo } = useCashierWorkflowStore();
+  const { activeSession, errorMessage, setError, setInfo } = useCashierWorkflowStore();
   const [quotes, setQuotes] = useState<PendingQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -86,17 +87,19 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
     };
   }, [activeSession?.id]);
 
-  const handleConvert = async (quote: PendingQuote) => {
+  const handleBringToSale = async (quote: PendingQuote) => {
     if (!activeSession?.id) return;
     setConvertingId(quote.id);
     setLocalError(null);
     setError(null);
     try {
+      // (a) Carga la cotización en el carrito (items, cliente, rate, farmacia).
+      useCurrentOrderStore.getState().hydrateFromQuote(quote);
+      // (b) Consume la cotización en backend (solo la marca Cancelled).
       await cashierAccountantService.convertQuote(quote.id, activeSession.id);
-      setInfo(`Cotización ${quote.quoteNumber} convertida. La factura fiscal se emitirá en breve.`);
-      await refresh();
-      // Recarga la sesión para que la factura nueva aparezca en "Documentos del turno".
-      await load();
+      setInfo(`Cotización ${quote.quoteNumber} llevada a venta. Completa el pago desde el carrito.`);
+      // (c) Cierra el diálogo: el cajero queda sobre el carrito con los items cargados.
+      onClose();
     } catch (e: any) {
       const mensaje = mapConvertError(e);
       setLocalError(mensaje);
@@ -192,11 +195,11 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
                         </td>
                         <td className="py-3 text-right">
                           <button
-                            onClick={() => handleConvert(q)}
+                            onClick={() => handleBringToSale(q)}
                             disabled={convertDisabled}
                             className="px-3 py-1.5 bg-[#0055ff] text-white rounded-xl font-black text-[11px] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            {convertingId === q.id ? "Convirtiendo..." : "Convertir a venta"}
+                            {convertingId === q.id ? "Cargando..." : "Llevar a venta"}
                           </button>
                         </td>
                       </tr>

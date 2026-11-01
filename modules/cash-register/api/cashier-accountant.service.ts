@@ -183,14 +183,16 @@ function parseTransaction(raw: any): CashierTransaction {
   };
 }
 
+function parseSaleStatus(raw: any): string {
+  const value = raw.saleStatus ?? raw.sale_status;
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") return Object.keys(value)[0] || "";
+  return "";
+}
+
 function parsePendingQuote(raw: any): PendingQuote {
   const totalreal = Number(raw.totalreal ?? raw.total_real ?? 0);
   const rate = Number(raw.rate ?? 0);
-  const saleStatus = typeof raw.sale_status === "string"
-    ? raw.sale_status
-    : (raw.sale_status && typeof raw.sale_status === "object"
-        ? Object.keys(raw.sale_status)[0] || ""
-        : "");
   return {
     id: String(raw.id ?? raw._id ?? raw.idOrder ?? ""),
     quoteNumber: String(
@@ -202,7 +204,11 @@ function parsePendingQuote(raw: any): PendingQuote {
     totalUsd: totalreal,
     totalVes: totalreal * rate,
     rate,
-    saleStatus,
+    saleStatus: parseSaleStatus(raw),
+    medications: Array.isArray(raw.medications) ? raw.medications : [],
+    client: raw.client ?? {},
+    idPharmacy: raw.idPharmacy ?? raw.id_pharmacy ?? "",
+    pharmacy: raw.pharmacy ?? "",
   };
 }
 
@@ -306,7 +312,8 @@ async fetchCurrentRate(): Promise<number> {
     };
   },
 
-  /** Convierte una cotización Quoted en venta real (pipeline completo, sin re-insert). */
+  /** Consume una cotización Quoted (la marca Cancelled en backend; la venta real
+   *  se arma en el carrito y se procesa por el flujo normal). El wire path no cambia. */
   async convertQuote(orderId: string, sesionCajaId?: string): Promise<{
     orderId: string;
     accepted: boolean;

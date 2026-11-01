@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment, CasheaPayment } from "@/modules/cash-register/types/cashier.types";
+import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment, CasheaPayment, PendingQuote } from "@/modules/cash-register/types/cashier.types";
 import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { toBs2 } from "@/modules/cash-register/lib/money";
@@ -35,6 +35,9 @@ interface CurrentOrderActions {
   buildModelOrder: (profile: Record<string, any>, saleStatus?: "Completed" | "Quoted") => Record<string, any> | null;
   resetPayments: () => void;
   clearCurrentOrder: () => void;
+  /** Carga una cotización en la orden actual: reemplaza medications/client/rate/
+   *  farmacia y resetea pagos. La orden quedará como venta normal (Pending), no Quoted. */
+  hydrateFromQuote: (quote: PendingQuote) => void;
 }
 
 function createEmptyOrder(): Order {
@@ -435,4 +438,61 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       );
       return { orders: updated, payments: createDefaultPayments(), activePaymentMethods: ["efectivo"] };
     }),
+
+  hydrateFromQuote: (quote) => {
+    const { orders, currentOrderIndex } = get();
+    const order = orders[currentOrderIndex];
+    if (!order) return;
+
+    const medications: Medication[] = (quote.medications ?? []).map((item) => ({
+      brand: item.brand ?? "",
+      activeIngredient: item.activeIngredient ?? "",
+      dosage: item.dosage ?? "",
+      tablets: item.tablets ?? "",
+      barCode: item.barCode ?? "",
+      name: item.name ?? "",
+      image: item.image ?? "",
+      category: item.category ?? "",
+      subcategory: item.subcategory ?? "",
+      price: Number(item.price ?? 0),
+      quantity: Number(item.quantity ?? 1),
+      stock: Number(item.stock ?? 0),
+      description: item.description ?? "",
+      controlled: Boolean(item.controlled ?? false),
+      vat: item.vat != null ? Number(item.vat) : 0,
+      antibiotic: Boolean(item.antibiotic ?? false),
+      minimum: Number(item.minimum ?? 0),
+      discount: item.discount != null ? Number(item.discount) : undefined,
+    }));
+
+    const client = {
+      id: String(quote.client?.id ?? ""),
+      documento: quote.client?.documento ?? "",
+      name: quote.client?.name ?? "Cliente General",
+      email: quote.client?.email ?? "",
+      direccion: quote.client?.direccion ?? "",
+      phone: quote.client?.phone ?? "",
+      tipo_documento: quote.client?.tipo_documento ?? "",
+      retencion: quote.client?.retencion != null ? String(quote.client.retencion) : undefined,
+    };
+
+    const updatedOrder: Order = {
+      ...order,
+      medications,
+      client,
+      rate: Number(quote.rate ?? 1),
+      idPharmacy: String(quote.idPharmacy ?? ""),
+      pharmacy: String(quote.pharmacy ?? ""),
+      // Venta normal, nunca Quoted: la cotización ya se consumió en backend.
+      saleStatus: "Pending",
+    };
+
+    const updatedOrders = orders.map((o, i) => (i === currentOrderIndex ? updatedOrder : o));
+
+    set({
+      orders: updatedOrders,
+      payments: createDefaultPayments(),
+      activePaymentMethods: ["efectivo"],
+    });
+  },
 }));
