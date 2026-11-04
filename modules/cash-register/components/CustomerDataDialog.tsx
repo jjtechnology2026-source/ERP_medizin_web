@@ -7,7 +7,7 @@ import { customerService, type Customer } from "@/modules/customers/api/customer
 const DOC_PREFIXES = ["V", "J", "E"] as const;
 type DocPrefix = (typeof DOC_PREFIXES)[number];
 
-const PHONE_PREFIXES = ["0412", "0414", "0416", "0424", "0426", "0418", "0212"];
+const PHONE_PREFIXES = ["0412", "0414", "0416", "0424", "0426", "0422", "0212"];
 
 // Helpers para dividir/combinar documento y teléfono
 function splitDocument(fullDoc: string) {
