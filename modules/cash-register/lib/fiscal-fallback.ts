@@ -1,4 +1,4 @@
-// Fallback fiscal "No Fiscal": cuando la facturacion digital falla (transporte,
+// Fallback de impresion: cuando la facturacion digital falla (transporte,
 // success=false, error o numeroControl ausente) se sintetizan los campos NO
 // monetarios y se persiste por los endpoints existentes. Los montos NUNCA se
 // tocan aqui: el total del documento sale de money.ts (fiscalItemsTotal/toBs2),
@@ -6,8 +6,7 @@
 
 import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
 
-export const NO_FISCAL_LEGEND = "No Fiscal";
-export const FALLBACK_NOTE_ERROR = "No Fiscal fallback";
+export const FALLBACK_NOTE_ERROR = "Facturacion digital fallida";
 
 const FALLBACK_Z_STORAGE_KEY = "no-fiscal-z-reports";
 

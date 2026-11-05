@@ -11,7 +11,6 @@ import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.ser
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
-import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { Order } from "@/modules/orders/types/orders";
@@ -182,7 +181,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
       setFiscalFallback(true);
       setStep("result");
-      setResultMsg(`Nota de Crédito No Fiscal emitida: ${note.numero_control}`);
+      setResultMsg(`Nota de Crédito emitida: ${note.numero_control}`);
       return;
     }
 
@@ -364,11 +363,6 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
             >
               <HiOutlineDocumentReport size={48} />
             </div>
-            {fiscalFallback && (
-              <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-black">
-                {NO_FISCAL_LEGEND}
-              </span>
-            )}
             <p className={`text-sm font-bold ${fiscalFallback ? "text-amber-700" : "text-emerald-700"}`}>
               {resultMsg}
             </p>

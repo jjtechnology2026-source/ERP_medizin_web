@@ -1,4 +1,4 @@
-// Builder ESC/POS de comprobantes "No Fiscal" (80 mm / 48 columnas).
+// Builder ESC/POS de comprobantes (80 mm / 48 columnas).
 // Funcion PURA: recibe datos ya calculados (montos vienen de money.ts en el call
 // site) y devuelve bytes ESC/POS. Sin I/O, sin React, sin red. Texto normalizado
 // a ASCII (sin acentos) y sin logo/QR (solo texto).
@@ -128,15 +128,10 @@ function headerBlock(h: TicketHeader, title: string): number[][] {
   return parts;
 }
 
-function footerBlock(legend: string): number[][] {
-  return [
-    line(separator()),
-    [...ESC.align(1), ...line(`** ${legend} **`)],
-    line("Documento sin validez fiscal"),
-    line(""),
-    [...ESC.feed(4)],
-    [...ESC.cut()],
-  ];
+function footerBlock(): number[][] {
+  // Pie del documento: separador, avance y corte. Sin leyenda ni aviso de
+  // validez: nada en el papel menciona el caracter fiscal del comprobante.
+  return [line(separator()), line(""), [...ESC.feed(4)], [...ESC.cut()]];
 }
 
 // --- Factura / venta ---
@@ -153,7 +148,6 @@ export interface SaleTicketData {
   total: number;
   payments: TicketMoneyLine[];
   change?: number;
-  legend: string;
 }
 
 export function buildSaleTicket(d: SaleTicketData): Uint8Array {
@@ -174,7 +168,7 @@ export function buildSaleTicket(d: SaleTicketData): Uint8Array {
   parts.push(line(separator()), line("Formas de pago:"));
   for (const p of d.payments) parts.push(line(row(`  ${p.label}`, fmtMoney(p.amount))));
   if (d.change && d.change > 0) parts.push(line(row("  Vuelto", fmtMoney(d.change))));
-  parts.push(...footerBlock(d.legend));
+  parts.push(...footerBlock());
   return concat(parts);
 }
 
@@ -192,7 +186,6 @@ export interface CreditNoteTicketData {
   reason?: string;
   items?: TicketItem[];
   total: number;
-  legend: string;
 }
 
 export function buildCreditNoteTicket(d: CreditNoteTicketData): Uint8Array {
@@ -214,7 +207,7 @@ export function buildCreditNoteTicket(d: CreditNoteTicketData): Uint8Array {
   }
   if (d.reason) parts.push(line(`Motivo: ${d.reason}`));
   parts.push([...ESC.align(1), ...line(`TOTAL Bs ${fmtMoney(d.total)}`), ...ESC.align(0)]);
-  parts.push(...footerBlock(d.legend));
+  parts.push(...footerBlock());
   return concat(parts);
 }
 
@@ -222,7 +215,7 @@ export function buildCreditNoteTicket(d: CreditNoteTicketData): Uint8Array {
 
 export interface ReportTicketData {
   header: TicketHeader;
-  title: string; // "REPORTE Z NO FISCAL" | "REPORTE X NO FISCAL"
+  title: string; // "REPORTE Z" | "REPORTE X"
   date: string;
   fields: { label: string; value: string }[];
   totals: TicketMoneyLine[];
@@ -234,7 +227,6 @@ export interface ReportTicketData {
   total?: number;
   /** Lineas de cuadre; deben dar 0. */
   reconciliation?: TicketMoneyLine[];
-  legend: string;
 }
 
 export function buildReportTicket(d: ReportTicketData): Uint8Array {
@@ -260,6 +252,6 @@ export function buildReportTicket(d: ReportTicketData): Uint8Array {
     parts.push(line(separator()), line("Cuadre:"));
     for (const r of d.reconciliation) parts.push(line(row(`  ${r.label}`, fmtMoney(r.amount))));
   }
-  parts.push(...footerBlock(d.legend));
+  parts.push(...footerBlock());
   return concat(parts);
 }

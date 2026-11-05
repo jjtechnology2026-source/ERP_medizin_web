@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  NO_FISCAL_LEGEND,
   FALLBACK_NOTE_ERROR,
   isFiscalFailure,
   synthesizeFiscalNumber,
@@ -213,15 +212,22 @@ test("registry: recordFallbackZ / isFallbackZ round-trip en storage inyectado", 
   );
 });
 
-test("on-screen outcome: leyenda literal 'No Fiscal'", () => {
-  assert.equal(NO_FISCAL_LEGEND, "No Fiscal");
-});
+// Ningun documento impreso por la POS80 puede mencionar "no fiscal": ni como
+// titulo, ni como leyenda `** ... **`, ni con el aviso de validez.
+function assertSinMarcasFiscales(text) {
+  assert.equal(text.toUpperCase().includes("NO FISCAL"), false, "el papel no dice NO FISCAL");
+  assert.equal(
+    text.toLowerCase().includes("sin validez fiscal"),
+    false,
+    "el papel no dice 'sin validez fiscal'",
+  );
+}
 
-test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL", () => {
+test("pos58: la factura renderiza cabecera (farmacia+RIF) y no imprime marcas fiscales", () => {
   const bytes = renderNoFiscalTicket({
     kind: "sale",
     header: { name: "FARMACIA DEMO", rif: "J-12345678-9", address: "AV RAUL LEONI CC BOYACA LOCAL 7", phone: "+584161688296" },
-    title: "COMPROBANTE NO FISCAL",
+    title: "",
     controlNumber: "NF000000000001",
     date: "10/09/2026 10:00",
     customerName: "Cliente General",
@@ -230,17 +236,25 @@ test("pos58: la factura renderiza cabecera (farmacia+RIF) y la leyenda NO FISCAL
     totals: [],
     total: 1.5,
     payments: [{ label: "Efectivo Bs", amount: 1.5 }],
-    legend: "NO FISCAL",
   });
   const text = Buffer.from(bytes).toString("latin1");
   assert.ok(text.includes("FARMACIA DEMO"));
   assert.ok(text.includes("J-12345678-9"));
   assert.ok(text.includes("AV RAUL LEONI CC BOYACA LOCAL 7"));
   assert.ok(text.includes("Tlf: +584161688296"));
-  assert.ok(text.includes("NO FISCAL"));
+  assertSinMarcasFiscales(text);
   // Formato POS80: separadores de 48 columnas (80 mm, Font A).
   assert.equal(WIDTH, 48);
   assert.ok(text.includes("-".repeat(48)));
+});
+
+// El operador sigue viendo que la facturacion digital fallo, pero sin la frase.
+test("mensajes visibles: ninguno menciona 'no fiscal'", () => {
+  assert.equal(
+    FALLBACK_NOTE_ERROR.toLowerCase().includes("no fiscal"),
+    false,
+    "el error de la nota que se muestra en pantalla no dice 'no fiscal'",
+  );
 });
 
 // --- C2: order persistence via submitOrder on the fallback path ---
@@ -279,7 +293,7 @@ test("runOrderFallback: reintenta submitOrder con los identificadores sintetizad
   assert.equal(printDocs[0].kind, "sale");
   assert.equal(printDocs[0].header.name, "FARMACIA");
   assert.equal(printDocs[0].header.rif, "J-1");
-  assert.equal(printDocs[0].title, "COMPROBANTE NO FISCAL");
+  assert.equal(printDocs[0].title, "");
   // El codigo de barra se agrega al nombre del producto; sin codigo queda igual.
   assert.equal(printDocs[0].items[0].description, "[7591234567890] PARACETAMOL 500MG");
   assert.equal(printDocs[0].items[1].description, "SIN CODIGO");
@@ -335,7 +349,7 @@ test("buildSaleReprintTicket: reusa numero de control, fecha y total del comprob
   };
   const ticket = buildSaleReprintTicket({ name: "FARMACIA", rif: "J-1" }, order);
   assert.equal(ticket.kind, "sale");
-  assert.equal(ticket.title, "COMPROBANTE NO FISCAL");
+  assert.equal(ticket.title, "");
   assert.equal(ticket.controlNumber, "NF000000000123");
   // Mismo formato de fecha local que la impresion original (DD/MM/YYYY HH:mm).
   const d = new Date("2026-09-10T15:30:45.000Z");
@@ -533,6 +547,26 @@ test("persistFallbackZ: reintenta el registro sin reimprimir el ticket", async (
   assert.equal(result.report.zNumber, fallback.z_number);
 });
 
+// --- Sin marcas fiscales en el papel (todos los documentos de la POS80) ---
+
+test("runZReportFallback: el reporte Z impreso no menciona 'no fiscal'", async () => {
+  let ticket = null;
+  await runZReportFallback({
+    header: { name: "F", rif: "J-1" },
+    pharmacyId: "PH1",
+    sessionInvoices: [{ controlNumber: "A-1", totalVes: 100 }],
+    initialResult: { success: true, report: { fiscalDate: "2026-10-19", zNumber: 128 } },
+    createZReport: async () => ({ success: true, report: null }),
+    print: async (doc) => { ticket = doc; return { printed: true, via: "usb" }; },
+    record: () => {},
+  });
+  assert.equal(ticket.kind, "report");
+  assert.equal(ticket.title, "REPORTE Z");
+  const text = Buffer.from(renderNoFiscalTicket(ticket)).toString("latin1");
+  assert.ok(text.includes("REPORTE Z"), "el corte se sigue identificando como Z");
+  assertSinMarcasFiscales(text);
+});
+
 // --- C4: note persistence retry on the fallback path ---
 
 test("runNoteFallback: reintenta createNotaCredito con tracking y control sintetizados", async () => {
@@ -555,6 +589,26 @@ test("runNoteFallback: reintenta createNotaCredito con tracking y control sintet
   assert.equal(calls[0].numero_control_interno, note.numero_control);
   assert.equal(note.url_pdf, null);
   assert.equal(note.fiscal_success, false);
+});
+
+test("runNoteFallback: la nota de credito impresa no menciona 'no fiscal'", async () => {
+  let ticket = null;
+  await runNoteFallback({
+    header: { name: "F", rif: "J-1" },
+    payload: { id_pharmacy: "PH1", factura_id: "F-1" },
+    createNote: async () => ({ success: true }),
+    print: async (doc) => { ticket = doc; return { printed: true, via: "usb" }; },
+    affectedDocument: "F-1",
+    total: 12.5,
+    customerName: "Cliente General",
+    customerDoc: "V-00000000",
+  });
+  assert.equal(ticket.kind, "credit-note");
+  assert.equal(ticket.title, "NOTA DE CREDITO");
+  const text = Buffer.from(renderNoFiscalTicket(ticket)).toString("latin1");
+  assert.ok(text.includes("NOTA DE CREDITO"), "la nota se sigue identificando como nota de credito");
+  assert.ok(text.includes("Afecta: F-1"), "conserva el documento afectado");
+  assertSinMarcasFiscales(text);
 });
 
 test("runNoteFallback: cubre el reintento TFHKA y no propaga un reintento fallido", async () => {

@@ -8,7 +8,6 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
-import { NO_FISCAL_LEGEND } from "@/modules/cash-register/lib/fiscal-fallback";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import type {
@@ -706,10 +705,10 @@ function NoFiscalOutcomeDialog({ onClose, error }: { onClose: () => void; error?
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6 text-center">
-        <div className="text-3xl font-black text-amber-500">{NO_FISCAL_LEGEND}</div>
+        <div className="text-3xl font-black text-amber-500">Comprobante POS80</div>
         <p className="text-sm font-bold text-slate-500">
-          La venta se registró, pero la facturación digital falló. El comprobante
-          impreso no es fiscal.
+          La venta se registró y el comprobante salió por la POS80, pero la
+          facturación digital falló.
         </p>
         {error && (
           <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-2xl p-3">

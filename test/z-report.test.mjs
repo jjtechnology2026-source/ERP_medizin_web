@@ -54,7 +54,7 @@ test("Z sin facturas no cuadra si hay cobros (y viceversa)", () => {
 test("buildReportTicket: imprime devoluciones, neto, metodos y cuadre", () => {
   const bytes = buildReportTicket({
     header: { name: "Farmacia Test", rif: "J-123" },
-    title: "REPORTE Z NO FISCAL",
+    title: "REPORTE Z",
     date: "16/09/2026 12:34",
     fields: [],
     totals: [
@@ -68,7 +68,6 @@ test("buildReportTicket: imprime devoluciones, neto, metodos y cuadre", () => {
       { label: "Cuadre ventas", amount: 0 },
       { label: "Cuadre neto", amount: 0 },
     ],
-    legend: "NO FISCAL",
   });
   const text = Buffer.from(bytes).toString("latin1");
   assert.ok(text.includes("Devoluciones (NC):"), "debe imprimir devoluciones");
@@ -76,6 +75,9 @@ test("buildReportTicket: imprime devoluciones, neto, metodos y cuadre", () => {
   assert.ok(text.includes("Por metodo de pago (neto):"));
   assert.ok(text.includes("Cuadre:"));
   assert.ok(text.includes("Cuadre ventas"));
+  // El pie fiscal sale del papel: ni leyenda ni aviso de validez.
+  assert.equal(text.toUpperCase().includes("NO FISCAL"), false);
+  assert.equal(text.toLowerCase().includes("sin validez fiscal"), false);
 });
 
 // --- Reporte X (No Fiscal) sobre la POS80 ---
@@ -106,7 +108,7 @@ test("buildSessionSummary: cobros, devoluciones y neto desde la sesion", () => {
   assert.equal(s.summary.ok, true);
 });
 
-test("runXReportFallback: imprime REPORTE X NO FISCAL con neto y cuadre, sin persistir", async () => {
+test("runXReportFallback: imprime REPORTE X con neto y cuadre, sin persistir ni marcas fiscales", async () => {
   let printedTicket = null;
   const outcome = await runXReportFallback({
     header: { name: "Farmacia Test", rif: "J-123" },
@@ -131,14 +133,16 @@ test("runXReportFallback: imprime REPORTE X NO FISCAL con neto y cuadre, sin per
 
   assert.equal(outcome.printed, true);
   assert.equal(printedTicket.kind, "report");
-  assert.equal(printedTicket.title, "REPORTE X NO FISCAL");
+  assert.equal(printedTicket.title, "REPORTE X");
   assert.equal(printedTicket.total, 150);
   assert.ok(!printedTicket.fields.some((f) => f.label === "Nro Z"), "el X no lleva Nro Z");
   assert.ok(printedTicket.fields.some((f) => f.label === "Tasa USD"), "el X lleva la tasa");
 
   const text = Buffer.from(renderNoFiscalTicket(printedTicket)).toString("latin1");
-  assert.ok(text.includes("REPORTE X NO FISCAL"), "el ticket dice REPORTE X NO FISCAL");
+  assert.ok(text.includes("REPORTE X"), "el ticket dice REPORTE X");
   assert.ok(!text.includes("REPORTE Z"), "no debe salir como Z");
   assert.ok(text.includes("TOTAL Bs 150,00"), "imprime el neto");
   assert.ok(text.includes("Cuadre:"), "imprime el cuadre");
+  assert.equal(text.toUpperCase().includes("NO FISCAL"), false, "el papel no dice NO FISCAL");
+  assert.equal(text.toLowerCase().includes("sin validez fiscal"), false);
 });

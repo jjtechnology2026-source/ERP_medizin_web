@@ -1,7 +1,7 @@
 // Decisiones PURAS de la emision de notas de credito desde el dialogo de facturas.
 //
 // Regla central: la UI NUNCA reporta exito ni imprime si la persistencia fallo.
-// El comprobante "No Fiscal" de una nota de credito queda reservado al caso en
+// El comprobante impreso de una nota de credito queda reservado al caso en
 // que la NC ya se guardo (y el stock ya se devolvio) pero fallo la impresora
 // fiscal; ahi solo se ofrece impresion bajo demanda, con un click explicito.
 //
@@ -52,7 +52,7 @@ export interface NotaCreditoDecision {
   reason?: string;
   /** La decision NUNCA imprime por si sola. */
   shouldPrint: boolean;
-  /** La UI debe ofrecer impresion "No Fiscal" bajo demanda (click explicito). */
+  /** La UI debe ofrecer impresion por la POS80 bajo demanda (click explicito). */
   canPrintOnDemand: boolean;
 }
 
@@ -61,7 +61,7 @@ export const NOTA_CREDITO_GENERIC_ERROR =
   "No se pudo emitir la nota de crédito. No se guardó ni se imprimió nada; verifique la conexión e intente nuevamente.";
 export const NOTA_CREDITO_SUCCESS = "Nota de crédito emitida correctamente";
 export const NOTA_CREDITO_STORED_NOT_PRINTED =
-  "La nota de crédito se guardó y el stock fue devuelto, pero no se pudo imprimir en la impresora fiscal. Puede imprimir el comprobante No Fiscal cuando lo necesite.";
+  "La nota de crédito se guardó y el stock fue devuelto, pero no se pudo imprimir en la impresora fiscal. Puede imprimir el comprobante por la POS80 cuando lo necesite.";
 export const NOTA_CREDITO_EMITTED_NOT_PERSISTED =
   "La nota de crédito ya fue emitida ante la autoridad fiscal, pero no se guardó en el sistema y el stock no fue devuelto. No vuelva a emitir la nota para no duplicar el documento fiscal.";
 

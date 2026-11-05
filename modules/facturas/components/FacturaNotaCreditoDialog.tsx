@@ -10,10 +10,7 @@ import { facturasService } from "../api/facturas.service";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
-import {
-  NO_FISCAL_LEGEND,
-  buildFallbackNote,
-} from "@/modules/cash-register/lib/fiscal-fallback";
+import { buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import type { TicketHeader } from "@/modules/cash-register/lib/pos58-ticket";
 import {
@@ -343,7 +340,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     const result = await printNoFiscalTicket({
       kind: "credit-note",
       header,
-      title: "NOTA DE CREDITO NO FISCAL",
+      title: "NOTA DE CREDITO",
       controlNumber: note.numero_control,
       trackingId: note.tracking_id,
       date: formatTicketDate(note.fecha),
@@ -352,7 +349,6 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
       affectedDoc: storedContext.affectedDocument,
       reason: storedContext.reason || undefined,
       total: storedContext.total,
-      legend: "NO FISCAL",
     });
 
     if (result.printed) {
@@ -431,9 +427,6 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             <div className="p-5 bg-amber-50 rounded-full text-amber-500">
               <HiOutlineDocumentReport size={48} />
             </div>
-            <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-black">
-              {NO_FISCAL_LEGEND}
-            </span>
             <p className="text-sm font-bold text-amber-700 max-w-md">{successMsg}</p>
             {storedReason && (
               <p className="text-[11px] text-slate-400 max-w-md">
@@ -442,12 +435,12 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             )}
             {printState === "printed" && (
               <p className="text-xs font-bold text-[#059669]">
-                Comprobante No Fiscal impreso en la POS80.
+                Comprobante impreso en la POS80.
               </p>
             )}
             {printState === "failed" && (
               <p className="text-xs font-bold text-red-500 max-w-md">
-                No se pudo imprimir el comprobante No Fiscal: {printError || "intente nuevamente"}.
+                No se pudo imprimir el comprobante: {printError || "intente nuevamente"}.
               </p>
             )}
             <div className="flex gap-3 justify-center pt-2">
@@ -466,7 +459,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
                   ? "Imprimiendo..."
                   : printState === "printed"
                     ? "Impreso"
-                    : "Imprimir comprobante No Fiscal"}
+                    : "Imprimir comprobante"}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-// Dev tool: imprime los comprobantes "No Fiscal" de prueba en la POS58 USB
+// Dev tool: imprime los comprobantes de prueba en la POS58 USB
 // (/dev/usb/lp0) usando los builders de produccion. Correr con:
 //   node --experimental-strip-types scripts/print-test-invoice.mjs
 import fs from "node:fs";
@@ -44,7 +44,7 @@ const iva = Math.round(subtotal * 0.16 * 100) / 100;
 const total = Math.round((subtotal + iva) * 100) / 100;
 const factura = buildSaleTicket({
   header,
-  title: "COMPROBANTE NO FISCAL",
+  title: "",
   controlNumber: "NF000000000123",
   date: nowVe(),
   customerName: "Cliente General",
@@ -56,14 +56,13 @@ const factura = buildSaleTicket({
   ],
   total,
   payments: [{ label: "Efectivo Bs", amount: total }],
-  legend: "NO FISCAL",
 });
 
 // --- 2) Nota de credito ---
 const ncTotal = 8.5;
 const nota = buildCreditNoteTicket({
   header,
-  title: "NOTA DE CREDITO NO FISCAL",
+  title: "NOTA DE CREDITO",
   controlNumber: "NC000000000045",
   trackingId: "nf-8f3c-2026",
   date: nowVe(),
@@ -73,14 +72,13 @@ const nota = buildCreditNoteTicket({
   reason: "Devolucion de producto",
   items: [{ qty: 1, description: "Ibuprofeno 400mg", amount: ncTotal }],
   total: ncTotal,
-  legend: "NO FISCAL",
 });
 
 // --- 3) Reporte Z ---
 const zTotal = 8781.46;
 const reporteZ = buildReportTicket({
   header,
-  title: "REPORTE Z NO FISCAL",
+  title: "REPORTE Z",
   date: nowVe(),
   fields: [
     { label: "Nro Z", value: "#1234" },
@@ -100,13 +98,12 @@ const reporteZ = buildReportTicket({
     { label: "Biopago", amount: 80.0 },
   ],
   total: 8781.46,
-  legend: "NO FISCAL",
 });
 
 // --- 4) Reporte X ---
 const reporteX = buildReportTicket({
   header,
-  title: "REPORTE X NO FISCAL",
+  title: "REPORTE X",
   date: nowVe(),
   fields: [
     { label: "Documentos", value: "NF0001 a NF0042" },
@@ -120,7 +117,6 @@ const reporteX = buildReportTicket({
     { label: "Pago Movil", amount: 100.0 },
   ],
   total: 612.4,
-  legend: "NO FISCAL",
 });
 
 const payload = concat([factura, gap, nota, gap, reporteZ, gap, reporteX]);

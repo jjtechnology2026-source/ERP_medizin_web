@@ -262,7 +262,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           submitOrder: cashierAccountantService.submitOrder,
           print: printNoFiscalTicket,
         });
-        set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
+        set({ isSubmitting: false, infoMessage: "Venta procesada" });
         await get().load();
         return outcome;
       };
@@ -331,7 +331,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         print: printNoFiscalTicket,
       });
 
-      set({ isSubmitting: false, infoMessage: "Venta procesada como No Fiscal" });
+      set({ isSubmitting: false, infoMessage: "Venta procesada" });
       await get().load();
       return outcome;
     } catch (error: any) {

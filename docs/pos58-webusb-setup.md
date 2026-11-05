@@ -1,7 +1,7 @@
 # POS58 por WebUSB — setup por PC
 
-Guía para que el ERP imprima los comprobantes **"No Fiscal"** (factura, nota de crédito,
-reporte Z y X) en la impresora térmica **POS58** conectada por USB.
+Guía para que el ERP imprima los comprobantes (factura, nota de crédito, reporte Z
+y X) en la impresora térmica **POS58** conectada por USB.
 
 - Dispositivo: **`0483:070b` "USB Printer Port"**, interfaz **clase 7 (Printer)**.
 - Transporte: **WebUSB** (no Web Serial: el dispositivo no es CDC-ACM).
@@ -61,7 +61,7 @@ ls /sys/bus/usb/drivers/usblp/   # el 3-8:1.0 de la POS58 NO debe aparecer
 2. **Configuración fiscal → Emparejar POS58** (una sola vez). Chrome pide permiso del
    dispositivo y queda persistido por origen.
 3. Listo: si la factura fiscal falla (máquina local o canal digital), se imprime el
-   comprobante **No Fiscal** por la POS58.
+   comprobante por la POS58.
 
 ---
 

@@ -86,7 +86,7 @@ test("persistencia ok + impresora fiscal falla: guardada sin imprimir, impresion
   assert.equal(decision.message, NOTA_CREDITO_STORED_NOT_PRINTED);
   assert.ok(decision.message.includes("se guardó"));
   assert.ok(decision.message.includes("no se pudo imprimir"));
-  // La nota ya esta guardada: se ofrece imprimir "No Fiscal" SOLO con un click.
+  // La nota ya esta guardada: se ofrece imprimir por la POS80 SOLO con un click.
   assert.equal(decision.shouldPrint, false);
   assert.equal(decision.canPrintOnDemand, true);
   assert.equal(decision.reason, "La impresora fiscal no devolvió número de control");

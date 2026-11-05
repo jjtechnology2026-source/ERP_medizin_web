@@ -322,7 +322,7 @@ export default function FiscalConfigCard() {
       done();
       chatToast.show("Reporte X generado en la máquina fiscal (no cierra el turno).");
     } catch {
-      // 2) Sin maquina fiscal: se imprime el X en la POS80 (No Fiscal), con el
+      // 2) Sin maquina fiscal: se imprime el X en la POS80, con el
       // mismo cuadre que el Z pero sin registrar nada.
       try {
         await prepairPrinter();
@@ -356,7 +356,7 @@ export default function FiscalConfigCard() {
         });
         if (res.printed) {
           done();
-          chatToast.show("Reporte X impreso en la POS80 (No Fiscal). El turno sigue abierto.");
+          chatToast.show("Reporte X impreso en la POS80. El turno sigue abierto.");
         } else {
           fail();
           chatToast.show(`No se pudo imprimir el reporte X en la POS80: ${res.error || "error"}`);
@@ -374,7 +374,7 @@ export default function FiscalConfigCard() {
     const res = await pairPrinter();
     if (res.printed) {
       setPos58Status("done");
-      chatToast.show("Impresora POS80 emparejada. Los comprobantes 'No Fiscal' saldrán por acá.");
+      chatToast.show("Impresora POS80 emparejada. Los comprobantes saldrán por acá.");
     } else {
       setPos58Status("error");
       chatToast.show(`No se pudo emparejar la POS80: ${res.error || "error"}`);

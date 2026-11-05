@@ -8,14 +8,14 @@ import {
 } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
-import { NO_FISCAL_LEGEND, isFallbackZ } from "@/modules/cash-register/lib/fiscal-fallback";
+import { isFallbackZ } from "@/modules/cash-register/lib/fiscal-fallback";
 import type { ZReportListItem, CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 interface ZReportHistoryDialogProps {
   onClose: () => void;
 }
 
-// El registro "No Fiscal" vive en localStorage (por navegador). useSyncExternalStore
+// El registro del Z salido por la POS80 vive en localStorage (por navegador). useSyncExternalStore
 // evita el mismatch de hidratacion: en SSR/hidratacion usa false y luego refresca.
 const subscribeNoop = () => () => {};
 
@@ -40,7 +40,7 @@ function FallbackZBadge({
     <span
       className={`px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wider ${className}`}
     >
-      {NO_FISCAL_LEGEND}
+      POS80
     </span>
   );
 }

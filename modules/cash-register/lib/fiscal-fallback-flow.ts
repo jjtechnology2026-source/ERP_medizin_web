@@ -1,4 +1,4 @@
-// Orquestacion del fallback "No Fiscal" (detectar -> sintetizar -> imprimir ->
+// Orquestacion del fallback de impresion (detectar -> sintetizar -> imprimir ->
 // reintentar persistir), con las llamadas externas inyectadas para poder
 // cubrirla sin React/DOM/red. Los montos NUNCA se calculan aqui: vienen de
 // money.ts a traves de fiscal-fallback.ts. Cada call site decide cuando hay
@@ -23,8 +23,6 @@ import type { TicketHeader, TicketMoneyLine } from "./pos58-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 export type PrintFn = (ticket: NoFiscalTicket) => Promise<NoFiscalPrintResult>;
-
-const NO_FISCAL = "NO FISCAL";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Efectivo Bs",
@@ -104,7 +102,8 @@ export interface SaleTicketInputs {
 }
 
 /**
- * Comprobante de venta "No Fiscal" (mismo formato que la impresion original).
+ * Comprobante de venta (mismo formato que la impresion original, sin marcas
+ * fiscales: es el papel que se entrega al cliente).
  * Funcion pura: reutilizada tanto en el fallback de venta como en la reimpresion.
  */
 export function buildSaleTicketForOrder(inputs: SaleTicketInputs): NoFiscalTicket {
@@ -122,7 +121,9 @@ export function buildSaleTicketForOrder(inputs: SaleTicketInputs): NoFiscalTicke
   return {
     kind: "sale",
     header: inputs.header,
-    title: "COMPROBANTE NO FISCAL",
+    // Sin titulo: headerBlock omite la linea y el ticket de venta no menciona
+    // el caracter fiscal del comprobante en ningun lugar.
+    title: "",
     controlNumber: inputs.controlNumber,
     date: inputs.date,
     customerName: order.client?.name || "Cliente General",
@@ -131,7 +132,6 @@ export function buildSaleTicketForOrder(inputs: SaleTicketInputs): NoFiscalTicke
     totals: [],
     total,
     payments: buildPayments(order, rate, total),
-    legend: NO_FISCAL,
   };
 }
 
@@ -210,7 +210,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
       ordenId = retry.ordenId;
     } catch (error) {
       console.error(
-        "❌ [registerSale] Reintento de persistencia No Fiscal fallo:",
+        "❌ [registerSale] Reintento de persistencia de la venta fallo:",
         error instanceof Error ? error.message : "Error de transporte",
       );
     }
@@ -319,7 +319,7 @@ export async function runZReportFallback<
   await inputs.print({
     kind: "report",
     header: inputs.header,
-    title: "REPORTE Z NO FISCAL",
+    title: "REPORTE Z",
     date: fmtDate(new Date()),
     fields,
     totals: reportTotals(fallback),
@@ -327,7 +327,6 @@ export async function runZReportFallback<
     paymentBreakdown: inputs.paymentBreakdown ?? [],
     total: inputs.netTotal ?? fallback.total_sales,
     reconciliation: inputs.reconciliation ?? [],
-    legend: NO_FISCAL,
   });
 
   // Primer intento: si ya devolvio el Z, esta registrado. Reintentar con los
@@ -350,7 +349,7 @@ export async function runZReportFallback<
     findPersistedZ: inputs.findPersistedZ,
   });
 
-  // El marcador local hace que el historial muestre el Z como "No Fiscal".
+  // El marcador local hace que el historial marque el Z como salido por la POS80.
   // Marcarlo sin que exista en el backend es afirmar algo falso: por eso solo
   // se registra cuando la persistencia quedo confirmada.
   if (persist.persisted && persist.report) {
@@ -430,7 +429,7 @@ export async function persistFallbackZ<
   return { report: null, persisted: false, persistError: failure };
 }
 
-// --- Reporte X (No Fiscal) ---
+// --- Reporte X ---
 
 export interface XReportFallbackInputs {
   header: TicketHeader;
@@ -454,8 +453,8 @@ export interface XReportFallbackOutcome {
 }
 
 /**
- * Reporte X "No Fiscal" en la POS80: corte PARCIAL del turno. Mismo cuadre que
- * el Z, pero no cierra la sesion, no lleva Nro Z y no persiste nada.
+ * Reporte X en la POS80: corte PARCIAL del turno. Mismo cuadre que el Z, pero
+ * no cierra la sesion, no lleva Nro Z y no persiste nada.
  */
 export async function runXReportFallback(
   inputs: XReportFallbackInputs,
@@ -481,7 +480,7 @@ export async function runXReportFallback(
   const outcome = await inputs.print({
     kind: "report",
     header: inputs.header,
-    title: "REPORTE X NO FISCAL",
+    title: "REPORTE X",
     date: fmtDate(new Date()),
     fields,
     totals: reportTotals(fallback),
@@ -489,7 +488,6 @@ export async function runXReportFallback(
     paymentBreakdown: inputs.paymentBreakdown ?? [],
     total: inputs.netTotal ?? fallback.total_sales,
     reconciliation: inputs.reconciliation ?? [],
-    legend: NO_FISCAL,
   });
 
   return { printed: outcome.printed, error: outcome.error };
@@ -515,7 +513,7 @@ export async function runNoteFallback<TPayload extends object>(
   await inputs.print({
     kind: "credit-note",
     header: inputs.header,
-    title: "NOTA DE CREDITO NO FISCAL",
+    title: "NOTA DE CREDITO",
     controlNumber: note.numero_control,
     trackingId: note.tracking_id,
     date: fmtDate(note.fecha),
@@ -524,7 +522,6 @@ export async function runNoteFallback<TPayload extends object>(
     affectedDoc: inputs.affectedDocument,
     reason: inputs.reason,
     total: inputs.total,
-    legend: NO_FISCAL,
   });
 
   // Reintento unico de persistencia con los identificadores sintetizados.
@@ -537,7 +534,7 @@ export async function runNoteFallback<TPayload extends object>(
       numero_control_interno: note.numero_control,
     } as TPayload);
   } catch {
-    // el reintento fallo: la nota queda impresa como "No Fiscal"
+    // el reintento fallo: la nota queda impresa y la persistencia pendiente
   }
 
   return note;

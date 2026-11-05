@@ -13,7 +13,6 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import {
-  NO_FISCAL_LEGEND,
   isFiscalFailure,
   recordFallbackZ,
   type FallbackZReport,
@@ -603,15 +602,14 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
               </div>
             )}
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
-              <p className="text-sm font-black text-amber-600">{NO_FISCAL_LEGEND}</p>
               <p className="text-xs font-bold text-amber-600/80 mt-1">
                 Z #{report?.zNumber ?? fallbackZ?.z_number ?? "—"} ·{" "}
                 {report?.fiscalDate || fallbackZ?.fiscal_date || "—"}
               </p>
             </div>
             <p className="text-sm font-bold text-slate-500 text-center">
-              El reporte Z se generó, pero la facturación digital falló. El comprobante
-              impreso no es fiscal.
+              El reporte Z se generó y salió por la POS80, pero la facturación
+              digital falló.
             </p>
             <div className="flex justify-end pt-1">
               <button
