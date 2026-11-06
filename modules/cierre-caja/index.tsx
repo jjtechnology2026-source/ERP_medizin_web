@@ -513,6 +513,28 @@ export default function CashClosurePage() {
                     </span>
                   </div>
                 </div>
+
+                {/* El conteo fisico en divisas tambien cierra el turno: sin estas dos
+                    filas el cajero escribe los dolares contados y el panel no se mueve,
+                    asi que la diferencia del cierre parece ignorarlos. Solo se muestra:
+                    la matematica del cierre no cambia. */}
+                <div className="pt-6 border-t border-slate-100">
+                  <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Físico USD</span>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-3xl font-black text-slate-700 tracking-tighter">
+                      {physicalTotalUsd.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Diferencia USD</span>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className={`text-3xl font-black tracking-tighter ${differenceUsd === 0 ? "text-emerald-500" : "text-red-500"}`}>
+                      {differenceUsd >= 0 ? "+" : ""}{differenceUsd.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
