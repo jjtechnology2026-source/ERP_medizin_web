@@ -24,6 +24,7 @@ export default function CashRegisterFeature() {
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showPendingQuotes, setShowPendingQuotes] = useState(false);
+  const [showPendingDeliveryNotes, setShowPendingDeliveryNotes] = useState(false);
 
   useEffect(() => {
     if (!pharmacyId) return;
@@ -41,13 +42,22 @@ export default function CashRegisterFeature() {
         <h1 className="text-2xl md:text-3xl font-black text-[#0057FF] tracking-tight">
           Caja de ventas
         </h1>
-        <button
-          onClick={() => setShowPendingQuotes(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-[#0055ff] border border-blue-100 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
-        >
-          <HiDocumentText size={16} />
-          Cotizaciones
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPendingQuotes(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-[#0055ff] border border-blue-100 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
+          >
+            <HiDocumentText size={16} />
+            Cotizaciones
+          </button>
+          <button
+            onClick={() => setShowPendingDeliveryNotes(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-amber-700 border border-amber-100 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
+          >
+            <HiDocumentText size={16} />
+            Notas de entrega
+          </button>
+        </div>
       </header>
 
       {isLoading ? (
@@ -91,6 +101,13 @@ export default function CashRegisterFeature() {
 
       {showPendingQuotes && (
         <PendingQuotesDialog onClose={() => setShowPendingQuotes(false)} />
+      )}
+
+      {showPendingDeliveryNotes && (
+        <PendingQuotesDialog
+          onClose={() => setShowPendingDeliveryNotes(false)}
+          mode="delivery-note"
+        />
       )}
     </div>
   );

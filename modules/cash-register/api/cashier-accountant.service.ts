@@ -312,6 +312,27 @@ async fetchCurrentRate(): Promise<number> {
     };
   },
 
+  /** Guarda una nota de entrega (sale_status=DeliveryNote) sin pipeline fiscal ni stock. */
+  async submitDeliveryNote(order: Record<string, any>, sesionCajaId?: string): Promise<{
+    quoteNumber: string | null;
+    ordenId: string;
+  }> {
+    const baseUrl = "/admin/Orders/nota-entrega";
+    const url = sesionCajaId
+      ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
+      : baseUrl;
+    const { data } = await api.post(url, order);
+    const result = Array.isArray(data) ? data[0] : data;
+    return {
+      quoteNumber:
+        result?.numero_control_interno ??
+        result?.numeroControlInterno ??
+        result?.numero_control ??
+        null,
+      ordenId: result?.id ?? result?.idOrder ?? "",
+    };
+  },
+
   /** Consume una cotización Quoted (la marca Cancelled en backend; la venta real
    *  se arma en el carrito y se procesa por el flujo normal). El wire path no cambia. */
   async convertQuote(orderId: string, sesionCajaId?: string): Promise<{
@@ -332,6 +353,17 @@ async fetchCurrentRate(): Promise<number> {
   /** Lista cotizaciones pendientes (Quoted) de la farmacia de la sesión. */
   async fetchPendingQuotes(sesionCajaId?: string): Promise<PendingQuote[]> {
     const baseUrl = "/admin/Orders/cotizacion";
+    const url = sesionCajaId
+      ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
+      : baseUrl;
+    const { data } = await api.get(url);
+    const items = Array.isArray(data) ? data : data?.data ?? data?.quotes ?? [];
+    return items.map(parsePendingQuote);
+  },
+
+  /** Lista notas de entrega pendientes (DeliveryNote) de la farmacia de la sesión. */
+  async fetchPendingDeliveryNotes(sesionCajaId?: string): Promise<PendingQuote[]> {
+    const baseUrl = "/admin/Orders/nota-entrega";
     const url = sesionCajaId
       ? `${baseUrl}?sesion_caja_id=${encodeURIComponent(sesionCajaId)}`
       : baseUrl;

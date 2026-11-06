@@ -36,26 +36,39 @@ function formatDate(date: string | null): string {
   });
 }
 
-export default function PendingQuotesDialog({ onClose }: { onClose: () => void }) {
+export default function PendingQuotesDialog({
+  onClose,
+  mode = "quote",
+}: {
+  onClose: () => void;
+  mode?: "quote" | "delivery-note";
+}) {
+  const isDeliveryNote = mode === "delivery-note";
+  const label = isDeliveryNote ? "nota de entrega" : "cotización";
   const { activeSession, errorMessage, setError, setInfo } = useCashierWorkflowStore();
   const [quotes, setQuotes] = useState<PendingQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
+  const fetchList = (sid: string) =>
+    isDeliveryNote
+      ? cashierAccountantService.fetchPendingDeliveryNotes(sid)
+      : cashierAccountantService.fetchPendingQuotes(sid);
+
   const refresh = async () => {
     if (!activeSession?.id) return;
     setLoading(true);
     setLocalError(null);
     try {
-      const items = await cashierAccountantService.fetchPendingQuotes(activeSession.id);
+      const items = await fetchList(activeSession.id);
       setQuotes(items);
     } catch (e: any) {
       setLocalError(
         e?.response?.data?.error ||
         e?.response?.data?.message ||
         e?.message ||
-        "No se pudo cargar las cotizaciones"
+        `No se pudo cargar las ${label}s`
       );
     } finally {
       setLoading(false);
@@ -67,7 +80,7 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
     let cancelled = false;
     (async () => {
       try {
-        const items = await cashierAccountantService.fetchPendingQuotes(activeSession.id);
+        const items = await fetchList(activeSession.id);
         if (!cancelled) setQuotes(items);
       } catch (e: any) {
         if (!cancelled) {
@@ -75,7 +88,7 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
             e?.response?.data?.error ||
             e?.response?.data?.message ||
             e?.message ||
-            "No se pudo cargar las cotizaciones"
+            `No se pudo cargar las ${label}s`
           );
         }
       } finally {
@@ -85,7 +98,7 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
     return () => {
       cancelled = true;
     };
-  }, [activeSession?.id]);
+  }, [activeSession?.id, mode]);
 
   const handleBringToSale = async (quote: PendingQuote) => {
     if (!activeSession?.id) return;
@@ -93,11 +106,11 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
     setLocalError(null);
     setError(null);
     try {
-      // (a) Carga la cotización en el carrito (items, cliente, rate, farmacia).
+      // (a) Carga el documento en el carrito (items, cliente, rate, farmacia).
       useCurrentOrderStore.getState().hydrateFromQuote(quote);
-      // (b) Consume la cotización en backend (solo la marca Cancelled).
+      // (b) Consume el documento en backend (lo marca Cancelled).
       await cashierAccountantService.convertQuote(quote.id, activeSession.id);
-      setInfo(`Cotización ${quote.quoteNumber} llevada a venta. Completa el pago desde el carrito.`);
+      setInfo(`${label === "nota de entrega" ? "Nota de entrega" : "Cotización"} ${quote.quoteNumber} llevada a venta. Completa el pago desde el carrito.`);
       // (c) Cierra el diálogo: el cajero queda sobre el carrito con los items cargados.
       onClose();
     } catch (e: any) {
@@ -113,7 +126,9 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col text-slate-800">
         <div className="flex items-center justify-between p-6 pb-3 flex-shrink-0">
-          <h2 className="text-xl font-black text-slate-800">Cotizaciones pendientes</h2>
+          <h2 className="text-xl font-black text-slate-800">
+            {isDeliveryNote ? "Notas de entrega pendientes" : "Cotizaciones pendientes"}
+          </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={refresh}
@@ -139,7 +154,9 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
         <div className="px-6 flex-1 overflow-y-auto pb-6">
           {!activeSession ? (
             <p className="text-xs font-bold text-slate-400 text-center py-10">
-              No hay sesión activa para listar cotizaciones.
+              {isDeliveryNote
+                ? "No hay sesión activa para listar notas de entrega."
+                : "No hay sesión activa para listar cotizaciones."}
             </p>
           ) : loading && quotes.length === 0 ? (
             <div className="flex items-center justify-center py-16">
@@ -147,14 +164,14 @@ export default function PendingQuotesDialog({ onClose }: { onClose: () => void }
             </div>
           ) : quotes.length === 0 ? (
             <p className="text-xs font-bold text-slate-400 text-center py-10">
-              Sin cotizaciones pendientes.
+              {isDeliveryNote ? "Sin notas de entrega pendientes." : "Sin cotizaciones pendientes."}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[640px]">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="text-[9px] font-black text-slate-400 uppercase tracking-wider pb-3 pl-1">No. Cotización</th>
+                    <th className="text-[9px] font-black text-slate-400 uppercase tracking-wider pb-3 pl-1">{isDeliveryNote ? "No. Nota" : "No. Cotización"}</th>
                     <th className="text-[9px] font-black text-slate-400 uppercase tracking-wider pb-3">Cliente</th>
                     <th className="text-[9px] font-black text-slate-400 uppercase tracking-wider pb-3">Fecha</th>
                     <th className="text-[9px] font-black text-slate-400 uppercase tracking-wider pb-3 text-right">Total</th>

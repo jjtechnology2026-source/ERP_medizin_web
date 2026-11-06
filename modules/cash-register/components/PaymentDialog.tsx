@@ -67,7 +67,7 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, saveQuote, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
+  const { registerSale, saveQuote, saveDeliveryNote, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -394,6 +394,40 @@ export default function PaymentDialog({
     }
   };
 
+  // Guardar nota de entrega: sin fiscal, sin printer, sin stock, sin PDF. Igual
+  // que el presupuesto, pero guarda saleStatus=DeliveryNote.
+  const handleSaveDeliveryNote = async () => {
+    setLocalError(null);
+    setError(null);
+    if (!activeSession) {
+      setLocalError("No hay sesión de caja activa.");
+      return;
+    }
+    if (totals.itemCount === 0) {
+      setLocalError("No hay productos en la orden.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await saveDeliveryNote();
+      if (!result || !result.quoteNumber) {
+        throw new Error("No se pudo guardar la nota de entrega");
+      }
+      setQuoteNumber(result.quoteNumber);
+    } catch (error: any) {
+      const mensaje =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Error al guardar la nota de entrega";
+      setLocalError(mensaje);
+      setError(mensaje);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <>
     {createPortal(
@@ -668,6 +702,13 @@ export default function PaymentDialog({
               className="flex-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? "Guardando..." : "Guardar presupuesto"}
+            </button>
+            <button
+              onClick={handleSaveDeliveryNote}
+              disabled={isProcessing || !activeSession || totals.itemCount === 0}
+              className="flex-1 py-3.5 bg-amber-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-amber-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Nota de entrega
             </button>
             <button
               onClick={handlePaymentSubmit}
