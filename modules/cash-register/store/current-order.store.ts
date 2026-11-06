@@ -75,6 +75,7 @@ function createDefaultPayments(): Record<PaymentMethod, Payment> {
     pagomovil: { type: "pagomovil", amount: 0, reference: "", bank: "" },
     biopago: { type: "biopago", amount: 0, reference: "", bank: "" },
     cashea: { type: "cashea", amount: 0 },
+    credito: { type: "credito", amount: 0 },
   };
 }
 
@@ -306,6 +307,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         case "cashea":   return { method: "cashea", amount: p.amount };
+        case "credito":  return { method: "credit", amount: p.amount };
         default:         return { method: "cash", currency: "VES", amount: p.amount };
       }
     });
