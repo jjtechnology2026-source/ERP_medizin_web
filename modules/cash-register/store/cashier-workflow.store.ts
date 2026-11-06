@@ -26,6 +26,7 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   openSession: () => Promise<void>;
   registerSale: (saleType?: "local" | "digital") => Promise<{ facturacion: any; ordenId: string; fiscalFallback?: boolean; printError?: string } | null>;
   saveQuote: () => Promise<{ quoteNumber: string | null; ordenId: string; order: Record<string, any> } | null>;
+  saveDeliveryNote: () => Promise<{ quoteNumber: string | null; ordenId: string; order: Record<string, any> } | null>;
   checkFiscalHealth: () => Promise<void>;
   requestCloseSession: (
     physicalCount: CashierClosePhysicalCount,
@@ -379,6 +380,48 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         error.message ||
         "Error al guardar la cotización";
       console.error("❌ [saveQuote] Error:", mensaje);
+      set({ isSubmitting: false, errorMessage: mensaje });
+      return null;
+    }
+  },
+
+  saveDeliveryNote: async () => {
+    const { activeSession } = get();
+    if (!activeSession?.id) {
+      set({ errorMessage: "No hay sesión de caja activa" });
+      return null;
+    }
+
+    const profile = useAuthStore.getState().profile;
+    if (!profile) {
+      set({ errorMessage: "No hay perfil de usuario" });
+      return null;
+    }
+
+    // Nota de entrega: sin pagos, sin stock, sin fiscal ni printer. El rate/totales
+    // quedan congelados en el body (buildModelOrder con saleStatus="DeliveryNote").
+    const order = useCurrentOrderStore.getState().buildModelOrder(profile, "DeliveryNote");
+    if (!order) {
+      set({ errorMessage: "No hay productos en la orden" });
+      return null;
+    }
+
+    set({ isSubmitting: true, errorMessage: null });
+    try {
+      const result = await cashierAccountantService.submitDeliveryNote(order, activeSession.id);
+      set({
+        isSubmitting: false,
+        lastQuoteNumber: result.quoteNumber,
+        infoMessage: "Nota de entrega guardada",
+      });
+      return { ...result, order };
+    } catch (error: any) {
+      const mensaje =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Error al guardar la nota de entrega";
+      console.error("❌ [saveDeliveryNote] Error:", mensaje);
       set({ isSubmitting: false, errorMessage: mensaje });
       return null;
     }

@@ -32,7 +32,7 @@ interface CurrentOrderActions {
   /** Construye un ModelOrder listo para POST /orders/local o /insertorder.
    *  `saleStatus="Quoted"` arma una cotización: rate/totales/items congelados,
    *  sin pagos ni campos fiscales. */
-  buildModelOrder: (profile: Record<string, any>, saleStatus?: "Completed" | "Quoted") => Record<string, any> | null;
+  buildModelOrder: (profile: Record<string, any>, saleStatus?: "Completed" | "Quoted" | "DeliveryNote") => Record<string, any> | null;
   resetPayments: () => void;
   clearCurrentOrder: () => void;
   /** Carga una cotización en la orden actual: reemplaza medications/client/rate/
@@ -287,11 +287,11 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       .filter((p) => p.amount > 0);
   },
 
-  buildModelOrder: (profile, saleStatus: "Completed" | "Quoted" = "Completed") => {
+  buildModelOrder: (profile, saleStatus: "Completed" | "Quoted" | "DeliveryNote" = "Completed") => {
     const order = get().orders[get().currentOrderIndex];
     if (!order || order.medications.length === 0) return null;
 
-    const isQuote = saleStatus === "Quoted";
+    const isQuote = saleStatus === "Quoted" || saleStatus === "DeliveryNote";
 
     const invoicePayments = isQuote
       ? []
