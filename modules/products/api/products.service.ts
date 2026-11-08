@@ -4,6 +4,9 @@ import { effectiveVat } from "@/modules/products/lib/pricing";
 
 const cleanImg = (item: any) => ({
   ...item,
+  // Tipo de producto del catálogo (`Medicamento`/`Alimento`/`Servicio`/`Otro`).
+  // Ausente en filas anteriores al cambio de catálogo: se deja `null`, no se inventa.
+  productType: item.productType ?? null,
   image: item.image && typeof item.image === "string" && (item.image.startsWith("http") || item.image.startsWith("data:")) ? item.image : "",
   stock: item.stock !== undefined ? Number(item.stock) : (item.quantity !== undefined ? Number(item.quantity) : 0),
   quantity: item.quantity !== undefined ? Number(item.quantity) : (item.stock !== undefined ? Number(item.stock) : 0),
@@ -106,6 +109,7 @@ export const productsService = {
 
   async createProduct(medication: Partial<Medication>): Promise<Medication> {
     const payload = [{
+      productType: medication.productType ?? undefined,
       brand: medication.brand || "",
       activeIngredient: medication.activeIngredient || "",
       dosage: medication.dosage || "",

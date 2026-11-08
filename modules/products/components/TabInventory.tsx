@@ -9,6 +9,7 @@ import { productsService } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { taxBreakdown } from "@/modules/products/lib/pricing";
+import { productTypeChipClass } from "@/modules/products/lib/catalog";
 import type { StockFilter, ViewState, Medication } from "@/modules/products/types/products.types";
 
 export default function InventoryList({
@@ -381,7 +382,16 @@ export default function InventoryList({
                     </td>
                     <td className="px-8 py-4">
                       <p className="font-bold text-slate-700 text-sm">{med.name}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">{med.barCode}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-[10px] text-slate-400 font-medium">{med.barCode}</span>
+                        {med.productType && (
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${productTypeChipClass(med.productType)}`}
+                          >
+                            {med.productType}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-8 py-4 text-slate-500 text-xs">{med.category || "-"}</td>
                     <td className="px-8 py-4">

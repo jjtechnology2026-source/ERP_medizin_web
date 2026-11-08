@@ -1,4 +1,13 @@
+/**
+ * Catálogo de productos: el tipo decide qué campos pide la UI.
+ * Debe coincidir exactamente con las variantes del enum `ProductType` del backend
+ * (`Medicamento`, `Alimento`, `Servicio`, `Otro`).
+ */
+export type ProductType = "Medicamento" | "Alimento" | "Servicio" | "Otro";
+
 export interface Medication {
+  /** Ausente en productos anteriores al cambio de catálogo (el backend los lee como `Otro`). */
+  productType?: ProductType | null;
   brand: string;
   activeIngredient: string;
   dosage: string;

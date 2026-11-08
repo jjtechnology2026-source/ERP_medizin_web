@@ -5,6 +5,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
+import { productTypeChipClass } from "@/modules/products/lib/catalog";
 import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
 
@@ -207,6 +208,11 @@ export default function StockFeaturesForm({
               </div>
             </div>
             <div className="flex items-center gap-3 mt-3 flex-wrap">
+              {currentMedicine?.productType && (
+                <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg ${productTypeChipClass(currentMedicine.productType)}`}>
+                  {currentMedicine.productType}
+                </span>
+              )}
               <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">{currentMedicine?.barCode || "Sin código"}</span>
               <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg">{currentMedicine?.category || "General"}</span>
               {currentMedicine?.dosage && <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg">{currentMedicine.dosage}</span>}

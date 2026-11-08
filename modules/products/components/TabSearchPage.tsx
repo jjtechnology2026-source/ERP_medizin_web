@@ -5,6 +5,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { productsService } from "@/modules/products/api/products.service";
+import { productTypeChipClass } from "@/modules/products/lib/catalog";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
 
 export default function CatalogSearchPage({
@@ -362,7 +363,16 @@ export default function CatalogSearchPage({
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-slate-700">{med.name}</p>
-                                <span className="text-[9px] text-slate-400 font-mono">{med.barCode}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[9px] text-slate-400 font-mono">{med.barCode}</span>
+                                  {med.productType && (
+                                    <span
+                                      className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${productTypeChipClass(med.productType)}`}
+                                    >
+                                      {med.productType}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>

@@ -6,7 +6,14 @@ import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
-import { resolveCategoryOptions, resolveSubcategoryOptions } from "@/modules/products/lib/catalog";
+import {
+  DEFAULT_PRODUCT_TYPE,
+  PRODUCT_TYPE_OPTIONS,
+  productTypeRules,
+  resolveCategoryOptions,
+  resolveSubcategoryOptions,
+} from "@/modules/products/lib/catalog";
+import type { ProductType } from "@/modules/products/types/products.types";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -176,6 +183,8 @@ export default function CreateProductPage({ setView }: any) {
   const [images, setImages] = useState<LocalImage[]>([]);
 
   const [formData, setFormData] = useState({
+    // El tipo manda: decide qué campos se ven y cuáles viajan en el payload.
+    productType: DEFAULT_PRODUCT_TYPE as ProductType,
     brand: "",
     activeIngredient: "",
     doseValue: "",
@@ -196,7 +205,12 @@ export default function CreateProductPage({ setView }: any) {
     profit: "",
     lote: "",
     fechaVencimiento: "",
+    controlled: false,
+    antibiotic: false,
   });
+
+  // Campos visibles/requeridos y etiquetas según el tipo elegido (contrato T5).
+  const rules = productTypeRules(formData.productType);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -283,41 +297,55 @@ export default function CreateProductPage({ setView }: any) {
     }
     const sellingPrice = calcSellingPrice(cost, profitPct, vatPct);
 
+    // Solo viaja lo que el operador vio según el tipo: un campo oculto va como
+    // `undefined` (axios lo omite del JSON) y nunca como `""` explícito.
     const payload = {
-      ...formData,
-      doseUnit: selectedUnit,
+      productType: formData.productType,
+      name: formData.name,
+      brand: formData.brand,
+      barCode: formData.barCode,
+      category: formData.category,
+      subcategory: formData.subcategory,
+      description: formData.description,
+      activeIngredient: rules.activeIngredient.visible ? formData.activeIngredient : undefined,
+      doseValue: rules.dosage.visible ? formData.doseValue : undefined,
+      doseUnit: rules.dosage.visible ? selectedUnit : undefined,
+      amount: rules.tablets.visible ? formData.amount : undefined,
+      presentation: rules.tablets.visible ? formData.presentation : undefined,
+      controlled: rules.controlled.visible ? formData.controlled : undefined,
+      antibiotic: rules.antibiotic.visible ? formData.antibiotic : undefined,
       price: sellingPrice > 0 ? String(Number(sellingPrice.toFixed(2))) : "0",
-      stock: formData.stock || "0",
-      minimum: formData.minimum || "0",
+      stock: rules.stock.visible ? formData.stock || "0" : undefined,
+      minimum: rules.stock.visible ? formData.minimum || "0" : undefined,
       vat: parseVatInput(formData.vat),
-      controlled: false,
-      antibiotic: false,
       basePrice: cost > 0 ? cost : undefined,
       profitPercentage: formData.profit ? parseFloat(formData.profit) : undefined,
-      lote: formData.lote.trim() || undefined,
-      fechaVencimiento: formData.fechaVencimiento || undefined,
+      lote: rules.stock.visible ? formData.lote.trim() || undefined : undefined,
+      fechaVencimiento: rules.stock.visible ? formData.fechaVencimiento || undefined : undefined,
     };
 
     const result = await createMedication(payload, images);
 
     if (result.success) {
       const newMed = {
+        // El tipo se muestra desde ya en el listado de inventario.
+        productType: payload.productType,
         barCode: payload.barCode,
         name: payload.name,
         brand: payload.brand,
-        activeIngredient: payload.activeIngredient,
-        dosage: `${payload.doseValue || ""} ${selectedUnit || ""}`.trim(),
-        tablets: `${payload.amount || ""} ${payload.presentation || ""}`.trim(),
+        activeIngredient: payload.activeIngredient ?? "",
+        dosage: payload.doseValue ? `${payload.doseValue} ${payload.doseUnit || ""}`.trim() : "",
+        tablets: payload.amount ? `${payload.amount} ${payload.presentation || ""}`.trim() : "",
         price: parseFloat(payload.price) || 0,
-        stock: parseInt(payload.stock) || 0,
-        quantity: parseInt(payload.stock) || 0,
+        stock: parseInt(payload.stock ?? "") || 0,
+        quantity: parseInt(payload.stock ?? "") || 0,
         category: payload.category,
         subcategory: payload.subcategory,
         description: payload.description,
         vat: effectiveVat(parseVatInput(payload.vat)),
-        controlled: false,
-        antibiotic: false,
-        minimum: parseInt(payload.minimum) || 0,
+        controlled: payload.controlled ?? false,
+        antibiotic: payload.antibiotic ?? false,
+        minimum: parseInt(payload.minimum ?? "") || 0,
         image: images.length > 0 ? images[0].name : "",
         basePrice: payload.basePrice ?? undefined,
         profitPercentage: payload.profitPercentage,
@@ -370,9 +398,45 @@ export default function CreateProductPage({ setView }: any) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-          {/* COLUMNA IZQUIERDA */}
-          <div className="space-y-8">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
+          {/* SELECTOR DE TIPO — va primero: decide qué pide el resto del formulario */}
+          <div className="order-1 lg:col-span-12 space-y-4">
+            <div>
+              <h2 className="text-2xl font-black text-blue-600">Tipo de producto</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Elige qué vas a crear: el formulario muestra solo lo que hace falta.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {PRODUCT_TYPE_OPTIONS.map((option) => {
+                const selected = formData.productType === option.value;
+                return (
+                  <button
+                    type="button"
+                    key={option.value}
+                    aria-pressed={selected}
+                    onClick={() => setFormData({ ...formData, productType: option.value })}
+                    className={`text-left p-4 bg-slate-50 border rounded-2xl transition-all cursor-pointer ${
+                      selected
+                        ? "border-blue-600 bg-blue-50/30 text-blue-600"
+                        : "border-slate-100 text-slate-600 hover:bg-white hover:border-blue-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`size-4 rounded-full border-2 ${selected ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}
+                      />
+                      <span className="text-xs font-black">{option.label}</span>
+                    </div>
+                    <p className="text-[10px] font-bold mt-1.5 opacity-70">{option.hint}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* COLUMNA IZQUIERDA — multimedia + categorías + descripción (en mobile baja después del precio) */}
+          <div className="order-4 lg:order-2 lg:col-span-5 space-y-8">
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-black text-blue-600">Contenido Multimedia</h2>
@@ -459,19 +523,49 @@ export default function CreateProductPage({ setView }: any) {
               </div>
             )}
 
+            <div className="border-t border-slate-100 pt-6 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <SearchableSelect
+                  label="Categoría"
+                  placeholder="Seleccione una categoría"
+                  required
+                  value={formData.category}
+                  options={categoryOptions}
+                  onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
+                />
+                <SearchableSelect
+                  label="Subcategoría"
+                  placeholder="Seleccione una subcategoría"
+                  required
+                  value={formData.subcategory}
+                  options={subcategoryOptions}
+                  onChange={(val) => setFormData({ ...formData, subcategory: val })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
+                <textarea
+                  className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
+                  placeholder="ej: Escribe la descripción de tu producto..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* COLUMNA DERECHA */}
-          <div className="space-y-6">
+          {/* COLUMNA DERECHA — identificación y precio (en mobile va primero) */}
+          <div className="order-2 lg:order-3 lg:col-span-7 space-y-6">
             <h2 className="text-2xl font-black text-blue-600 mb-8">Información del Producto</h2>
 
-            <div className="grid grid-cols-1 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <InputField
                 label="Código de barras"
                 placeholder="ej: 7591234567890"
                 value={formData.barCode}
                 onChange={(e: any) => setFormData({ ...formData, barCode: e.target.value })}
-                required
+                required={rules.barCode.required}
               />
               <InputField
                 label="Marca"
@@ -480,13 +574,19 @@ export default function CreateProductPage({ setView }: any) {
                 onChange={(e: any) => setFormData({ ...formData, brand: e.target.value })}
                 required
               />
-              <InputField
-                label="Principio activo"
-                placeholder="ej: Acetaminofen"
-                value={formData.activeIngredient}
-                onChange={(e: any) => setFormData({ ...formData, activeIngredient: e.target.value })}
-                required
-              />
+              {rules.activeIngredient.visible && (
+                <InputField
+                  label={rules.activeIngredient.label}
+                  placeholder={
+                    formData.productType === "Alimento"
+                      ? "ej: Harina, azúcar, cacao"
+                      : "ej: Acetaminofen"
+                  }
+                  value={formData.activeIngredient}
+                  onChange={(e: any) => setFormData({ ...formData, activeIngredient: e.target.value })}
+                  required={rules.activeIngredient.required}
+                />
+              )}
               <InputField
                 label="Nombre comercial"
                 placeholder="ej: Acetaminofen 500mg"
@@ -494,95 +594,111 @@ export default function CreateProductPage({ setView }: any) {
                 onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
-              <InputField
-                label="Dosis"
-                placeholder="ej: 500"
-                value={formData.doseValue}
-                onChange={(e: any) => setFormData({ ...formData, doseValue: e.target.value })}
-                required
-              />
+              {rules.dosage.visible && (
+                <InputField
+                  label="Dosis"
+                  placeholder="ej: 500"
+                  value={formData.doseValue}
+                  onChange={(e: any) => setFormData({ ...formData, doseValue: e.target.value })}
+                  required
+                />
+              )}
 
-              <InputField
-                label="Cantidad"
-                placeholder="Cantidad de presentación (ej: 10)"
-                value={formData.amount}
-                onChange={(e: any) => setFormData({ ...formData, amount: e.target.value })}
-                required
-              />
+              {rules.tablets.visible && (
+                <>
+                  <InputField
+                    label="Cantidad"
+                    placeholder="Cantidad de presentación (ej: 10)"
+                    value={formData.amount}
+                    onChange={(e: any) => setFormData({ ...formData, amount: e.target.value })}
+                    required
+                  />
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Presentación: *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque", "Ampollas"].map((opt) => (
-                    <div
-                      key={opt}
-                      onClick={() => setFormData({ ...formData, presentation: opt })}
-                      className={`flex items-center gap-3 p-4 bg-slate-50 border rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                        formData.presentation === opt
-                          ? "border-blue-600 bg-blue-50/30 text-blue-600 font-black"
-                          : "border-slate-100 text-slate-600 hover:bg-white hover:border-blue-200"
-                      }`}
-                    >
-                      <div
-                        className={`size-4 rounded-full border-2 ${formData.presentation === opt ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}
-                      />
-                      {opt}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{rules.tablets.label}: *</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {["Frasco", "Tabletas", "Pastillas", "Capsulas", "Empaque", "Ampollas"].map((opt) => (
+                        <div
+                          key={opt}
+                          onClick={() => setFormData({ ...formData, presentation: opt })}
+                          className={`flex items-center gap-3 p-4 bg-slate-50 border rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                            formData.presentation === opt
+                              ? "border-blue-600 bg-blue-50/30 text-blue-600 font-black"
+                              : "border-slate-100 text-slate-600 hover:bg-white hover:border-blue-200"
+                          }`}
+                        >
+                          <div
+                            className={`size-4 rounded-full border-2 ${formData.presentation === opt ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}
+                          />
+                          {opt}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                </>
+              )}
+
+              {rules.dosage.visible && (
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Unidad métrica: *</label>
+                  <div className="flex flex-wrap gap-1.5 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    {["und", "ml", "l", "cc", "mg", "gr", "mcg"].map((u) => (
+                      <button
+                        type="button"
+                        key={u}
+                        onClick={() => setSelectedUnit(u)}
+                        className={`flex-1 px-2 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+                          selectedUnit === u ? "bg-blue-600 text-white shadow-md" : "text-slate-400"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Unidad métrica: *</label>
-                <div className="flex flex-wrap gap-1.5 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
-                  {["und", "ml", "l", "cc", "mg", "gr", "mcg"].map((u) => (
-                    <button
-                      type="button"
-                      key={u}
-                      onClick={() => setSelectedUnit(u)}
-                      className={`flex-1 px-2 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
-                        selectedUnit === u ? "bg-blue-600 text-white shadow-md" : "text-slate-400"
-                      }`}
-                    >
-                      {u}
-                    </button>
-                  ))}
+              {(rules.controlled.visible || rules.antibiotic.visible) && (
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Clasificación:</label>
+                  <div className="flex flex-wrap gap-2">
+                    {rules.controlled.visible && (
+                      <button
+                        type="button"
+                        aria-pressed={formData.controlled}
+                        onClick={() => setFormData({ ...formData, controlled: !formData.controlled })}
+                        className={`px-5 py-3 bg-slate-50 border rounded-2xl text-xs font-black transition-all cursor-pointer ${
+                          formData.controlled
+                            ? "border-blue-600 bg-blue-50/30 text-blue-600"
+                            : "border-slate-100 text-slate-600 hover:bg-white hover:border-blue-200"
+                        }`}
+                      >
+                        Controlado
+                      </button>
+                    )}
+                    {rules.antibiotic.visible && (
+                      <button
+                        type="button"
+                        aria-pressed={formData.antibiotic}
+                        onClick={() => setFormData({ ...formData, antibiotic: !formData.antibiotic })}
+                        className={`px-5 py-3 bg-slate-50 border rounded-2xl text-xs font-black transition-all cursor-pointer ${
+                          formData.antibiotic
+                            ? "border-blue-600 bg-blue-50/30 text-blue-600"
+                            : "border-slate-100 text-slate-600 hover:bg-white hover:border-blue-200"
+                        }`}
+                      >
+                        Antibiótico
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
-              <textarea
-                className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
-                placeholder="ej: Escribe la descripción de tu producto..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <SearchableSelect
-                label="Categoría"
-                placeholder="Seleccione una categoría"
-                required
-                value={formData.category}
-                options={categoryOptions}
-                onChange={(val) => setFormData({ ...formData, category: val, subcategory: "" })}
-              />
-              <SearchableSelect
-                label="Subcategoría"
-                placeholder="Seleccione una subcategoría"
-                required
-                value={formData.subcategory}
-                options={subcategoryOptions}
-                onChange={(val) => setFormData({ ...formData, subcategory: val })}
-              />
-            </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-6 mt-6">
-              <h3 className="text-lg font-black text-slate-800 mb-4">Precio y Stock</h3>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="border-t border-slate-100 pt-6">
+              <h3 className="text-lg font-black text-slate-800 mb-4">Precio e IVA</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <InputField
                   label="Costo (sin IVA)"
                   placeholder="ej: 3.00"
@@ -592,27 +708,12 @@ export default function CreateProductPage({ setView }: any) {
                   onChange={(e: any) => setFormData({ ...formData, price: e.target.value })}
                 />
                 <InputField
-                  label="Stock inicial"
-                  placeholder="ej: 10"
-                  type="number"
-                  step="1"
-                  value={formData.stock}
-                  onChange={(e: any) => setFormData({ ...formData, stock: e.target.value })}
-                />
-                <InputField
                   label="IVA (%)"
                   type="number"
                   step="1"
                   value={formData.vat}
                   onChange={(e: any) => setFormData({ ...formData, vat: e.target.value })}
-                />
-                <InputField
-                  label="Stock mínimo"
-                  placeholder="ej: 5"
-                  type="number"
-                  step="1"
-                  value={formData.minimum}
-                  onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
+                  required
                 />
                 <InputField
                   label="Ganancia (%)"
@@ -621,6 +722,31 @@ export default function CreateProductPage({ setView }: any) {
                   step="1"
                   value={formData.profit}
                   onChange={(e: any) => setFormData({ ...formData, profit: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* INVENTARIO — a todo lo ancho. Un servicio no lleva stock, así que no se muestra. */}
+          {rules.stock.visible && (
+            <div className="order-3 lg:order-4 lg:col-span-12 border-t border-slate-100 pt-6">
+              <h3 className="text-lg font-black text-slate-800 mb-4">Inventario</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <InputField
+                  label="Stock inicial"
+                  placeholder="ej: 10"
+                  type="number"
+                  step="1"
+                  value={formData.stock}
+                  onChange={(e: any) => setFormData({ ...formData, stock: e.target.value })}
+                />
+                <InputField
+                  label="Stock mínimo"
+                  placeholder="ej: 5"
+                  type="number"
+                  step="1"
+                  value={formData.minimum}
+                  onChange={(e: any) => setFormData({ ...formData, minimum: e.target.value })}
                 />
                 <InputField
                   label="Lote (opcional)"
@@ -636,7 +762,10 @@ export default function CreateProductPage({ setView }: any) {
                 />
               </div>
             </div>
+          )}
 
+          {/* MENSAJES Y ACCIÓN — a todo lo ancho; la barra queda visible al hacer scroll */}
+          <div className="order-5 lg:col-span-12 space-y-4">
             {successMsg && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
                 <p className="text-emerald-700 text-xs font-bold">{successMsg}</p>
@@ -644,7 +773,7 @@ export default function CreateProductPage({ setView }: any) {
             )}
             {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
 
-            <div className="flex gap-4 pt-10 sticky bottom-0 bg-white py-4 border-t border-slate-50">
+            <div className="flex gap-4 sticky bottom-0 bg-white py-4 border-t border-slate-50">
               <button
                 type="submit"
                 disabled={isLoading}
