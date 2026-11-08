@@ -147,7 +147,7 @@ export default function PaymentDialog({
     if (!p || p.amount <= 0) return true;
     if (method === "tarjeta") {
       const card = p as CardPayment;
-      if (!card.reference.trim() || !card.cardType) return true;
+      if (!card.cardType) return true;
     }
     if (method === "pagomovil") {
       const mobile = p as MobilePayment;
@@ -155,7 +155,7 @@ export default function PaymentDialog({
     }
     if (method === "biopago") {
       const biopago = p as BiopagoPayment;
-      if (!biopago.reference.trim() || !biopago.bank) return true;
+      if (!biopago.bank) return true;
     }
     return false;
   });
@@ -204,7 +204,6 @@ export default function PaymentDialog({
 
       if (method === "tarjeta") {
         const card = p as CardPayment;
-        if (!card.reference.trim()) return "Falta la referencia de la tarjeta.";
         if (!card.cardType) return "Seleccione el tipo de tarjeta.";
       }
       if (method === "pagomovil") {
@@ -214,7 +213,6 @@ export default function PaymentDialog({
       }
       if (method === "biopago") {
         const biopago = p as BiopagoPayment;
-        if (!biopago.reference.trim()) return "Falta la referencia del biopago.";
         if (!biopago.bank) return "Seleccione el banco para el biopago.";
       }
     }
@@ -518,7 +516,6 @@ export default function PaymentDialog({
                     {method === "tarjeta" && (
                       <>
                         <PaymentField label="Monto en Bs" value={String((payments.tarjeta as CardPayment).amount || "")} onChange={(v) => updatePayment("tarjeta", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("tarjeta")} rate={rate} />
-                        <PaymentField label="Referencia" value={(payments.tarjeta as CardPayment).reference} onChange={(v) => updatePayment("tarjeta", { reference: v })} placeholder="Número de referencia" />
                         <div>
                           <label className="text-[10px] font-bold text-slate-600 mb-1 block">Tipo de tarjeta</label>
                           <select
@@ -552,7 +549,6 @@ export default function PaymentDialog({
                     {method === "biopago" && (
                       <>
                         <PaymentField label="Monto en Bs" value={String((payments.biopago as BiopagoPayment).amount || "")} onChange={(v) => updatePayment("biopago", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("biopago")} rate={rate} />
-                        <PaymentField label="Referencia" value={(payments.biopago as BiopagoPayment).reference} onChange={(v) => updatePayment("biopago", { reference: v })} placeholder="Número de referencia" />
                         <div>
                           <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
                           <select
