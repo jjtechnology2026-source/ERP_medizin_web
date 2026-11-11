@@ -89,14 +89,14 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Código de barras del producto"
+                  placeholder="Código o nombre del producto"
                   className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400"
                 />
               </div>
 
               {code.trim() === "" ? (
                 <p className="mt-4 text-xs font-bold text-slate-400">
-                  Escanea o escribe el código del producto para ver la disponibilidad en tu grupo.
+                  Escanea o escribe el código o nombre del producto para ver la disponibilidad en tu grupo.
                 </p>
               ) : loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -114,10 +114,13 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
                 <ul className="mt-4 space-y-2">
                   {rows.map((g) => (
                     <li
-                      key={g.farmacia_id || g.farmacia}
+                      key={`${g.bar_code || ""}-${g.farmacia_id}`}
                       className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3"
                     >
-                      <span className="text-sm font-bold text-slate-700 truncate">{g.farmacia}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-sm font-bold text-slate-700 truncate">{g.producto || "Producto"}</span>
+                        <span className="block text-xs font-medium text-slate-400 truncate">{g.farmacia}</span>
+                      </div>
                       <span className="text-xs font-black text-[#0057FF] whitespace-nowrap">
                         {formatPrice(g.precio ?? 0)}
                         <span className="block text-[10px] font-bold text-slate-400">

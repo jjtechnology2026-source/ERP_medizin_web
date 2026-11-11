@@ -2,8 +2,10 @@ import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
 import { effectiveVat } from "@/modules/products/lib/pricing";
 
-/** Disponibilidad de un producto en otras farmacias del mismo grupo. */
+/** Disponibilidad de un producto (código o nombre) en otras farmacias del mismo grupo. */
 export interface GroupProductAvailability {
+  producto: string;
+  bar_code: string;
   farmacia: string;
   farmacia_id: string;
   precio: number;
