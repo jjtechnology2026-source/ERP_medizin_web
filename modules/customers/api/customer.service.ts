@@ -76,4 +76,17 @@ export const customerService = {
       return null;
     }
   },
+
+  async updateName(documento: string, newName: string): Promise<boolean> {
+    try {
+      await api.put(
+        "/admin/User/update_name",
+        {},
+        { params: { documento, new_name: newName } }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  },
 };

@@ -58,6 +58,7 @@ export default function CustomerDataDialog({
   const [direccion, setDireccion] = useState(client?.direccion || "");
   const [retencion, setRetencion] = useState(client?.retencion || "0");
   const [userFound, setUserFound] = useState(client?.found === "true");
+  const [foundName, setFoundName] = useState(client?.name || "");
 
   const [loadingDocument, setLoadingDocument] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -96,7 +97,6 @@ export default function CustomerDataDialog({
   const handleNameChange = (val: string) => {
     setName(val);
     setCustomerField("name", val);
-    if (userFound) { setUserFound(false); setCustomerField("found", "false"); }
   };
   const handleEmailChange = (val: string) => {
     setEmail(val);
@@ -171,6 +171,7 @@ export default function CustomerDataDialog({
         setPhonePrefix(ph.prefix);
         setPhoneNumber(ph.number);
         setName(customer.name || "");
+        setFoundName(customer.name || "");
         setEmail(customer.email || "");
         setDireccion(customer.direccion || "");
         setRetencion(customer.retencion || "0");
@@ -222,11 +223,18 @@ export default function CustomerDataDialog({
     return true;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     updateDocumento();
     updatePhone();
     setCustomerField("retencion", docPrefix === "J" ? retencion : "0");
     if (!validateForm()) return;
+
+    // Si el cliente es registrado y cambió el nombre, persistir en su registro.
+    if (userFound && name.trim() && name.trim() !== (foundName || "").trim()) {
+      const documento = combineDocument(docPrefix, docNumber);
+      await customerService.updateName(documento, name.trim());
+    }
+
     onContinue();
   };
 
@@ -289,9 +297,8 @@ export default function CustomerDataDialog({
               type="text"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
-              readOnly={userFound}
               placeholder="Nombre del cliente"
-              className={`w-full px-4 py-3 bg-slate-100 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 ${userFound ? "cursor-not-allowed opacity-70" : ""}`}
+              className="w-full px-4 py-3 bg-slate-100 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
