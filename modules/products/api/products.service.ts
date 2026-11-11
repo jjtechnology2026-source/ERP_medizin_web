@@ -2,6 +2,14 @@ import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
 import { effectiveVat } from "@/modules/products/lib/pricing";
 
+/** Disponibilidad de un producto en otras farmacias del mismo grupo. */
+export interface GroupProductAvailability {
+  farmacia: string;
+  farmacia_id: string;
+  precio: number;
+  cantidad: number;
+}
+
 const cleanImg = (item: any) => ({
   ...item,
   // Tipo de producto del catálogo (`Medicamento`/`Alimento`/`Servicio`/`Otro`).
@@ -204,6 +212,17 @@ export const productsService = {
       pharmacy_id: pharmacyId,
       medications,
     });
+  },
+
+  /** Consulta disponibilidad (precio + stock) de un producto en el grupo de la farmacia. */
+  async getGroupAvailability(
+    pharmacyId: string,
+    barCode: string,
+  ): Promise<GroupProductAvailability[]> {
+    const { data } = await api.get(
+      `/admin/Pharmacy/${pharmacyId}/disponibilidad?barCode=${encodeURIComponent(barCode)}`
+    );
+    return Array.isArray(data) ? data : [];
   },
 
   async bulkImport(products: BulkProductRow[]): Promise<{ success: number; errors: string[]; created: Medication[] }> {

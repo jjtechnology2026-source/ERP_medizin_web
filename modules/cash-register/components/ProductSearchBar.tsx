@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { HiQrcode } from "react-icons/hi";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useProductsStore } from "@/modules/products/store/products.store";
-import { productsService } from "@/modules/products/api/products.service";
+import { productsService, type GroupProductAvailability } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { Medication } from "@/modules/products/types/products.types";
@@ -36,6 +36,11 @@ export default function ProductSearchBar() {
   const searchSeqRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Disponibilidad en el grupo (otras farmacias).
+  const [groupList, setGroupList] = useState<GroupProductAvailability[] | null>(null);
+  const [groupLoading, setGroupLoading] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -224,12 +229,37 @@ export default function ProductSearchBar() {
     }
   };
 
+  const handleConsultarGrupo = async () => {
+    const code = barcode.trim();
+    setGroupError(null);
+    if (!code) {
+      setGroupError("Ingresa el código del producto");
+      return;
+    }
+    const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
+    if (!pharmacyId) {
+      setGroupError("No hay farmacia asignada");
+      return;
+    }
+    setGroupLoading(true);
+    setGroupList(null);
+    try {
+      const rows = await productsService.getGroupAvailability(pharmacyId, code);
+      setGroupList(rows);
+    } catch (e: any) {
+      setGroupError(e?.message || "Error al consultar en el grupo");
+    } finally {
+      setGroupLoading(false);
+    }
+  };
+
   return (
-    <div ref={containerRef} className="flex flex-col md:flex-row md:items-center gap-3 w-full relative">
-      <label className="text-xs font-black text-slate-600 whitespace-nowrap min-w-[130px] md:text-left">
-        Código del Producto:
-      </label>
-      <div className="flex flex-1 gap-3 w-full">
+    <div ref={containerRef} className="w-full relative">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 w-full">
+        <label className="text-xs font-black text-slate-600 whitespace-nowrap min-w-[130px] md:text-left">
+          Código del Producto:
+        </label>
+        <div className="flex flex-1 gap-3 w-full">
         <div className="relative flex-1">
           <HiQrcode className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
@@ -315,13 +345,52 @@ export default function ProductSearchBar() {
             <p className="mt-1 text-[10px] font-bold text-red-500">{error}</p>
           )}
         </div>
-        <button
-          onClick={() => handleAdd()}
-          className="px-8 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
-        >
-          ENTER - Agregar
-        </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleAdd()}
+              className="px-8 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
+            >
+              ENTER - Agregar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleConsultarGrupo()}
+              className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-black text-xs tracking-wide transition-all whitespace-nowrap"
+            >
+              {groupLoading ? "Consultando..." : "Consultar en mi grupo"}
+            </button>
+          </div>
+        </div>
       </div>
+
+      {groupError && (
+        <p className="mt-1 text-[10px] font-bold text-red-500">{groupError}</p>
+      )}
+
+      {groupList !== null && (
+        <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-black text-slate-600 mb-2">Disponibilidad en tu grupo</p>
+          {groupList.length === 0 ? (
+            <p className="text-xs font-bold text-slate-400">
+              Ninguna farmacia del grupo tiene este producto con stock.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {groupList.map((g) => (
+                <li
+                  key={g.farmacia_id || g.farmacia}
+                  className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700"
+                >
+                  <span className="truncate">{g.farmacia}</span>
+                  <span className="text-slate-500 whitespace-nowrap">
+                    {formatPrice(g.precio ?? 0)} · {g.cantidad ?? 0} unidades
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
