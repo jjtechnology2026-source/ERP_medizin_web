@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { HiDocumentText } from "react-icons/hi";
+import { HiDocumentText, HiSearch } from "react-icons/hi";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import CashierSessionCard from "@/modules/cash-register/components/CashierSessionCard";
 import ProductSearchBar from "@/modules/cash-register/components/ProductSearchBar";
@@ -13,6 +13,7 @@ import RecentInvoicesCard from "@/modules/cash-register/components/RecentInvoice
 import CustomerDataDialog from "@/modules/cash-register/components/CustomerDataDialog";
 import PaymentDialog from "@/modules/cash-register/components/PaymentDialog";
 import PendingQuotesDialog from "@/modules/cash-register/components/PendingQuotesDialog";
+import GroupAvailabilityDialog from "@/modules/cash-register/components/GroupAvailabilityDialog";
 
 export default function CashRegisterFeature() {
   const { load, ensureSession, activeSession, isLoading } = useCashierWorkflowStore();
@@ -25,6 +26,7 @@ export default function CashRegisterFeature() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showPendingQuotes, setShowPendingQuotes] = useState(false);
   const [showPendingDeliveryNotes, setShowPendingDeliveryNotes] = useState(false);
+  const [showGroupAvailability, setShowGroupAvailability] = useState(false);
 
   useEffect(() => {
     if (!pharmacyId) return;
@@ -56,6 +58,13 @@ export default function CashRegisterFeature() {
           >
             <HiDocumentText size={16} />
             Notas de entrega
+          </button>
+          <button
+            onClick={() => setShowGroupAvailability(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
+          >
+            <HiSearch size={16} />
+            Consultar en mi grupo
           </button>
         </div>
       </header>
@@ -108,6 +117,10 @@ export default function CashRegisterFeature() {
           onClose={() => setShowPendingDeliveryNotes(false)}
           mode="delivery-note"
         />
+      )}
+
+      {showGroupAvailability && (
+        <GroupAvailabilityDialog onClose={() => setShowGroupAvailability(false)} />
       )}
     </div>
   );
