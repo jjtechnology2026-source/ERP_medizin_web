@@ -55,6 +55,12 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const formatUsd = (n: number) => `$ ${r2(n).toFixed(2)}`;
 const formatBs = (bs: number) => `Bs ${r2(bs).toFixed(2)}`;
 
+// "V12345678" -> "V-12345678". Si ya trae guion u otro formato, se deja igual.
+const formatDocumento = (doc: string): string => {
+  const m = doc.match(/^([A-Za-z])(\d+)$/);
+  return m ? `${m[1]}-${m[2]}` : doc;
+};
+
 export default function PaymentDialog({
   onClose,
   onComplete,
@@ -72,6 +78,7 @@ export default function PaymentDialog({
   const { registerSale, saveQuote, saveDeliveryNote, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
+  const currentClient = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]?.client);
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
@@ -460,6 +467,21 @@ export default function PaymentDialog({
             <HiX size={20} />
           </button>
         </div>
+
+        {(currentClient?.name || currentClient?.documento) && (
+          <div className="px-6 pb-3 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-2xl">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Cliente</p>
+                <p className="text-sm font-black text-slate-800 truncate">{currentClient.name || "Cliente General"}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Cédula</p>
+                <p className="text-sm font-black font-mono text-blue-700">{currentClient.documento ? formatDocumento(currentClient.documento) : "—"}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {(localError || errorMessage) && (
           <div className="px-6 pb-3 flex-shrink-0">
