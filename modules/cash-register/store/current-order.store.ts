@@ -303,8 +303,8 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       switch (p.type) {
         case "efectivo": return { method: "cash", currency: "VES", amount: p.amount };
         case "dolares":  return { method: "dollars", amount: p.amount };
-        case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount };
-        case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
+        case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount, bank_account_id: p.bankAccountId ?? undefined };
+        case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "", bank_account_id: p.bankAccountId ?? undefined };
         case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         case "cashea":   return { method: "cashea", amount: p.amount };
         case "credito":  return { method: "credit", amount: p.amount };

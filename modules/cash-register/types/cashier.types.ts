@@ -190,6 +190,8 @@ export interface CardPayment {
   punto: string;
   cardType: string;
   reference: string;
+  /** Cuenta bancaria de destino (id) seleccionada por el cajero para el pago. */
+  bankAccountId?: string;
 }
 
 export interface MobilePayment {
@@ -197,6 +199,8 @@ export interface MobilePayment {
   amount: number;
   reference: string;
   bank: string;
+  /** Cuenta bancaria de destino (id) seleccionada por el cajero para el pago. */
+  bankAccountId?: string;
 }
 
 export interface BiopagoPayment {
@@ -241,6 +245,17 @@ export interface MovimientoCajaPayload {
   tasa_cambio?: number;
   metodo_pago: string;
   descripcion?: string;
+  /** Cuenta bancaria de destino para pagos electrónicos (pagomovil/tarjeta). */
+  bank_account_id?: string;
+}
+
+/** Cuenta bancaria de la farmacia (`GET /admin/bank-accounts`). */
+export interface CashierBankAccount {
+  id: string;
+  banco: string;
+  numero_cuenta: string;
+  tipo: "banco" | "efectivo";
+  activa: boolean;
 }
 
 export interface CreateInvoicePayload {

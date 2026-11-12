@@ -10,6 +10,7 @@ import type {
   CreateInvoicePayload,
   CloseSessionPayload,
   MovimientoCajaPayload,
+  CashierBankAccount,
   PendingQuote,
 } from "@/modules/cash-register/types/cashier.types";
 

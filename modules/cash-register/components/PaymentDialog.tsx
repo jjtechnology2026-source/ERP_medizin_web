@@ -8,6 +8,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
+import api from "@/modules/core/api/client";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import type {
@@ -19,6 +20,7 @@ import type {
   BiopagoPayment,
   CasheaPayment,
   CreditPayment,
+  CashierBankAccount,
 } from "@/modules/cash-register/types/cashier.types";
 
 type ManualChangeType = "efectivoVes" | "efectivoUsd" | "movil" | "credito";
@@ -76,12 +78,32 @@ export default function PaymentDialog({
   const [noFiscalOutcome, setNoFiscalOutcome] = useState(false);
   const [noFiscalPrintError, setNoFiscalPrintError] = useState<string | null>(null);
   const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
+  const [bancoAccounts, setBancoAccounts] = useState<CashierBankAccount[]>([]);
 
   // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
   // vivo, la venta va directo al fallback POS80 sin intentar la fiscal.
   useEffect(() => {
     checkFiscalHealth();
   }, [checkFiscalHealth]);
+
+  // Carga las cuentas "banco" de la farmacia para elegir destino en pagomovil/tarjeta.
+  useEffect(() => {
+    const pharmacyId = (profile as any)?.pharmacyId;
+    if (!pharmacyId) return;
+    (async () => {
+      try {
+        const res = await api.get("/admin/bank-accounts", {
+          params: { pharmacy_id: pharmacyId },
+        });
+        const rows = res.data?.data?.items ?? res.data?.items ?? [];
+        setBancoAccounts(
+          (rows as CashierBankAccount[]).filter((a) => a.tipo === "banco" && a.activa),
+        );
+      } catch {
+        setBancoAccounts([]);
+      }
+    })();
+  }, [profile]);
 
   const totals = getComputedTotals();
   const rate = getEffectiveRate();
@@ -147,11 +169,11 @@ export default function PaymentDialog({
     if (!p || p.amount <= 0) return true;
     if (method === "tarjeta") {
       const card = p as CardPayment;
-      if (!card.cardType) return true;
+      if (!card.cardType || !card.bankAccountId) return true;
     }
     if (method === "pagomovil") {
       const mobile = p as MobilePayment;
-      if (!mobile.reference.trim() || !mobile.bank) return true;
+      if (!mobile.reference.trim() || !mobile.bankAccountId) return true;
     }
     if (method === "biopago") {
       const biopago = p as BiopagoPayment;
@@ -205,11 +227,12 @@ export default function PaymentDialog({
       if (method === "tarjeta") {
         const card = p as CardPayment;
         if (!card.cardType) return "Seleccione el tipo de tarjeta.";
+        if (!card.bankAccountId) return "Seleccione la cuenta destino de la tarjeta.";
       }
       if (method === "pagomovil") {
         const mobile = p as MobilePayment;
         if (!mobile.reference.trim()) return "Falta la referencia del pago móvil.";
-        if (!mobile.bank) return "Seleccione el banco para el pago móvil.";
+        if (!mobile.bankAccountId) return "Seleccione la cuenta destino del pago móvil.";
       }
       if (method === "biopago") {
         const biopago = p as BiopagoPayment;
@@ -527,6 +550,20 @@ export default function PaymentDialog({
                             {CARD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Cuenta destino</label>
+                          <select
+                            value={(payments.tarjeta as CardPayment).bankAccountId || ""}
+                            onChange={(e) => {
+                              const acc = bancoAccounts.find((a) => a.id === e.target.value);
+                              updatePayment("tarjeta", { bankAccountId: e.target.value, punto: acc?.banco || "" });
+                            }}
+                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                          >
+                            <option value="">Selecciona cuenta</option>
+                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.banco}</option>)}
+                          </select>
+                        </div>
                       </>
                     )}
                     {method === "pagomovil" && (
@@ -534,14 +571,17 @@ export default function PaymentDialog({
                         <PaymentField label="Monto en Bs" value={String((payments.pagomovil as MobilePayment).amount || "")} onChange={(v) => updatePayment("pagomovil", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("pagomovil")} rate={rate} />
                         <PaymentField label="Referencia" value={(payments.pagomovil as MobilePayment).reference} onChange={(v) => updatePayment("pagomovil", { reference: v })} placeholder="Número de referencia" />
                         <div>
-                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Banco</label>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Cuenta destino</label>
                           <select
-                            value={(payments.pagomovil as MobilePayment).bank}
-                            onChange={(e) => updatePayment("pagomovil", { bank: e.target.value })}
+                            value={(payments.pagomovil as MobilePayment).bankAccountId || ""}
+                            onChange={(e) => {
+                              const acc = bancoAccounts.find((a) => a.id === e.target.value);
+                              updatePayment("pagomovil", { bankAccountId: e.target.value, bank: acc?.banco || "" });
+                            }}
                             className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
                           >
-                            <option value="">Banco</option>
-                            {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
+                            <option value="">Selecciona cuenta</option>
+                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.banco}</option>)}
                           </select>
                         </div>
                       </>
