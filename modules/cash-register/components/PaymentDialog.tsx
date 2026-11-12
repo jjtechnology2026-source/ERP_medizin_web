@@ -561,7 +561,7 @@ export default function PaymentDialog({
                             className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
                           >
                             <option value="">Selecciona cuenta</option>
-                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.banco}</option>)}
+                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.alias || a.banco}</option>)}
                           </select>
                         </div>
                       </>
@@ -581,7 +581,7 @@ export default function PaymentDialog({
                             className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
                           >
                             <option value="">Selecciona cuenta</option>
-                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.banco}</option>)}
+                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.alias || a.banco}</option>)}
                           </select>
                         </div>
                       </>

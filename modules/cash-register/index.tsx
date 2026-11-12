@@ -38,6 +38,34 @@ export default function CashRegisterFeature() {
     })();
   }, [pharmacyId, load, ensureSession]);
 
+  // Enter → "siguiente" (checkout): pasa del carrito al diálogo de cliente.
+  // No dispara mientras se escribe en inputs/selects ni con un diálogo abierto.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Enter") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase() ?? "";
+      if (["input", "textarea", "select"].includes(tag) || target?.isContentEditable) return;
+      if (
+        showCustomerDialog ||
+        showPaymentDialog ||
+        showPendingQuotes ||
+        showPendingDeliveryNotes ||
+        showGroupAvailability
+      )
+        return;
+      setShowCustomerDialog(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    showCustomerDialog,
+    showPaymentDialog,
+    showPendingQuotes,
+    showPendingDeliveryNotes,
+    showGroupAvailability,
+  ]);
+
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6 bg-[#f8fafc] min-h-full">
       <header className="flex items-center justify-between">

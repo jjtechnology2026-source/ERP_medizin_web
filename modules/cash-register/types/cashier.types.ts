@@ -254,7 +254,8 @@ export interface CashierBankAccount {
   id: string;
   banco: string;
   numero_cuenta: string;
-  tipo: "banco" | "efectivo";
+  alias?: string;
+  tipo: "banco" | "efectivo" | "efectivo_usd";
   activa: boolean;
 }
 

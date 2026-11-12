@@ -106,12 +106,21 @@ export default function OrderItemsTable() {
                     autoFocus
                   />
                 ) : (
-                  <button
-                    onDoubleClick={() => handleDoubleClick(i, med.quantity)}
-                    className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
-                  >
-                    {med.quantity}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onDoubleClick={() => handleDoubleClick(i, med.quantity)}
+                      className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      {med.quantity}
+                    </button>
+                    <button
+                      onClick={() => updateQuantity(i, med.quantity + 1)}
+                      className="px-2 py-1 bg-emerald-500 text-white rounded-lg text-xs font-black hover:bg-emerald-600 transition-colors"
+                      title="Sumar 1 unidad"
+                    >
+                      +
+                    </button>
+                  </div>
                 )}
               </td>
               <td className="py-3 pr-4">
