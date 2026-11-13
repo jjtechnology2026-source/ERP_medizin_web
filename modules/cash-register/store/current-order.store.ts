@@ -74,7 +74,7 @@ function createDefaultPayments(): Record<PaymentMethod, Payment> {
     tarjeta: { type: "tarjeta", amount: 0, punto: "", cardType: "", reference: "" },
     pagomovil: { type: "pagomovil", amount: 0, reference: "", bank: "" },
     biopago: { type: "biopago", amount: 0, reference: "", bank: "" },
-    cashea: { type: "cashea", amount: 0 },
+    cashea: { type: "cashea", amount: 0, bankAccountId: undefined },
     credito: { type: "credito", amount: 0 },
     divisa_electronica: { type: "divisa_electronica", amount: 0 },
   };
@@ -310,7 +310,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         case "tarjeta":  return { method: "card", punto: p.punto || "", type: p.cardType || "", reference: p.reference || "", amount: p.amount, bank_account_id: p.bankAccountId ?? undefined };
         case "pagomovil":return { method: "mobile", amount: p.amount, reference: p.reference || "", bank: p.bank || "", bank_account_id: p.bankAccountId ?? undefined };
         case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
-        case "cashea":   return { method: "cashea", amount: p.amount };
+        case "cashea":   return { method: "cashea", amount: p.amount, bank_account_id: p.bankAccountId ?? undefined };
         case "credito":  return { method: "credit", amount: p.amount };
         case "divisa_electronica": return { method: "divisaElectronica", amount: p.amount, bank_account_id: p.bankAccountId ?? undefined };
         default:         return { method: "cash", currency: "VES", amount: p.amount };

@@ -216,6 +216,8 @@ export interface BiopagoPayment {
 export interface CasheaPayment {
   type: "cashea";
   amount: number;
+  /** Cuenta bancaria de destino (id) seleccionada por el cajero para el pago. */
+  bankAccountId?: string;
 }
 
 export interface CreditPayment {

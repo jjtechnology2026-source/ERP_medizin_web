@@ -202,6 +202,10 @@ export default function PaymentDialog({
       const mobile = p as MobilePayment;
       if (!mobile.reference.trim() || !mobile.bankAccountId) return true;
     }
+    if (method === "cashea") {
+      const cashea = p as CasheaPayment;
+      if (!cashea.bankAccountId) return true;
+    }
     if (method === "biopago") {
       const biopago = p as BiopagoPayment;
       if (!biopago.bank) return true;
@@ -260,6 +264,10 @@ export default function PaymentDialog({
         const mobile = p as MobilePayment;
         if (!mobile.reference.trim()) return "Falta la referencia del pago móvil.";
         if (!mobile.bankAccountId) return "Seleccione la cuenta destino del pago móvil.";
+      }
+      if (method === "cashea") {
+        const cashea = p as CasheaPayment;
+        if (!cashea.bankAccountId) return "Seleccione la cuenta destino del cashea.";
       }
       if (method === "biopago") {
         const biopago = p as BiopagoPayment;
@@ -645,7 +653,20 @@ export default function PaymentDialog({
                       </>
                     )}
                     {method === "cashea" && (
-                      <PaymentField label="Monto en Bs" value={String((payments.cashea as CasheaPayment).amount || "")} onChange={(v) => updatePayment("cashea", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("cashea")} rate={rate} />
+                      <>
+                        <PaymentField label="Monto en Bs" value={String((payments.cashea as CasheaPayment).amount || "")} onChange={(v) => updatePayment("cashea", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("cashea")} rate={rate} />
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">Cuenta destino</label>
+                          <select
+                            value={(payments.cashea as CasheaPayment).bankAccountId || ""}
+                            onChange={(e) => updatePayment("cashea", { bankAccountId: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                          >
+                            <option value="">Selecciona cuenta</option>
+                            {bancoAccounts.map((a) => <option key={a.id} value={a.id}>{a.alias || a.banco}</option>)}
+                          </select>
+                        </div>
+                      </>
                     )}
                     {method === "credito" && (
                       <PaymentField label="Monto en Bs" value={String((payments.credito as CreditPayment).amount || "")} onChange={(v) => updatePayment("credito", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("credito")} rate={rate} />
