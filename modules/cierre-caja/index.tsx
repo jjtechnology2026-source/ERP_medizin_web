@@ -17,6 +17,8 @@ import {
   HiOutlineDeviceMobile,
   HiOutlineFingerPrint,
   HiOutlineClock,
+  HiOutlineBookOpen,
+  HiOutlineGlobe,
   HiOutlineCalculator,
   HiOutlineInformationCircle,
   HiOutlineCheckCircle,
@@ -27,7 +29,7 @@ import {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea";
+type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea" | "credito" | "divisa_electronica";
 
 interface PhysicalCount {
   efectivo_ves: number;
@@ -36,6 +38,8 @@ interface PhysicalCount {
   pagomovil_ves: number;
   biopago_ves: number;
   cashea_ves: number;
+  otros_ves: number;
+  divisa_electronica_usd: number;
 }
 
 const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
@@ -45,6 +49,8 @@ const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
   pagomovil: <HiOutlineDeviceMobile />,
   biopago: <HiOutlineFingerPrint />,
   cashea: <HiOutlineClock />,
+  credito: <HiOutlineBookOpen />,
+  divisa_electronica: <HiOutlineGlobe />,
 };
 
 const METHOD_LABELS: Record<PaymentMethodKey, string> = {
@@ -54,6 +60,8 @@ const METHOD_LABELS: Record<PaymentMethodKey, string> = {
   pagomovil: "Pago Móvil",
   biopago: "Biopago",
   cashea: "Cashea",
+  credito: "Crédito",
+  divisa_electronica: "Divisa Electrónica",
 };
 
 const METHOD_COLORS: Record<PaymentMethodKey, string> = {
@@ -63,6 +71,8 @@ const METHOD_COLORS: Record<PaymentMethodKey, string> = {
   pagomovil: "text-pink-500",
   biopago: "text-orange-500",
   cashea: "text-lime-500",
+  credito: "text-rose-500",
+  divisa_electronica: "text-teal-500",
 };
 
 const METHOD_BG: Record<PaymentMethodKey, string> = {
@@ -72,6 +82,8 @@ const METHOD_BG: Record<PaymentMethodKey, string> = {
   pagomovil: "bg-pink-50",
   biopago: "bg-orange-50",
   cashea: "bg-lime-50",
+  credito: "bg-rose-50",
+  divisa_electronica: "bg-teal-50",
 };
 
 // Cada metodo del desglose lee su monto del campo correspondiente del conteo
@@ -83,6 +95,8 @@ const COUNTED_FIELD_BY_METHOD: Record<PaymentMethodKey, keyof PhysicalCount> = {
   pagomovil: "pagomovil_ves",
   biopago: "biopago_ves",
   cashea: "cashea_ves",
+  credito: "otros_ves",
+  divisa_electronica: "divisa_electronica_usd",
 };
 
 export default function CashClosurePage() {
@@ -107,6 +121,8 @@ export default function CashClosurePage() {
     pagomovil_ves: 0,
     biopago_ves: 0,
     cashea_ves: 0,
+    otros_ves: 0,
+    divisa_electronica_usd: 0,
   });
 
   // La clasificacion por metodo vive en el componente; la matematica del
@@ -135,8 +151,8 @@ export default function CashClosurePage() {
   const theoreticalBalanceVes = balances.theoreticalBalanceVes;
   const theoreticalBalanceUsd = balances.theoreticalBalanceUsd;
 
-  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves + physicalCount.cashea_ves;
-  const physicalTotalUsd = physicalCount.efectivo_usd;
+  const physicalTotalVes = physicalCount.efectivo_ves + physicalCount.tarjeta_ves + physicalCount.pagomovil_ves + physicalCount.biopago_ves + physicalCount.cashea_ves + physicalCount.otros_ves;
+  const physicalTotalUsd = physicalCount.efectivo_usd + physicalCount.divisa_electronica_usd;
 
   const differenceVes = computeDifference(physicalTotalVes, theoreticalBalanceVes);
   const differenceUsd = computeDifference(physicalTotalUsd, theoreticalBalanceUsd);
@@ -186,6 +202,7 @@ export default function CashClosurePage() {
         efectivo_usd: physicalCount.efectivo_usd,
         tarjeta_usd: 0,
         otros_usd: 0,
+        divisa_electronica_usd: physicalCount.divisa_electronica_usd,
       },
       {
         observations: "Cierre de turno",
@@ -196,7 +213,7 @@ export default function CashClosurePage() {
 
   const salesData = (Object.keys(METHOD_LABELS) as PaymentMethodKey[]).map((method) => ({
     label: METHOD_LABELS[method],
-    value: method === "dolares" ? `${(totalsByMethod[method] / (currentRate || 1)).toFixed(2)} USD` : totalsByMethod[method].toFixed(2),
+    value: method === "dolares" || method === "divisa_electronica" ? `${(totalsByMethod[method] / (currentRate || 1)).toFixed(2)} USD` : totalsByMethod[method].toFixed(2),
     icon: METHOD_ICONS[method],
     color: METHOD_COLORS[method],
     bg: METHOD_BG[method],
@@ -391,6 +408,16 @@ export default function CashClosurePage() {
                     className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Divisa Electrónica USD</label>
+                  <input
+                    type="number"
+                    value={physicalCount.divisa_electronica_usd || ""}
+                    onChange={(e) => handlePhysicalCountChange("divisa_electronica_usd", e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
             </div>
 
@@ -494,6 +521,18 @@ export default function CashClosurePage() {
                     </span>
                     <span className="text-emerald-500 font-bold text-lg font-mono">USD</span>
                   </div>
+                  {activeSession?.saldoTeoricoUsd ? (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-400">Efectivo USD</span>
+                        <span className="font-mono font-bold text-slate-600">$ {activeSession.saldoTeoricoUsd.efectivo_usd.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-400">Divisa Electrónica USD</span>
+                        <span className="font-mono font-bold text-slate-600">$ {activeSession.saldoTeoricoUsd.divisa_electronica_usd.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="pt-6 border-t border-slate-100">
@@ -569,11 +608,15 @@ export default function CashClosurePage() {
 
 function mapTransactionToMethod(tx: any): PaymentMethodKey | null {
   const method = (tx.paymentMethod || "").toLowerCase();
-  // Backend Rust enum variants: Efectivo, TarjetaDebito, TarjetaCredito, Transferencia, Cheque, Biopago
-  if (method.includes("efectivo") || method === "efectivo") {
+  // Backend Rust enum variants: Efectivo, TarjetaDebito, TarjetaCredito, Transferencia,
+  // Cheque, Biopago, DivisaElectronica, Credito (cuenta por cobrar).
+  if (method.includes("efectivo")) {
     return tx.currency === "USD" ? "dolares" : "efectivo";
   }
-  if (method.includes("tarjeta") || method.includes("debito") || method.includes("credito")) return "tarjeta";
+  if (method.includes("divisa") && method.includes("electronica")) return "divisa_electronica";
+  if (method.includes("tarjeta") || method.includes("debito")) return "tarjeta";
+  // "Credito" a secas = cuenta por cobrar; "TarjetaCredito" ya cayó en tarjeta.
+  if (method.includes("credito")) return "credito";
   if (method.includes("transferencia") || method.includes("movil")) return "pagomovil";
   if (method.includes("biopago")) return "biopago";
   if (method.includes("cashea")) return "cashea";

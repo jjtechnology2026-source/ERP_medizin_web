@@ -20,6 +20,7 @@ import type {
   BiopagoPayment,
   CasheaPayment,
   CreditPayment,
+  DivisaElectronicaPayment,
   CashierBankAccount,
 } from "@/modules/cash-register/types/cashier.types";
 
@@ -40,7 +41,12 @@ const PAYMENT_ICONS: Record<PaymentMethod, string> = {
   biopago: "\u{1F535}",
   cashea: "\u{1F7E2}",
   credito: "\u{1F4D6}",
+  divisa_electronica: "\u{1F3E6}",
 };
+
+// Etiqueta visible del método; divisa_electronica tiene nombre propio (no "Divisa_electronica").
+const methodDisplayLabel = (method: PaymentMethod): string =>
+  method === "divisa_electronica" ? "Divisa Electrónica" : method.charAt(0).toUpperCase() + method.slice(1);
 
 const VENEZUELAN_BANKS = [
   "Banco de Venezuela", "Mercantil", "Provincial", "Banesco", "BOD",
@@ -86,6 +92,7 @@ export default function PaymentDialog({
   const [noFiscalPrintError, setNoFiscalPrintError] = useState<string | null>(null);
   const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
   const [bancoAccounts, setBancoAccounts] = useState<CashierBankAccount[]>([]);
+  const [divisaElectronicaAccounts, setDivisaElectronicaAccounts] = useState<CashierBankAccount[]>([]);
 
   // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
   // vivo, la venta va directo al fallback POS80 sin intentar la fiscal.
@@ -103,11 +110,12 @@ export default function PaymentDialog({
           params: { pharmacy_id: pharmacyId },
         });
         const rows = res.data?.data?.items ?? res.data?.items ?? [];
-        setBancoAccounts(
-          (rows as CashierBankAccount[]).filter((a) => a.tipo === "banco" && a.activa),
-        );
+        const all = rows as CashierBankAccount[];
+        setBancoAccounts(all.filter((a) => a.tipo === "banco" && a.activa));
+        setDivisaElectronicaAccounts(all.filter((a) => a.tipo === "divisa_electronica" && a.activa));
       } catch {
         setBancoAccounts([]);
+        setDivisaElectronicaAccounts([]);
       }
     })();
   }, [profile]);
@@ -124,7 +132,7 @@ export default function PaymentDialog({
 
   // IGTF: 3% sobre pagos en divisas (USD), doble redondeo igual que backend
   const usdPayments = activePaymentMethods
-    .filter((m) => m === "dolares" || (m === "efectivo" && (payments[m] as any)?.currency === "USD"))
+    .filter((m) => m === "dolares" || m === "divisa_electronica" || (m === "efectivo" && (payments[m] as any)?.currency === "USD"))
     .map((m) => payments[m]?.amount || 0);
   const usdTotal = usdPayments.reduce((s, a) => s + a, 0);
   const igtfUsd = r2(usdTotal * 0.03);
@@ -136,9 +144,21 @@ export default function PaymentDialog({
     setPayment({ ...base, ...partial } as any);
   };
 
+  // Divisa electrónica: la caja divisa (tipo = "divisa_electronica") se autoselecciona.
+  // El cajero no elige destino de forma manual: se presume esa única cuenta activa.
+  useEffect(() => {
+    if (!activePaymentMethods.includes("divisa_electronica")) return;
+    const account = divisaElectronicaAccounts[0];
+    if (!account) return;
+    const p = payments.divisa_electronica as DivisaElectronicaPayment;
+    if (!p.bankAccountId) {
+      setPayment({ ...p, bankAccountId: account.id } as DivisaElectronicaPayment);
+    }
+  }, [activePaymentMethods, divisaElectronicaAccounts, payments.divisa_electronica]);
+
   const totalPaid = activePaymentMethods.reduce((sum, method) => {
     const p = payments[method];
-    if (method === "dolares") return sum + (p.amount || 0) * rate;
+    if (method === "dolares" || method === "divisa_electronica") return sum + (p.amount || 0) * rate;
     return sum + (p.amount || 0);
   }, 0);
 
@@ -148,12 +168,12 @@ export default function PaymentDialog({
   // considerando lo ya pagado en otros métodos y el IGTF (3% que el propio USD genera).
   const fillAmountFor = (method: PaymentMethod): number => {
     const safeRate = rate > 0 ? rate : 300;
-    const ownVes = method === "dolares"
-      ? (payments.dolares.amount || 0) * rate
+    const ownVes = method === "dolares" || method === "divisa_electronica"
+      ? (payments[method].amount || 0) * rate
       : (payments[method].amount || 0);
     const othersVes = totalPaid - ownVes;
 
-    if (method === "dolares") {
+    if (method === "dolares" || method === "divisa_electronica") {
       return r2(Math.max(0, r2(totalVes - othersVes)) / (safeRate * 0.97));
     }
     return r2(Math.max(0, r2(totalConIgtfVes - othersVes)));
@@ -524,7 +544,7 @@ export default function PaymentDialog({
                     }`}
                   >
                     <input type="checkbox" checked={activePaymentMethods.includes(method)} onChange={() => togglePaymentMethod(method)} className="sr-only" />
-                    {PAYMENT_ICONS[method]} {method.charAt(0).toUpperCase() + method.slice(1)}
+                    {PAYMENT_ICONS[method]} {methodDisplayLabel(method)}
                   </label>
                 ))}
               </div>
@@ -532,7 +552,7 @@ export default function PaymentDialog({
               <div className="flex flex-col gap-4">
                 {activePaymentMethods.map((method) => (
                   <div key={method} className="bg-slate-50 rounded-2xl p-5 space-y-3">
-                    <p className="text-sm font-black text-slate-600">{method.charAt(0).toUpperCase() + method.slice(1)}</p>
+                    <p className="text-sm font-black text-slate-600">{methodDisplayLabel(method)}</p>
                     {method === "efectivo" && (
                       <PaymentField
                         label="Monto en Bs"
@@ -629,6 +649,29 @@ export default function PaymentDialog({
                     )}
                     {method === "credito" && (
                       <PaymentField label="Monto en Bs" value={String((payments.credito as CreditPayment).amount || "")} onChange={(v) => updatePayment("credito", { amount: r2(parseFloat(v) || 0) })} placeholder="0.00" fullAmount={fillAmountFor("credito")} rate={rate} />
+                    )}
+                    {method === "divisa_electronica" && (
+                      <>
+                        <PaymentField
+                          label="Monto en USD"
+                          value={String((payments.divisa_electronica as DivisaElectronicaPayment).amount || "")}
+                          onChange={(v) => updatePayment("divisa_electronica", { amount: r2(parseFloat(v) || 0) })}
+                          placeholder="0.00"
+                          fullAmount={fillAmountFor("divisa_electronica")}
+                        />
+                        {divisaElectronicaAccounts.length > 0 && (
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 mb-1 block">Caja divisa (destino)</label>
+                            <select
+                              value={(payments.divisa_electronica as DivisaElectronicaPayment).bankAccountId || ""}
+                              onChange={(e) => updatePayment("divisa_electronica", { bankAccountId: e.target.value })}
+                              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                            >
+                              {divisaElectronicaAccounts.map((a) => <option key={a.id} value={a.id}>{a.alias || a.banco}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}

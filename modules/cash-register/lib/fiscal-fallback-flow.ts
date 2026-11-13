@@ -40,6 +40,8 @@ const PAYMENT_LABELS: Record<string, string> = {
   pago_movil: "Pago Movil",
   biopago: "Biopago",
   cashea: "Cashea",
+  divisa_electronica: "Divisa Electrónica",
+  divisaelectronica: "Divisa Electrónica",
   transfer: "Transferencia",
   transferencia: "Transferencia",
   cheque: "Cheque",
@@ -47,8 +49,10 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export function paymentLabel(method?: string, currency?: string): string {
+  const key = (method || "").toLowerCase();
+  if (key === "divisa_electronica" || key === "divisaelectronica") return "Divisa Electrónica";
   if (method === "dollars" || currency === "USD") return "Efectivo USD";
-  return PAYMENT_LABELS[(method || "").toLowerCase()] || "Otro";
+  return PAYMENT_LABELS[key] || "Otro";
 }
 
 interface FallbackOrderShape {
@@ -81,7 +85,7 @@ function buildPayments(order: FallbackOrderShape, rate: number, fallbackTotal: n
   return pays.map((p) => {
     const method = String(p.method ?? "");
     const currency = String(p.currency ?? "");
-    const isUsd = method === "dollars" || currency === "USD";
+    const isUsd = method === "dollars" || method === "divisaElectronica" || currency === "USD";
     const amountBs = toBs2((Number(p.amount) || 0) * (isUsd ? rate : 1));
     return { label: paymentLabel(method, currency), amount: amountBs };
   });

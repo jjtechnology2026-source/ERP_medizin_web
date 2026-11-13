@@ -60,6 +60,9 @@ export function mapPaymentToFiscal(p: any, rate: number): FiscalPayloadPayment {
       return { method: "other" as const, amount: p.amount, reference: p.reference || "" };
     case "cashea":
       return { method: "other" as const, amount: p.amount };
+    case "divisaElectronica":
+      // Divisas electrónicas (USD por transferencia): moneda USD, forma transfer.
+      return { method: "transfer" as const, amount: p.amount, currency: "USD" as const, exchange_rate: rate };
     default:
       return { method: "cash" as const, amount: p.amount, currency: "VES" as const };
   }

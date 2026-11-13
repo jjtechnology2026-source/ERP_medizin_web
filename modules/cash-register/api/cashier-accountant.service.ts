@@ -39,7 +39,7 @@ function parseCashBox(raw: any): CashierCashBox {
   };
 }
 
-function parseSession(raw: any, saldoTeorico?: any): CashierSession {
+function parseSession(raw: any, saldoTeorico?: any, saldoTeoricoUsd?: any): CashierSession {
   return {
     id: raw.id ?? raw._id ?? "",
     cashBoxId: raw.caja_id ?? raw.cashBoxId ?? "",
@@ -53,6 +53,12 @@ function parseSession(raw: any, saldoTeorico?: any): CashierSession {
     theoreticalAmountUsd: Number(
       saldoTeorico?.usd ?? raw.monto_teorico_usd ?? raw.theoreticalAmountUsd ?? 0
     ),
+    saldoTeoricoUsd: saldoTeoricoUsd
+      ? {
+          efectivo_usd: Number(saldoTeoricoUsd.efectivo_usd ?? 0),
+          divisa_electronica_usd: Number(saldoTeoricoUsd.divisa_electronica_usd ?? 0),
+        }
+      : undefined,
     closingPhysicalAmountVes: Number(raw.monto_cierre_fisico_ves ?? raw.closingPhysicalAmountVes ?? 0),
     closingPhysicalAmountUsd: Number(raw.monto_cierre_fisico_usd ?? raw.closingPhysicalAmountUsd ?? 0),
     differenceVes: Number(raw.diferencia_ves ?? raw.differenceVes ?? 0),
@@ -96,6 +102,9 @@ function parseInvoice(raw: any): CashierInvoice {
 function parsePaymentMethod(metodoPago: any): string {
   if (typeof metodoPago === "string") return metodoPago;
   if (typeof metodoPago === "object" && metodoPago !== null) {
+    // PaymentMethod interno está etiquetado con tag `method` (camelCase):
+    // { method: "divisaElectronica", ... }. Devolver su valor, no el nombre de la clave.
+    if (typeof metodoPago.method === "string" && metodoPago.method) return metodoPago.method;
     return Object.keys(metodoPago)[0] || "";
   }
   return "";
@@ -234,8 +243,9 @@ export const cashierAccountantService = {
 
     const sessionRaw = payload.sesion;
     const saldoTeorico = payload.saldo_teorico ?? {};
+    const saldoTeoricoUsd = payload.saldo_teorico_usd ?? null;
 
-    return parseSession(sessionRaw, saldoTeorico);
+    return parseSession(sessionRaw, saldoTeorico, saldoTeoricoUsd);
   },
 
 async fetchCurrentRate(): Promise<number> {

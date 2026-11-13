@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment, CasheaPayment, PendingQuote } from "@/modules/cash-register/types/cashier.types";
+import type { Payment, PaymentMethod, CashPayment, DollarPayment, CardPayment, MobilePayment, BiopagoPayment, CasheaPayment, DivisaElectronicaPayment, PendingQuote } from "@/modules/cash-register/types/cashier.types";
 import type { Medication, Order } from "@/modules/orders/types/orders";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { toBs2 } from "@/modules/cash-register/lib/money";
@@ -76,6 +76,7 @@ function createDefaultPayments(): Record<PaymentMethod, Payment> {
     biopago: { type: "biopago", amount: 0, reference: "", bank: "" },
     cashea: { type: "cashea", amount: 0 },
     credito: { type: "credito", amount: 0 },
+    divisa_electronica: { type: "divisa_electronica", amount: 0 },
   };
 }
 
@@ -243,6 +244,9 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         newPayments[method] = { ...current, amount: share * effectiveRate } as BiopagoPayment;
       } else if (method === "cashea") {
         newPayments[method] = { ...current, amount: share * effectiveRate } as CasheaPayment;
+      } else if (method === "divisa_electronica") {
+        // USD electrónico: se distribuye en divisas, igual que `dolares`.
+        newPayments[method] = { ...current, amount: share } as DivisaElectronicaPayment;
       }
     });
     set({ payments: newPayments });
@@ -308,6 +312,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
         case "biopago":  return { method: "biopago", amount: p.amount, reference: p.reference || "", bank: p.bank || "" };
         case "cashea":   return { method: "cashea", amount: p.amount };
         case "credito":  return { method: "credit", amount: p.amount };
+        case "divisa_electronica": return { method: "divisaElectronica", amount: p.amount, bank_account_id: p.bankAccountId ?? undefined };
         default:         return { method: "cash", currency: "VES", amount: p.amount };
       }
     });
@@ -318,7 +323,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
 
     // IGTF: 3% sobre pagos en divisas, doble redondeo (igual que backend build_formas_pago_and_igtf)
     const usdPayment = invoicePayments.filter(
-      (p: any) => p.type === "dolares" || (p.type === "efectivo" && p.currency === "USD")
+      (p: any) => p.type === "dolares" || p.type === "divisa_electronica" || (p.type === "efectivo" && p.currency === "USD")
     );
     const usdTotal = usdPayment.reduce((s: number, p: any) => s + p.amount, 0);
     const igtfUsd = r2(usdTotal * 0.03);
@@ -326,7 +331,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
     const totalConIgtfVes = r2(subtotal * rate + igtfVes);
 
     const totalPaidIn = invoicePayments.reduce((s, p) => {
-      if (p.type === "dolares") return s + p.amount * rate;
+      if (p.type === "dolares" || p.type === "divisa_electronica") return s + p.amount * rate;
       return s + p.amount;
     }, 0);
 

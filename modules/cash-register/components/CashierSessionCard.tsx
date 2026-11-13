@@ -240,9 +240,20 @@ export default function CashierSessionCard() {
             </div>
             <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
               <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Saldo teorico USD</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {activeSession.theoreticalAmountUsd.toFixed(2)}
-              </span>
+              {activeSession.saldoTeoricoUsd ? (
+                <div className="mt-0.5 space-y-0.5">
+                  <div className="text-[10px] font-black text-slate-700 font-mono leading-tight">
+                    Efc $ {activeSession.saldoTeoricoUsd.efectivo_usd.toFixed(2)}
+                  </div>
+                  <div className="text-[10px] font-black text-slate-500 font-mono leading-tight">
+                    Div $ {activeSession.saldoTeoricoUsd.divisa_electronica_usd.toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
+                  {activeSession.theoreticalAmountUsd.toFixed(2)}
+                </span>
+              )}
             </div>
             <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
               <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Facturas del turno</span>

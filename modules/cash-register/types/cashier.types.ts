@@ -1,6 +1,6 @@
 export type CashierApprovalStatus = "pending" | "approved" | "rejected" | "unknown";
 export type CashierTransactionType = "sale" | "expense" | "refund" | "unknown";
-export type PaymentMethod = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea" | "credito";
+export type PaymentMethod = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea" | "credito" | "divisa_electronica";
 
 export interface CashierCashBox {
   id: string;
@@ -26,6 +26,8 @@ export interface CashierSession {
   closingPhysicalAmountUsd: number;
   differenceVes: number;
   differenceUsd: number;
+  /** Saldo teórico USD desglosado por origen (efectivo físico vs divisa electrónica). */
+  saldoTeoricoUsd?: { efectivo_usd: number; divisa_electronica_usd: number };
   openedByUserId: string;
   openedAt: string | null;
   status: string;
@@ -170,6 +172,7 @@ export interface CashierClosePhysicalCount {
   efectivo_usd: number;
   tarjeta_usd: number;
   otros_usd: number;
+  divisa_electronica_usd: number;
 }
 
 export interface CashPayment {
@@ -220,7 +223,14 @@ export interface CreditPayment {
   amount: number;
 }
 
-export type Payment = CashPayment | DollarPayment | CardPayment | MobilePayment | BiopagoPayment | CasheaPayment | CreditPayment;
+export interface DivisaElectronicaPayment {
+  type: "divisa_electronica";
+  amount: number;
+  /** Cuenta bancaria de la divisa (caja electrónica USD) destinataria del pago. */
+  bankAccountId?: string;
+}
+
+export type Payment = CashPayment | DollarPayment | CardPayment | MobilePayment | BiopagoPayment | CasheaPayment | CreditPayment | DivisaElectronicaPayment;
 
 export interface CashierWorkflowState {
   isLoading: boolean;
@@ -255,7 +265,7 @@ export interface CashierBankAccount {
   banco: string;
   numero_cuenta: string;
   alias?: string;
-  tipo: "banco" | "efectivo" | "efectivo_usd";
+  tipo: "banco" | "efectivo" | "efectivo_usd" | "divisa_electronica";
   activa: boolean;
 }
 
