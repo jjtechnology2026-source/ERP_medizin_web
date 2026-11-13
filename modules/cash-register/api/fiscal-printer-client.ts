@@ -64,7 +64,7 @@ export interface FiscalInvoiceItem {
 }
 
 export interface FiscalPayment {
-  method: "cash" | "card" | "transfer" | "mobile_payment" | "other";
+  method: "cash" | "card" | "credit_card" | "transfer" | "mobile_payment" | "other";
   amount: number | string;
   currency?: "VES" | "USD";
   exchange_rate?: number | string;

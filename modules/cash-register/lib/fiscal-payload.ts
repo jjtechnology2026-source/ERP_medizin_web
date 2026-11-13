@@ -12,7 +12,7 @@ export interface FiscalPayloadItem {
 }
 
 export interface FiscalPayloadPayment {
-  method: "cash" | "card" | "transfer" | "mobile_payment" | "other";
+  method: "cash" | "card" | "credit_card" | "transfer" | "mobile_payment" | "other";
   amount: number | string;
   currency?: "VES" | "USD";
   exchange_rate?: number | string;
@@ -53,7 +53,11 @@ export function mapPaymentToFiscal(p: any, rate: number): FiscalPayloadPayment {
     case "dollars":
       return { method: "cash" as const, amount: p.amount, currency: "USD" as const, exchange_rate: rate };
     case "card":
-      return { method: "card" as const, amount: p.amount };
+      // La máquina fiscal separa débito (punto de venta, 13) de crédito (04).
+      return {
+        method: (String(p.type ?? "").toLowerCase().includes("cred") ? "credit_card" : "card") as "card" | "credit_card",
+        amount: p.amount,
+      };
     case "mobile":
       return { method: "mobile_payment" as const, amount: p.amount, reference: p.reference || "" };
     case "biopago":
