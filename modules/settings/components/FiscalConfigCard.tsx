@@ -4,8 +4,9 @@ import fiscalPrinterClient, { type FiscalSerialPort, setFiscalBrand } from "@/mo
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
+import type { ZReportMode } from "@/modules/cash-register/components/ZReportDialog";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
-import { pairPrinter, isWebUsbSupported, prepairPrinter, printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { pairPrinter, isWebUsbSupported, prepairPrinter, printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
@@ -69,10 +70,10 @@ export default function FiscalConfigCard() {
   const [availablePorts, setAvailablePorts] = useState<FiscalSerialPort[]>([]);
   const [portStatus, setPortStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [reportXStatus, setReportXStatus] = useState<"idle" | "printing" | "done" | "error">("idle");
-  const [pos58Status, setPos58Status] = useState<"idle" | "pairing" | "done" | "error">("idle");
+  const [pos80Status, setPos80Status] = useState<"idle" | "pairing" | "done" | "error">("idle");
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
   const [serviceVersion, setServiceVersion] = useState<string | null>(null);
-  const [showZReport, setShowZReport] = useState(false);
+  const [showZReport, setShowZReport] = useState<ZReportMode | null>(null);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
@@ -369,17 +370,17 @@ export default function FiscalConfigCard() {
     setTimeout(() => setReportXStatus("idle"), 4000);
   };
 
-  const handlePairPos58 = async () => {
-    setPos58Status("pairing");
+  const handlePairPos80 = async () => {
+    setPos80Status("pairing");
     const res = await pairPrinter();
     if (res.printed) {
-      setPos58Status("done");
+      setPos80Status("done");
       chatToast.show("Impresora POS80 emparejada. Los comprobantes saldrán por acá.");
     } else {
-      setPos58Status("error");
+      setPos80Status("error");
       chatToast.show(`No se pudo emparejar la POS80: ${res.error || "error"}`);
     }
-    setTimeout(() => setPos58Status("idle"), 4000);
+    setTimeout(() => setPos80Status("idle"), 4000);
   };
 
   return (
@@ -533,22 +534,30 @@ export default function FiscalConfigCard() {
                       : "Generar reporte X"}
               </button>
               <button
-                onClick={async () => { await prepairPrinter(); setShowZReport(true); }}
+                onClick={() => setShowZReport("print")}
+                title="Solo imprime el reporte Z en la máquina fiscal. No lo registra en el libro de ventas."
                 className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
               >
                 Generar reporte Z
               </button>
               <button
-                onClick={handlePairPos58}
-                disabled={!isWebUsbSupported() || pos58Status === "pairing"}
+                onClick={() => setShowZReport("register")}
+                title="Carga las ventas del día en el libro de ventas. No imprime nada."
+                className="px-10 py-5 bg-[#5b21b6] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+              >
+                Registrar en libro de ventas
+              </button>
+              <button
+                onClick={handlePairPos80}
+                disabled={!isWebUsbSupported() || pos80Status === "pairing"}
                 title={isWebUsbSupported() ? "" : "Requiere Chrome/Edge"}
                 className="px-10 py-5 bg-[#0369a1] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
               >
-                {pos58Status === "pairing"
+                {pos80Status === "pairing"
                   ? "Emparejando POS80..."
-                  : pos58Status === "done"
+                  : pos80Status === "done"
                     ? "POS80 emparejada"
-                    : pos58Status === "error"
+                    : pos80Status === "error"
                       ? "Error al emparejar"
                       : "Emparejar POS80"}
               </button>
@@ -615,7 +624,7 @@ export default function FiscalConfigCard() {
         </div>
       </div>
     </div>
-      {showZReport && <ZReportDialog onClose={() => setShowZReport(false)} />}
+      {showZReport && <ZReportDialog mode={showZReport} onClose={() => setShowZReport(null)} />}
       {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
       {showDiagnostic && <FiscalDiagnosticDialog onClose={() => setShowDiagnostic(false)} />}
     </>

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect, useMemo, FormEvent } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, FormEvent } from "react";
 import {
   HiOutlineXCircle,
   HiOutlineDocumentReport,
@@ -13,18 +13,41 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import {
-  isFiscalFailure,
+  readLastZPrint,
   recordFallbackZ,
-  type FallbackZReport,
+  recordLastZPrint,
+  type ZPrintedIdentity,
 } from "@/modules/cash-register/lib/fiscal-fallback";
-import { runZReportFallback, persistFallbackZ, paymentLabel } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import {
+  buildZRegisterPayload,
+  paymentLabel,
+  printZReportFallback,
+  zReportErrorMessage,
+} from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { buildZSummary } from "@/modules/cash-register/lib/z-report";
-import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
+
+/**
+ * Las dos operaciones del cierre, nunca encadenadas:
+ * - "print": solo imprime el Z (maquina fiscal, o POS80 si no responde).
+ * - "register": solo carga las ventas del dia en el libro de ventas.
+ */
+export type ZReportMode = "print" | "register";
 
 interface ZReportDialogProps {
   onClose: () => void;
+  mode: ZReportMode;
 }
+
+type ZStep =
+  | "printing"
+  | "printed"
+  | "print_error"
+  | "registering"
+  | "result"
+  | "error"
+  | "form";
 
 function todayUtcDate(): string {
   return new Date().toISOString().split("T")[0];
@@ -35,7 +58,7 @@ function formatMoney(value: number | null | undefined): string {
   return `Bs ${value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function ZReportDialog({ onClose }: ZReportDialogProps) {
+export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
   const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
@@ -93,19 +116,22 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     return buildZSummary({ invoicedTotalVes, salesByMethod: paymentBreakdown, deviationsByMethod });
   }, [sessionInvoices, paymentBreakdown, deviationsByMethod]);
 
-  const initialStep = usesDigitalBilling ? "loading" : "fiscal_printing";
-  const [step, setStep] = useState<"fiscal_printing" | "form" | "loading" | "result" | "error">(initialStep);
+  const [step, setStep] = useState<ZStep>(mode === "print" ? "printing" : "registering");
+  const [printedVia, setPrintedVia] = useState<ZPrintedIdentity["via"] | null>(null);
+  // Identidad del ultimo Z impreso: lo que la maquina devolvio (o lo que salio
+  // en la POS80). Es lo que despues reusa el registro, para que el Z del libro
+  // coincida con el ticket fisico.
+  const [lastPrint, setLastPrint] = useState<ZPrintedIdentity | null>(null);
   const [report, setReport] = useState<CreatedZReport | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
-  const [fiscalFallback, setFiscalFallback] = useState(false);
-  const [fallbackZ, setFallbackZ] = useState<FallbackZReport | null>(null);
   // El Z lee del store de la sesion: hay que cargarla aca mismo, porque este
   // dialogo tambien se abre desde Configuracion (sin pasar por la caja).
   const loadSession = useCashierWorkflowStore((s) => s.load);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const startedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,155 +147,146 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
     };
   }, [loadSession, pharmacyId]);
 
-  const runFallback = useCallback(
-    async (initialResult: { success: boolean; report?: CreatedZReport | null }) => {
-      const outcome = await runZReportFallback({
-        header,
-        pharmacyId,
-        sessionInvoices,
-        paymentBreakdown: zSummary.payments,
-        deviations: deviationsByMethod,
-        netTotal: zSummary.netTotal,
-        reconciliation: zSummary.reconciliation,
-        rate,
-        initialResult,
-        createZReport: fiscalZReportService.createZReport,
-        findPersistedZ: (identity) =>
-          fiscalZReportService.findZReport(identity.pharmacyId, {
-            fiscalDate: identity.fiscalDate,
-            zNumber: identity.zNumber,
-          }),
-        print: printNoFiscalTicket,
-        record: recordFallbackZ,
-      });
-      setFallbackZ(outcome.fallback);
-      setFiscalFallback(true);
-      if (outcome.report) setReport(outcome.report);
+  // --- Operacion 1: imprimir el Z (no registra nada) ---
 
-      // El ticket ya salio por la POS80: el cierre existe en papel. Si no quedo
-      // registrado hay que decirlo en la cara, porque esa venta no va a
-      // aparecer en el libro de ventas (incidente DETODOFARMACY).
-      if (!outcome.persisted) {
-        setErrorMessage(
-          `El reporte Z #${outcome.fallback.z_number} se imprimió pero NO quedó registrado en el sistema. La venta del día no aparecerá en el libro hasta que se registre.`,
+  const rememberPrint = useCallback((identity: ZPrintedIdentity) => {
+    recordLastZPrint(identity);
+    setLastPrint(identity);
+    setPrintedVia(identity.via);
+  }, []);
+
+  const printOnFiscalMachine = useCallback(async () => {
+    setPrintedVia("fiscal");
+    setPrintError(null);
+    setStep("printing");
+    try {
+      const res = await fiscalPrinterClient.reportZ();
+      if (!res?.printed) {
+        setPrintError(
+          res?.print_error?.trim() || "La máquina fiscal no confirmó la impresión del reporte Z.",
         );
-        setErrorDetails(outcome.persistError ?? null);
-        setStep("error");
+        setStep("print_error");
         return;
       }
-
-      setErrorMessage("");
-      setErrorDetails(null);
-      setStep("result");
-    },
-    [header, pharmacyId, sessionInvoices, zSummary, deviationsByMethod, rate],
-  );
-
-  // Reintento de REGISTRO: no vuelve a imprimir el ticket (ya esta impreso) y
-  // no recalcula montos: reenvia el mismo Z sintetizado del cierre.
-  const retryPersist = useCallback(async () => {
-    if (!fallbackZ) return;
-    setStep("loading");
-    const result = await persistFallbackZ({
-      pharmacyId,
-      fallback: fallbackZ,
-      createZReport: fiscalZReportService.createZReport,
-      findPersistedZ: (identity) =>
-        fiscalZReportService.findZReport(identity.pharmacyId, {
-          fiscalDate: identity.fiscalDate,
-          zNumber: identity.zNumber,
-        }),
-    });
-
-    if (result.persisted) {
-      recordFallbackZ({
+      // La maquina puede no devolver Nº Z ni serial: quedan en null y el
+      // registro los deriva despues desde las facturas del dia.
+      rememberPrint({
         pharmacyId,
-        fiscalDate: result.report?.fiscalDate || fallbackZ.fiscal_date,
-        zNumber: result.report?.zNumber || fallbackZ.z_number,
+        zNumber: res.z_number ?? null,
+        fiscalSerial: res.fiscal_serial ?? null,
+        via: "fiscal",
+        printedAt: new Date().toISOString(),
       });
-      if (result.report) setReport(result.report);
-      setErrorMessage("");
-      setErrorDetails(null);
-      setStep("result");
-      return;
+      setStep("printed");
+    } catch (e) {
+      setPrintError(
+        e instanceof Error && e.message
+          ? e.message
+          : "No se pudo contactar la máquina fiscal.",
+      );
+      setStep("print_error");
     }
+  }, [pharmacyId, rememberPrint]);
 
-    setErrorMessage(`El reporte Z #${fallbackZ.z_number} sigue sin registrarse.`);
-    setErrorDetails(result.persistError ?? null);
-    setStep("error");
-  }, [fallbackZ, pharmacyId]);
-
-  // Registra el Z con los datos que devuelve la máquina fiscal (si vienen): el Nº Z
-  // y el serial reales del dispositivo, para que el reporte del ERP coincida con el
-  // ticket físico auditado. Lo que la máquina no reporta (p. ej. el rango de
-  // documentos) lo deriva el backend desde las facturas reales del día.
-  const registrarAutomatico = useCallback(async (zNumber?: number | null, fiscalSerial?: string | null) => {
-    const payload: Record<string, unknown> = {};
-    if (zNumber && zNumber > 0) payload.z_number = zNumber;
-    if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
-    const result = await fiscalZReportService.createZReport(pharmacyId, payload);
-
-    const fiscalRef =
-      result.report?.fiscalSerial ||
-      (result.report?.zNumber ? String(result.report.zNumber) : null);
-    const fiscalFailure = isFiscalFailure({
-      success: result.success,
-      numeroControl: fiscalRef,
-      error: result.details,
+  // Fallback "sin maquina fiscal": el mismo Z, impreso en la POS80. Sigue sin
+  // registrar: imprimir y cargar el libro son botones distintos.
+  const printOnPos80 = useCallback(async () => {
+    setPrintedVia("pos80");
+    setPrintError(null);
+    setStep("printing");
+    await prepairPrinter();
+    const outcome = await printZReportFallback({
+      header,
+      pharmacyId,
+      sessionInvoices,
+      paymentBreakdown: zSummary.payments,
+      deviations: deviationsByMethod,
+      netTotal: zSummary.netTotal,
+      reconciliation: zSummary.reconciliation,
+      rate,
+      print: printNoFiscalTicket,
     });
-
-    // Fallback "No Fiscal": la registracion Z fallo (canal digital o local). Se
-    // imprime el comprobante en la POS80 y se registra con identificadores sinteticos.
-    if (fiscalFailure) {
-      await runFallback(result);
+    if (!outcome.printed) {
+      setPrintError(outcome.error || "No se pudo imprimir el reporte Z en la POS80.");
+      setStep("print_error");
       return;
     }
+    rememberPrint({
+      pharmacyId,
+      zNumber: outcome.fallback.z_number,
+      fiscalSerial: outcome.fallback.fiscal_serial,
+      via: "pos80",
+      printedAt: new Date().toISOString(),
+    });
+    setStep("printed");
+  }, [
+    header,
+    pharmacyId,
+    sessionInvoices,
+    zSummary,
+    deviationsByMethod,
+    rate,
+    rememberPrint,
+  ]);
+
+  // --- Operacion 2: registrar el Z en el libro (no imprime nada) ---
+
+  const register = useCallback(async () => {
+    if (!pharmacyId) {
+      setErrorMessage("No se pudo resolver la farmacia.");
+      setErrorDetails(null);
+      setStep("error");
+      return;
+    }
+    // Identidad capturada por la ultima impresion de esta farmacia. Sin print
+    // previo el payload va vacio y el backend deriva Nº Z, serial y rango.
+    const captured = readLastZPrint(pharmacyId);
+    setLastPrint(captured);
+    setErrorMessage("");
+    setErrorDetails(null);
+    setStep("registering");
+
+    const result = await fiscalZReportService.createZReport(
+      pharmacyId,
+      buildZRegisterPayload(captured),
+    );
 
     if (!result.success || !result.report) {
-      setStep("error");
-      let msg = result.message || "No se pudo registrar el reporte Z.";
-      if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
-      else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
-      else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
-      else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
-      else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
-      setErrorMessage(msg);
+      setErrorMessage(zReportErrorMessage(result));
       setErrorDetails(result.details);
+      setStep("error");
       return;
+    }
+
+    // El historial marca con "POS80" el Z cuyo papel salio por la POS80.
+    if (captured?.via === "pos80") {
+      recordFallbackZ({
+        pharmacyId,
+        fiscalDate: result.report.fiscalDate,
+        zNumber: result.report.zNumber,
+      });
     }
 
     setReport(result.report);
     setStep("result");
-  }, [pharmacyId, runFallback]);
+  }, [pharmacyId]);
 
+  // Arranque unico: imprimir o registrar, nunca las dos cosas.
   useEffect(() => {
-    if (!dataLoaded) return;
-    if (step === "fiscal_printing") {
-      (async () => {
-        setPrintError(null);
-        try {
-          const res = await fiscalPrinterClient.reportZ();
-          if (!res.printed) {
-            // La maquina fiscal no imprimio: fallback "No Fiscal" en la POS80.
-            await runFallback({ success: false, report: null });
-            return;
-          }
-          setStep("loading");
-          await registrarAutomatico(res.z_number, res.fiscal_serial);
-        } catch {
-          // Error al imprimir en la maquina fiscal: fallback "No Fiscal" en la POS80.
-          await runFallback({ success: false, report: null });
-        }
-      })();
-      return;
-    }
-
-    if (step === "loading" && usesDigitalBilling) {
-      (async () => {
-        await registrarAutomatico();
-      })();
-    }
-  }, [step, usesDigitalBilling, pharmacyId, registrarAutomatico, runFallback, dataLoaded]);
+    if (!dataLoaded || startedRef.current) return;
+    startedRef.current = true;
+    const start = async () => {
+      // Ceder el turno: el arranque no puede ser un setState sincrono del efecto.
+      await Promise.resolve();
+      if (mode === "print") {
+        // Con facturacion digital no hay maquina fiscal: el papel sale por la POS80.
+        await (usesDigitalBilling ? printOnPos80() : printOnFiscalMachine());
+        return;
+      }
+      await register();
+    };
+    void start();
+  }, [dataLoaded, mode, usesDigitalBilling, printOnPos80, printOnFiscalMachine, register]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");
@@ -304,7 +321,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
         return;
       }
 
-      setStep("loading");
+      setStep("registering");
 
       const payload = {
         z_number: Number(zNumber),
@@ -320,15 +337,9 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
       const result = await fiscalZReportService.createZReport(pharmacyId, payload);
 
       if (!result.success || !result.report) {
-        setStep("error");
-        let msg = result.message || "No se pudo registrar el reporte Z.";
-        if (result.statusCode === 400) msg = `Validación (400): ${msg}`;
-        else if (result.statusCode === 401) msg = `No autorizado (401): ${msg}`;
-        else if (result.statusCode === 403) msg = `Acceso denegado (403): ${msg}`;
-        else if (result.statusCode === 404) msg = `Farmacia no encontrada (404): ${msg}`;
-        else if (result.statusCode === 409) msg = `Conflicto (409): ${msg}`;
-        setErrorMessage(msg);
+        setErrorMessage(zReportErrorMessage(result));
         setErrorDetails(result.details);
+        setStep("error");
         return;
       }
 
@@ -352,9 +363,13 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
               <HiOutlineDocumentReport size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">Generar reporte Z</h2>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                {mode === "print" ? "Imprimir reporte Z" : "Registrar en libro de ventas"}
+              </h2>
               <p className="text-xs font-bold text-slate-400">
-                Datos del Z físico / impresora fiscal
+                {mode === "print"
+                  ? "Solo imprime el Z. No registra nada en el sistema."
+                  : "Solo registra el Z. No imprime nada."}
               </p>
             </div>
           </div>
@@ -367,14 +382,21 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
           </button>
         </div>
 
-        {step === "fiscal_printing" && !printError && (
+        {step === "printing" && (
           <div className="p-10 flex flex-col items-center gap-4 text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
-            <p className="text-sm font-bold text-slate-600">Imprimiendo reporte Z en la máquina fiscal...</p>
+            <p className="text-sm font-bold text-slate-600">
+              {printedVia === "pos80"
+                ? "Imprimiendo reporte Z en la POS80..."
+                : "Imprimiendo reporte Z en la máquina fiscal..."}
+            </p>
+            <p className="text-[11px] font-bold text-slate-400 max-w-sm">
+              No se registra nada: el libro de ventas se carga con el botón «Registrar en libro de ventas».
+            </p>
           </div>
         )}
 
-        {step === "fiscal_printing" && printError && (
+        {step === "print_error" && (
           <div className="p-8 flex flex-col items-center gap-6 text-center">
             <div className="p-5 bg-red-50 rounded-full text-red-500">
               <HiOutlineXCircle size={48} />
@@ -383,18 +405,74 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
               <p className="text-lg font-bold text-slate-800 mb-2">Error de impresión</p>
               <p className="text-sm text-slate-500 max-w-md">{printError}</p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
               <button
                 type="button"
-                onClick={async () => { await prepairPrinter(); setStep("fiscal_printing"); }}
+                onClick={() => void printOnPos80()}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
-                Reintentar
+                Imprimir en la POS80
               </button>
+              {!usesDigitalBilling && (
+                <button
+                  type="button"
+                  onClick={() => void printOnFiscalMachine()}
+                  className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+                >
+                  Reintentar en la máquina fiscal
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
                 className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+            <p className="text-[11px] font-bold text-slate-400 max-w-md">
+              Imprimir en la POS80 tampoco registra el Z en el libro de ventas.
+            </p>
+          </div>
+        )}
+
+        {step === "printed" && (
+          <div className="p-6 space-y-5">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+              <p className="text-sm font-black text-emerald-700">Reporte Z impreso</p>
+              <p className="text-xs font-bold text-emerald-600/80 mt-1">
+                {lastPrint?.zNumber ? `Z #${lastPrint.zNumber}` : "Z # no informado"} ·{" "}
+                {lastPrint?.fiscalSerial || "serial no informado"}
+              </p>
+              <p className="text-[11px] font-bold text-emerald-600/70 mt-1">
+                {printedVia === "pos80"
+                  ? "Salió por la POS80 porque la máquina fiscal no respondió."
+                  : "Salió por la máquina fiscal."}
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+              <p className="text-xs font-black text-amber-600 uppercase tracking-wider">
+                Todavía no está en el libro de ventas
+              </p>
+              <p className="text-[11px] font-medium text-amber-800/80 leading-relaxed mt-1">
+                El reporte Z se imprimió pero NO quedó registrado en el sistema. La venta del día
+                no aparecerá en el libro hasta que uses «Registrar en libro de ventas» en
+                Configuración fiscal.
+              </p>
+              {!lastPrint?.zNumber && !lastPrint?.fiscalSerial && (
+                <p className="text-[11px] font-medium text-amber-800/80 leading-relaxed mt-2">
+                  La impresión no devolvió el Nº Z ni el serial: el registro los derivará de las
+                  facturas del día.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
               >
                 Cerrar
               </button>
@@ -532,10 +610,15 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
           </form>
         )}
 
-        {step === "loading" && (
+        {step === "registering" && (
           <div className="p-10 flex flex-col items-center gap-4 text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
-            <p className="text-sm font-bold text-slate-600">Registrando reporte Z...</p>
+            <p className="text-sm font-bold text-slate-600">Registrando reporte Z en el libro de ventas...</p>
+            <p className="text-[11px] font-bold text-slate-400 max-w-sm">
+              {lastPrint
+                ? `Con los datos de la última impresión: Z #${lastPrint.zNumber ?? "—"} · ${lastPrint.fiscalSerial ?? "—"}`
+                : "Sin impresión previa en este navegador: el backend deriva el Nº Z y el serial de las facturas del día."}
+            </p>
           </div>
         )}
 
@@ -557,22 +640,22 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
               </div>
             )}
             <div className="flex flex-wrap justify-center gap-3">
-              {fallbackZ && (
-                <button
-                  type="button"
-                  onClick={retryPersist}
-                  className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all"
-                >
-                  Registrar el Z ahora
-                </button>
-              )}
               <button
                 type="button"
-                onClick={async () => { await prepairPrinter(); setStep(usesDigitalBilling ? "loading" : "form"); }}
+                onClick={() => void register()}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
                 Reintentar
               </button>
+              {mode === "register" && (
+                <button
+                  type="button"
+                  onClick={() => setStep("form")}
+                  className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
+                >
+                  Registrar con datos del ticket
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -584,46 +667,7 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
           </div>
         )}
 
-        {step === "result" && fiscalFallback && (
-          <div className="p-6 space-y-5">
-            {!zSummary.ok && (
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
-                <p className="text-xs font-black text-red-600 uppercase tracking-wider">
-                  Diferencia en el cuadre
-                </p>
-                <p className="text-sm font-bold text-red-700 mt-1">
-                  Cobrado{" "}
-                  {formatMoney(zSummary.payments.reduce((sum, p) => sum + p.amount, 0))} vs facturado{" "}
-                  {formatMoney(zSummary.grossTotal)} · Diferencia {formatMoney(zSummary.salesDiff)}
-                </p>
-                <p className="text-[11px] text-red-500/80 mt-1">
-                  Se imprimió en el Z como “Cuadre ventas”.
-                </p>
-              </div>
-            )}
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
-              <p className="text-xs font-bold text-amber-600/80 mt-1">
-                Z #{report?.zNumber ?? fallbackZ?.z_number ?? "—"} ·{" "}
-                {report?.fiscalDate || fallbackZ?.fiscal_date || "—"}
-              </p>
-            </div>
-            <p className="text-sm font-bold text-slate-500 text-center">
-              El reporte Z se generó y salió por la POS80, pero la facturación
-              digital falló.
-            </p>
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all shadow-lg"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === "result" && !fiscalFallback && report && (
+        {step === "result" && report && (
           <div className="p-6 space-y-5">
             {!zSummary.ok && (
               <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
@@ -760,6 +804,10 @@ export default function ZReportDialog({ onClose }: ZReportDialogProps) {
                 <span className="text-slate-800">{report.taxWithholdingsCount}</span>
               </p>
             )}
+
+            <p className="text-[11px] font-bold text-slate-400 text-center">
+              No se imprimió nada en esta operación.
+            </p>
 
             <div className="flex justify-end pt-1">
               <button

@@ -103,6 +103,7 @@ export interface Order {
   gender: string;
   saleStatus: "Pending" | "Paid" | "Completed" | "Cancelled" | "PipelineFailed";
   numeroControlInterno?: string | null;
+  serieFiscal?: string | null;
   pipelineFailure?: PipelineFailure | null;
   isControlled: boolean;
   saleType: string;

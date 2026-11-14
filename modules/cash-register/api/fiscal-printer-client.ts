@@ -100,6 +100,7 @@ export interface FiscalInvoiceResponse {
   planned_commands: string[];
   message?: string | null;
   fiscal_number?: string | null;
+  fiscal_serial?: string | null;
 }
 
 export interface FiscalReportZResponse {

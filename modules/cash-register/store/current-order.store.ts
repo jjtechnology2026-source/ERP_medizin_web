@@ -424,6 +424,7 @@ export const useCurrentOrderStore = create<CurrentOrderStore>()((set, get) => ({
       facturacion: null,
       notaCredito: null,
       numeroControlInterno: null,
+      serieFiscal: null,
       gender: order.gender || "Male",
       saleStatus,
       isControlled: order.isControlled || false,

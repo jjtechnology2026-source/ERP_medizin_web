@@ -9,6 +9,7 @@ import { toBs2, fiscalItemsTotal, fiscalUnitPriceBs } from "./money.ts";
 export const FALLBACK_NOTE_ERROR = "Facturacion digital fallida";
 
 const FALLBACK_Z_STORAGE_KEY = "no-fiscal-z-reports";
+const LAST_Z_PRINT_STORAGE_KEY = "last-z-print";
 
 export interface FiscalFailure {
   success?: boolean | null;
@@ -266,4 +267,70 @@ export function isFallbackZ(
   storage?: Pick<Storage, "getItem" | "setItem">,
 ): boolean {
   return readRegistry(storage).includes(zMarkerKey(marker));
+}
+
+/**
+ * Identidad del ULTIMO Z impreso para una farmacia.
+ *
+ * Imprimir el Z y registrarlo en el libro de ventas son dos operaciones
+ * separadas: la impresion guarda aca lo que devolvio la maquina fiscal (Nº Z y
+ * serial) y el boton "Registrar en libro de ventas" la reusa para que el Z
+ * registrado coincida con el ticket fisico. Si la maquina no devolvio nada, o
+ * el papel salio por la POS80, los campos quedan en null y el backend deriva la
+ * identidad desde las facturas del dia.
+ */
+export interface ZPrintedIdentity {
+  pharmacyId: string;
+  zNumber: number | null;
+  fiscalSerial: string | null;
+  /** Que dispositivo saco el papel: la maquina fiscal o la POS80. */
+  via: "fiscal" | "pos80";
+  /** ISO de cuando se imprimio (para mostrar/auditar el ultimo print). */
+  printedAt: string;
+}
+
+function readLastPrints(
+  storage?: Pick<Storage, "getItem" | "setItem">,
+): ZPrintedIdentity[] {
+  const s =
+    storage ??
+    (typeof localStorage !== "undefined" ? localStorage : undefined);
+  if (!s) return [];
+  try {
+    const raw = s.getItem(LAST_Z_PRINT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry): entry is ZPrintedIdentity =>
+        !!entry && typeof entry === "object" && typeof entry.pharmacyId === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+// Mismo limite conocido que el registro "no fiscal": una entrada por farmacia
+// en el localStorage de ESTE navegador, asi que un Z impreso en otra caja no
+// aparece aca.
+export function recordLastZPrint(
+  identity: ZPrintedIdentity,
+  storage?: Pick<Storage, "getItem" | "setItem">,
+): void {
+  const s =
+    storage ??
+    (typeof localStorage !== "undefined" ? localStorage : undefined);
+  if (!s) return;
+  const list = readLastPrints(s).filter(
+    (entry) => entry.pharmacyId !== identity.pharmacyId,
+  );
+  list.push(identity);
+  s.setItem(LAST_Z_PRINT_STORAGE_KEY, JSON.stringify(list));
+}
+
+export function readLastZPrint(
+  pharmacyId: string,
+  storage?: Pick<Storage, "getItem" | "setItem">,
+): ZPrintedIdentity | null {
+  if (!pharmacyId) return null;
+  return readLastPrints(storage).find((entry) => entry.pharmacyId === pharmacyId) ?? null;
 }

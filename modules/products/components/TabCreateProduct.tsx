@@ -4,7 +4,7 @@ import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
+import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, profitFromPrice, minimumSellingPrice, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
 import {
   DEFAULT_PRODUCT_TYPE,
@@ -181,6 +181,10 @@ export default function CreateProductPage({ setView }: any) {
 
   // Estado para un arreglo de hasta 10 imágenes
   const [images, setImages] = useState<LocalImage[]>([]);
+  // Precio final directo: el operador lo tipea y la ganancia se deriva de él.
+  // La ganancia sigue siendo la fuente de verdad del payload.
+  const [finalPriceInput, setFinalPriceInput] = useState("");
+  const [finalPriceError, setFinalPriceError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     // El tipo manda: decide qué campos se ven y cuáles viajan en el payload.
@@ -283,8 +287,55 @@ export default function CreateProductPage({ setView }: any) {
     setImages(newImages);
   };
 
+  const applyFinalPrice = (raw: string) => {
+    setFinalPriceInput(raw);
+    const cost = parseFloat(formData.price) || 0;
+    const vatPct = effectiveVat(parseVatInput(formData.vat));
+    const price = parseFloat(raw);
+    if (raw.trim() === "") {
+      setFinalPriceError(null);
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      setFinalPriceError("Ingresá un precio final mayor a 0.");
+      return;
+    }
+    if (cost <= 0) {
+      setFinalPriceError("Cargá primero el costo para calcular la ganancia.");
+      return;
+    }
+    const floor = minimumSellingPrice(cost, vatPct);
+    if (price < floor) {
+      setFinalPriceError(
+        `Con IVA ${vatPct}% el precio final no puede ser menor a $${floor.toFixed(2)} (costo + IVA).`,
+      );
+      return;
+    }
+    const profit = profitFromPrice(cost, price, vatPct);
+    if (profit === undefined) {
+      setFinalPriceError("No se pudo calcular la ganancia para ese precio final.");
+      return;
+    }
+    setFinalPriceError(null);
+    setFormData((prev: typeof formData) => ({ ...prev, profit: String(profit) }));
+  };
+
+  // Vista previa del precio que se va a cobrar con la ganancia vigente.
+  const previewCost = parseFloat(formData.price) || 0;
+  const previewProfit = parseFloat(formData.profit) || 0;
+  const previewVat = effectiveVat(parseVatInput(formData.vat));
+  const previewFinalPrice =
+    previewCost > 0 && isValidProfit(previewProfit)
+      ? Number(calcSellingPrice(previewCost, previewProfit, previewVat).toFixed(2))
+      : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (finalPriceError) {
+      alert(finalPriceError);
+      return;
+    }
 
     // Precio de venta = costo / (1 - Ganancia%) + IVA (margen sobre precio de venta)
     const cost = parseFloat(formData.price) || 0;
@@ -698,21 +749,29 @@ export default function CreateProductPage({ setView }: any) {
 
             <div className="border-t border-slate-100 pt-6">
               <h3 className="text-lg font-black text-slate-800 mb-4">Precio e IVA</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <InputField
                   label="Costo (sin IVA)"
                   placeholder="ej: 3.00"
                   type="number"
                   step="0.01"
                   value={formData.price}
-                  onChange={(e: any) => setFormData({ ...formData, price: e.target.value })}
+                  onChange={(e: any) => {
+                    setFinalPriceInput("");
+                    setFinalPriceError(null);
+                    setFormData({ ...formData, price: e.target.value });
+                  }}
                 />
                 <InputField
                   label="IVA (%)"
                   type="number"
                   step="1"
                   value={formData.vat}
-                  onChange={(e: any) => setFormData({ ...formData, vat: e.target.value })}
+                  onChange={(e: any) => {
+                    setFinalPriceInput("");
+                    setFinalPriceError(null);
+                    setFormData({ ...formData, vat: e.target.value });
+                  }}
                   required
                 />
                 <InputField
@@ -721,9 +780,28 @@ export default function CreateProductPage({ setView }: any) {
                   type="number"
                   step="1"
                   value={formData.profit}
-                  onChange={(e: any) => setFormData({ ...formData, profit: e.target.value })}
+                  onChange={(e: any) => {
+                    setFinalPriceInput("");
+                    setFinalPriceError(null);
+                    setFormData({ ...formData, profit: e.target.value });
+                  }}
+                />
+                <InputField
+                  label="Precio final (con IVA)"
+                  placeholder="ej: 16.57"
+                  type="number"
+                  step="0.01"
+                  value={finalPriceInput}
+                  onChange={(e: any) => applyFinalPrice(e.target.value)}
                 />
               </div>
+              <p className="mt-2 text-[11px] font-bold text-slate-500">
+                Precio que se cobra: <span className="text-slate-800">${previewFinalPrice.toFixed(2)}</span>
+                {" — "}tipeá el precio final y la ganancia se calcula sola.
+              </p>
+              {finalPriceError && (
+                <p className="mt-1 text-[11px] font-black text-red-600">{finalPriceError}</p>
+              )}
             </div>
           </div>
 

@@ -6,7 +6,7 @@ import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
 import { productTypeChipClass } from "@/modules/products/lib/catalog";
-import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
+import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT, profitFromPrice, minimumSellingPrice } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
@@ -30,6 +30,10 @@ export default function StockFeaturesForm({
   const [minStock, setMinStock] = useState("");
   const [discount, setDiscount] = useState("");
   const [profit, setProfit] = useState("");
+  // Precio final directo: el operador lo tipea y la ganancia se deriva de él.
+  // La ganancia sigue siendo la fuente de verdad del payload.
+  const [finalPriceInput, setFinalPriceInput] = useState("");
+  const [finalPriceError, setFinalPriceError] = useState<string | null>(null);
   const [lote, setLote] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -94,10 +98,47 @@ export default function StockFeaturesForm({
   const subtotal = priceWithProfit * (1 - discountPct / 100);
   const iva = subtotal * selectedVat / 100;
 
+  // Precio final directo (con IVA): deriva la ganancia desde el precio tipeado.
+  // `base` es el costo (sin IVA) y `discountPct` el descuento ya aplicado.
+  const applyFinalPrice = (raw: string) => {
+    setFinalPriceInput(raw);
+    const typedPrice = parseInput(raw);
+    if (raw.trim() === "") {
+      setFinalPriceError(null);
+      return;
+    }
+    if (!Number.isFinite(typedPrice) || typedPrice <= 0) {
+      setFinalPriceError("Ingresá un precio final mayor a 0.");
+      return;
+    }
+    if (base <= 0) {
+      setFinalPriceError("Cargá primero el costo para calcular la ganancia.");
+      return;
+    }
+    const floor = minimumSellingPrice(base, selectedVat, discountPct);
+    if (typedPrice < floor) {
+      setFinalPriceError(
+        `Con IVA ${selectedVat}% el precio final no puede ser menor a $${floor.toFixed(2)} (costo + IVA).`,
+      );
+      return;
+    }
+    const derivedProfit = profitFromPrice(base, typedPrice, selectedVat, discountPct);
+    if (derivedProfit === undefined) {
+      setFinalPriceError("No se pudo calcular la ganancia para ese precio final.");
+      return;
+    }
+    setFinalPriceError(null);
+    setProfit(String(derivedProfit));
+  };
+
   const handleSave = async () => {
     if (!currentMedicine?.name) return;
     if (profitInvalid) {
       setFeedback({ type: "error", message: "La utilidad debe ser ≥ 0 y < 100%." });
+      return;
+    }
+    if (finalPriceError) {
+      setFeedback({ type: "error", message: finalPriceError });
       return;
     }
     setIsSaving(true);
@@ -263,7 +304,11 @@ export default function StockFeaturesForm({
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                     <input
                       type="text" inputMode="decimal" value={priceWithoutVat}
-                      onChange={(e) => setPriceWithoutVat(e.target.value)}
+                      onChange={(e) => {
+                        setFinalPriceInput("");
+                        setFinalPriceError(null);
+                        setPriceWithoutVat(e.target.value);
+                      }}
                       placeholder="0.00"
                       className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
@@ -273,7 +318,11 @@ export default function StockFeaturesForm({
                   <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Tasa de IVA</label>
                   <div className="grid grid-cols-4 gap-1.5">
                     {VAT_OPTIONS.map((v) => (
-                      <button key={v} type="button" onClick={() => setSelectedVat(v)}
+                      <button key={v} type="button" onClick={() => {
+                        setFinalPriceInput("");
+                        setFinalPriceError(null);
+                        setSelectedVat(v);
+                      }}
                         className={`py-3 rounded-xl font-black text-xs transition-all cursor-pointer ${
                           selectedVat === v
                             ? "bg-blue-600 text-white shadow-md shadow-blue-100"
@@ -373,12 +422,31 @@ export default function StockFeaturesForm({
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Ganancia (%)</label>
                     <input type="text" inputMode="decimal" value={profit}
-                      onChange={(e) => setProfit(e.target.value)}
+                      onChange={(e) => {
+                        setFinalPriceInput("");
+                        setFinalPriceError(null);
+                        setProfit(e.target.value);
+                      }}
                       placeholder="0"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
                     />
                     {profitInvalid && (
                       <p className="text-[10px] font-bold text-rose-600 ml-1">La utilidad debe ser ≥ 0 y &lt; 100%.</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Precio final (con IVA)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <input
+                        type="text" inputMode="decimal" value={finalPriceInput}
+                        onChange={(e) => applyFinalPrice(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+                    {finalPriceError && (
+                      <p className="text-[10px] font-bold text-rose-600 ml-1">{finalPriceError}</p>
                     )}
                   </div>
                   <div className="space-y-2">

@@ -9,7 +9,7 @@ import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
-import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
 import {
   resolveAuthorizedCajaId,
   describeSessionResolutionError,
@@ -293,6 +293,9 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
         }
         order.numeroControlInterno = fiscalResult.fiscal_number;
+        // Serial fiscal de la maquina: se guarda junto al numero de control para
+        // poder conciliar el libro de ventas contra el papel. Nunca se inventa.
+        order.serieFiscal = fiscalResult.fiscal_serial ?? null;
         const result = await cashierAccountantService.submitOrder(order, "local", activeSession.id);
         set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
         await get().load();

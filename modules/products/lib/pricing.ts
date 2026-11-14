@@ -88,6 +88,45 @@ export function bulkSellingPrice(
   return derivePrice(base, profitPct, vatPct);
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Lowest final price that still yields a representable profit (>= 0): the cost
+ * plus VAT, after discount. Derived the same way as {@link derivePrice} with 0%.
+ * Used to explain why a typed final price cannot be honored.
+ */
+export function minimumSellingPrice(
+  cost: number,
+  vatPct?: number | null,
+  discountPct?: number | null,
+): number {
+  if (!Number.isFinite(cost) || cost < 0) return NaN;
+  return round2(cost * (1 + effectiveVat(vatPct) / 100) * (1 - (discountPct ?? 0) / 100));
+}
+
+/**
+ * Inverse of {@link derivePrice}: the profit percent implied by a final price
+ * (VAT included, discount already applied), rounded to 2 decimals.
+ *
+ * `undefined` when no valid profit can represent that price: missing/zero cost,
+ * missing/zero price, or a price below {@link minimumSellingPrice} (a negative
+ * margin, which the backend rejects because it requires 0 <= profit < 100).
+ */
+export function profitFromPrice(
+  cost: number,
+  price: number,
+  vatPct?: number | null,
+  discountPct?: number | null,
+): number | undefined {
+  if (!Number.isFinite(cost) || cost <= 0) return undefined;
+  if (!Number.isFinite(price) || price <= 0) return undefined;
+  const gross = cost * (1 + effectiveVat(vatPct) / 100) * (1 - (discountPct ?? 0) / 100);
+  const profit = round2(100 * (1 - gross / price));
+  return isValidProfit(profit) ? profit : undefined;
+}
+
 /**
  * Price the register charges for a product: the persisted listing `price` (USD).
  * The panel must render exactly this value so it equals `fiscalUnitPriceBs(price, rate)`.

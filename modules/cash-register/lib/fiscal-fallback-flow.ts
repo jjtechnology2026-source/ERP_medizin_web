@@ -18,8 +18,8 @@ import {
   type FallbackZInvoice,
 } from "./fiscal-fallback.ts";
 import { toBs2, fiscalLineTotalBs } from "./money.ts";
-import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos58-print.ts";
-import type { TicketHeader, TicketMoneyLine } from "./pos58-ticket.ts";
+import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos80-print.ts";
+import type { TicketHeader, TicketMoneyLine } from "./pos80-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 export type PrintFn = (ticket: NoFiscalTicket) => Promise<NoFiscalPrintResult>;
@@ -245,9 +245,8 @@ export interface ZFallbackZIdentity {
   fiscalSerial: string;
 }
 
-export interface ZFallbackInputs<
-  TReport extends { fiscalDate?: string | null; zNumber?: number | null },
-> {
+/** Datos para imprimir el Z en la POS80 (sin maquina fiscal). */
+export interface ZPrintInputs {
   header: TicketHeader;
   pharmacyId: string;
   sessionInvoices: FallbackZInvoice[];
@@ -260,6 +259,18 @@ export interface ZFallbackInputs<
   /** Total NETO (ventas − devoluciones). Si falta, se usa el bruto del fallback. */
   netTotal?: number;
   rate?: number;
+  print: PrintFn;
+}
+
+export interface ZPrintOutcome {
+  fallback: FallbackZReport;
+  printed: boolean;
+  error?: string;
+}
+
+export interface ZFallbackInputs<
+  TReport extends { fiscalDate?: string | null; zNumber?: number | null },
+> extends ZPrintInputs {
   initialResult: ZFallbackResultLike<TReport>;
   createZReport: (
     pharmacyId: string,
@@ -271,7 +282,6 @@ export interface ZFallbackInputs<
    * transporte): la respuesta puede perderse despues de escribirse.
    */
   findPersistedZ?: (identity: ZFallbackZIdentity) => Promise<TReport | null>;
-  print: PrintFn;
   record: (marker: FallbackZMarker) => void;
 }
 
@@ -298,14 +308,11 @@ function reportTotals(f: FallbackZReport): TicketMoneyLine[] {
   ];
 }
 
-export async function runZReportFallback<
-  TReport extends { fiscalDate?: string | null; zNumber?: number | null },
->(inputs: ZFallbackInputs<TReport>): Promise<ZFallbackOutcome<TReport>> {
-  const fallback = buildFallbackZReport({
-    sessionInvoices: inputs.sessionInvoices,
-    pharmacyId: inputs.pharmacyId,
-  });
-
+/** Ticket del reporte Z para la POS80 (mismo papel para el fallback y para el print solo). */
+function buildZFallbackTicket(
+  inputs: ZPrintInputs,
+  fallback: FallbackZReport,
+): NoFiscalTicket {
   const fields: { label: string; value: string }[] = [
     { label: "Nro Z", value: `#${fallback.z_number}` },
     { label: "Serial", value: fallback.fiscal_serial },
@@ -320,7 +327,7 @@ export async function runZReportFallback<
     fields.push({ label: "Tasa USD", value: inputs.rate.toFixed(4) });
   }
 
-  await inputs.print({
+  return {
     kind: "report",
     header: inputs.header,
     title: "REPORTE Z",
@@ -331,7 +338,45 @@ export async function runZReportFallback<
     paymentBreakdown: inputs.paymentBreakdown ?? [],
     total: inputs.netTotal ?? fallback.total_sales,
     reconciliation: inputs.reconciliation ?? [],
+  };
+}
+
+function buildZFallbackReport(inputs: ZPrintInputs): FallbackZReport {
+  return buildFallbackZReport({
+    sessionInvoices: inputs.sessionInvoices,
+    pharmacyId: inputs.pharmacyId,
   });
+}
+
+/**
+ * SOLO imprime el reporte Z en la POS80: no registra nada.
+ *
+ * Imprimir el Z y cargar las ventas en el libro son dos operaciones separadas:
+ * este helper es la impresion cuando la maquina fiscal no puede sacar el papel.
+ * La identidad que queda en el comprobante se devuelve para que el registro
+ * posterior la reuse.
+ */
+export async function printZReportFallback(inputs: ZPrintInputs): Promise<ZPrintOutcome> {
+  const fallback = buildZFallbackReport(inputs);
+  const outcome = await inputs.print(buildZFallbackTicket(inputs, fallback));
+  return {
+    fallback,
+    printed: outcome.printed,
+    error: outcome.printed
+      ? undefined
+      : outcome.error?.trim() || "No se pudo imprimir el reporte Z en la POS80",
+  };
+}
+
+/**
+ * Camino historico "imprimir + registrar de una": lo conserva solo la suite de
+ * tests. La UI ya no lo usa porque el cierre son dos operaciones separadas
+ * (imprimir el Z y cargar el libro de ventas, cada una en su boton).
+ */
+export async function runZReportFallback<
+  TReport extends { fiscalDate?: string | null; zNumber?: number | null },
+>(inputs: ZFallbackInputs<TReport>): Promise<ZFallbackOutcome<TReport>> {
+  const { fallback } = await printZReportFallback(inputs);
 
   // Primer intento: si ya devolvio el Z, esta registrado. Reintentar con los
   // identificadores sinteticos sobreescribiria un Z real (o chocaria por
@@ -431,6 +476,46 @@ export async function persistFallbackZ<
   }
 
   return { report: null, persisted: false, persistError: failure };
+}
+
+/**
+ * Payload del registro del Z en el libro de ventas.
+ *
+ * Solo viaja la identidad que capturo la impresion (Nº Z y serial de la maquina
+ * fiscal). Sin print capturado el backend deriva todo desde las facturas del
+ * dia, igual que antes. Nunca se manda `invoices`: sobreescribiria el rango real.
+ */
+export function buildZRegisterPayload(
+  captured?: { zNumber?: number | null; fiscalSerial?: string | null } | null,
+): CreateZReportDto {
+  const payload: CreateZReportDto = {};
+  const zNumber = Number(captured?.zNumber);
+  if (Number.isInteger(zNumber) && zNumber > 0) payload.z_number = zNumber;
+  const fiscalSerial = (captured?.fiscalSerial ?? "").trim();
+  if (fiscalSerial) payload.fiscal_serial = fiscalSerial;
+  return payload;
+}
+
+/** Mensaje de error del registro, con el mismo mapeo por codigo de siempre. */
+export function zReportErrorMessage(
+  result: { message?: string | null; statusCode?: number | null },
+  fallbackMessage = "No se pudo registrar el reporte Z.",
+): string {
+  const message = result.message?.trim() || fallbackMessage;
+  switch (result.statusCode) {
+    case 400:
+      return `Validación (400): ${message}`;
+    case 401:
+      return `No autorizado (401): ${message}`;
+    case 403:
+      return `Acceso denegado (403): ${message}`;
+    case 404:
+      return `Farmacia no encontrada (404): ${message}`;
+    case 409:
+      return `Conflicto (409): ${message}`;
+    default:
+      return message;
+  }
 }
 
 // --- Reporte X ---

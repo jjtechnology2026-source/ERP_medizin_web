@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown, derivePrice, effectiveVat, parseVatInput, displayedChargePrice, DEFAULT_VAT_PCT } from "../modules/products/lib/pricing.ts";
+import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown, derivePrice, effectiveVat, parseVatInput, displayedChargePrice, profitFromPrice, minimumSellingPrice, DEFAULT_VAT_PCT } from "../modules/products/lib/pricing.ts";
 import { toBs2, fiscalUnitPriceBs } from "../modules/cash-register/lib/money.ts";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
@@ -144,6 +144,59 @@ test("taxBreakdown cuadra con el caso costo 3.29 + 40% + IVA 16% (6.36)", () => 
   assert.ok(close(b.profit, 2.1933333333333334));
   assert.ok(close(b.iva, b.saleNoVat * 0.16));
   assert.ok(close(b.cost + b.profit + b.iva, b.final));
+});
+
+// --- Precio final directo (S1): el operador tipea el precio de venta y la app
+// deriva la ganancia. La ganancia sigue siendo la fuente de verdad del payload.
+
+test("profitFromPrice invierte sellingPrice con IVA (round-trip)", () => {
+  for (const [cost, profit, vat] of [[10, 30, 0], [10, 30, 16], [3.29, 40, 16], [0.8, 40, 0], [25, 0, 16]]) {
+    const price = sellingPrice(cost, profit, vat);
+    const derived = profitFromPrice(cost, price, vat);
+    assert.equal(typeof derived, "number", `debe derivar ganancia para precio ${price}`);
+    assert.ok(
+      Math.abs(derived - profit) <= 0.01,
+      `ganancia derivada ${derived} debe acercarse a ${profit}`,
+    );
+    assert.ok(
+      Math.abs(sellingPrice(cost, derived, vat) - price) <= 0.01,
+      "el precio re-derivado debe quedar a menos de un centavo del tipeado",
+    );
+  }
+});
+
+test("profitFromPrice respeta el descuento: el precio final es el que ya lo incluye", () => {
+  // precio final con descuento 10% sobre la base derivada sin descuento
+  const withVat = sellingPrice(10, 30, 16);
+  const finalPrice = withVat * 0.9;
+  const derived = profitFromPrice(10, finalPrice, 16, 10);
+  assert.equal(typeof derived, "number");
+  assert.ok(Math.abs(derived - 30) <= 0.01, `esperaba ~30, obtuve ${derived}`);
+});
+
+test("profitFromPrice devuelve undefined si el precio no deja ganancia representable", () => {
+  // Piso: precio == costo + IVA -> ganancia 0 (válida, no undefined).
+  const floor = minimumSellingPrice(10, 16);
+  assert.equal(floor, 11.6);
+  assert.equal(profitFromPrice(10, 11.6, 16), 0);
+  assert.equal(profitFromPrice(10, 10, 16), undefined, "por debajo del costo + IVA no es representable");
+  assert.equal(profitFromPrice(10, 1, 16), undefined);
+});
+
+test("profitFromPrice sin costo o sin precio no deriva (no inventa ganancia)", () => {
+  assert.equal(profitFromPrice(0, 16.57, 16), undefined);
+  assert.equal(profitFromPrice(0, 0, 16), undefined);
+  assert.equal(profitFromPrice(NaN, 16.57, 16), undefined);
+  assert.equal(profitFromPrice(10, 0, 16), undefined);
+  assert.equal(profitFromPrice(10, NaN, 16), undefined);
+});
+
+test("minimumSellingPrice aplica IVA y descuento igual que derivePrice con ganancia 0", () => {
+  assert.equal(minimumSellingPrice(10, 0), 10);
+  assert.equal(minimumSellingPrice(10, 16), 11.6);
+  assert.equal(minimumSellingPrice(10, 16, 10), 10.44);
+  assert.equal(minimumSellingPrice(10, 16, 10), derivePrice(10, 0, 16, 10));
+  assert.equal(minimumSellingPrice(10, 16), derivePrice(10, 0, 16, 0));
 });
 
 test("taxBreakdown sin costo asume ganancia 0 y sin IVA el neto es el final", () => {
