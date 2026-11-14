@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { usePermissions } from "@/modules/core/hooks/usePermissions";
 import { HiDocumentText, HiSearch } from "react-icons/hi";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import CashierSessionCard from "@/modules/cash-register/components/CashierSessionCard";
@@ -18,6 +19,10 @@ import GroupAvailabilityDialog from "@/modules/cash-register/components/GroupAva
 export default function CashRegisterFeature() {
   const { load, ensureSession, activeSession, isLoading } = useCashierWorkflowStore();
   const { data: session } = useSession();
+  const { permits } = usePermissions();
+  const canConsultarGrupo = permits.some(
+    (p: string) => p.toLowerCase() === "consultar en grupo",
+  );
 
   // pharmacyId directamente de la sesión de NextAuth (valor confirmado en logs)
   const pharmacyId = (session?.user as any)?.pharmacyId;
@@ -87,13 +92,15 @@ export default function CashRegisterFeature() {
             <HiDocumentText size={16} />
             Notas de entrega
           </button>
-          <button
-            onClick={() => setShowGroupAvailability(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
-          >
-            <HiSearch size={16} />
-            Consultar en mi grupo
-          </button>
+          {canConsultarGrupo && (
+            <button
+              onClick={() => setShowGroupAvailability(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition-all"
+            >
+              <HiSearch size={16} />
+              Consultar en mi grupo
+            </button>
+          )}
         </div>
       </header>
 
