@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildZSummary } from "../modules/cash-register/lib/z-report.ts";
-import { buildReportTicket } from "../modules/cash-register/lib/pos58-ticket.ts";
+import { buildReportTicket } from "../modules/cash-register/lib/pos80-ticket.ts";
 
 test("Z cuadra: ventas por método == facturado y neto == bruto − devoluciones", () => {
   const z = buildZSummary({
@@ -84,7 +84,7 @@ test("buildReportTicket: imprime devoluciones, neto, metodos y cuadre", () => {
 
 const { buildSessionSummary } = await import("../modules/cash-register/lib/z-report.ts");
 const { runXReportFallback } = await import("../modules/cash-register/lib/fiscal-fallback-flow.ts");
-const { renderNoFiscalTicket } = await import("../modules/cash-register/lib/pos58-print.ts");
+const { renderNoFiscalTicket } = await import("../modules/cash-register/lib/pos80-print.ts");
 
 test("buildSessionSummary: cobros, devoluciones y neto desde la sesion", () => {
   const s = buildSessionSummary({

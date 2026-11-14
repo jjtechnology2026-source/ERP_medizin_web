@@ -10,8 +10,8 @@ import {
   type SaleTicketData,
   type CreditNoteTicketData,
   type ReportTicketData,
-} from "./pos58-ticket.ts";
-import { printEscPos, isWebUsbSupported, pairPrinter, prepairPrinter } from "./pos58-usb.ts";
+} from "./pos80-ticket.ts";
+import { printEscPos, isWebUsbSupported, pairPrinter, prepairPrinter } from "./pos80-usb.ts";
 
 export type NoFiscalTicket =
   | ({ kind: "sale" } & SaleTicketData)

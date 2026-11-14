@@ -12,7 +12,7 @@ import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-clie
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
 import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
-import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
   FiscalNoteItem,

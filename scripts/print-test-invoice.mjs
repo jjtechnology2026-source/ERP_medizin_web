@@ -1,4 +1,4 @@
-// Dev tool: imprime los comprobantes de prueba en la POS58 USB
+// Dev tool: imprime los comprobantes de prueba en la POS80 USB
 // (/dev/usb/lp0) usando los builders de produccion. Correr con:
 //   node --experimental-strip-types scripts/print-test-invoice.mjs
 import fs from "node:fs";
@@ -9,7 +9,7 @@ import {
   fmtMoney,
   line,
   ESC,
-} from "../modules/cash-register/lib/pos58-ticket.ts";
+} from "../modules/cash-register/lib/pos80-ticket.ts";
 
 const LP = process.env.LP_DEVICE ?? "/dev/usb/lp0";
 const header = { name: "DETODOFARMACY C.A", rif: "J-50843636-9" };

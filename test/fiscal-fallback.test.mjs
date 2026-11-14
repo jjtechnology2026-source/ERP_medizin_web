@@ -13,8 +13,8 @@ import {
   recordFallbackZ,
   isFallbackZ,
 } from "../modules/cash-register/lib/fiscal-fallback.ts";
-import { renderNoFiscalTicket } from "../modules/cash-register/lib/pos58-print.ts";
-import { WIDTH } from "../modules/cash-register/lib/pos58-ticket.ts";
+import { renderNoFiscalTicket } from "../modules/cash-register/lib/pos80-print.ts";
+import { WIDTH } from "../modules/cash-register/lib/pos80-ticket.ts";
 import {
   runOrderFallback,
   runZReportFallback,
@@ -223,7 +223,7 @@ function assertSinMarcasFiscales(text) {
   );
 }
 
-test("pos58: la factura renderiza cabecera (farmacia+RIF) y no imprime marcas fiscales", () => {
+test("pos80: la factura renderiza cabecera (farmacia+RIF) y no imprime marcas fiscales", () => {
   const bytes = renderNoFiscalTicket({
     kind: "sale",
     header: { name: "FARMACIA DEMO", rif: "J-12345678-9", address: "AV RAUL LEONI CC BOYACA LOCAL 7", phone: "+584161688296" },
@@ -316,7 +316,7 @@ test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva
   assert.equal(outcome.fiscalFallback, true);
 });
 
-test("runOrderFallback: expone printError cuando la POS58 no imprime", async () => {
+test("runOrderFallback: expone printError cuando la POS80 no imprime", async () => {
   const outcome = await runOrderFallback({
     header: { name: "F", rif: "J-1" },
     order: { medications: [{ quantity: 1, price: 2 }] },

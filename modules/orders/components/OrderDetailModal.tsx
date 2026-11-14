@@ -6,7 +6,7 @@ import { OrderService, REPROCESS_REFUSAL_LABELS } from "../services/OrderService
 import ModalWrapper from "../../../components/shared/modals/ModalWrapper";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
-import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import { buildSaleReprintTicket } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 
 interface OrderDetailModalProps {

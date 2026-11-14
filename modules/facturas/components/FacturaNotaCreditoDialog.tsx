@@ -11,8 +11,8 @@ import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-clie
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
 import { buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
-import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
-import type { TicketHeader } from "@/modules/cash-register/lib/pos58-ticket";
+import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
+import type { TicketHeader } from "@/modules/cash-register/lib/pos80-ticket";
 import {
   decideNotaCreditoOutcome,
   type NotaCreditoDecision,

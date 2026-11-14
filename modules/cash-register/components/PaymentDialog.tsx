@@ -9,7 +9,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
-import { prepairPrinter } from "@/modules/cash-register/lib/pos58-print";
+import { prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import type {
   PaymentMethod,
