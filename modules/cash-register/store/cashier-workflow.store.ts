@@ -9,6 +9,7 @@ import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { persistLocalSale, quoteBlockReasonForCart, issuedFiscalForCart, cartSignature, matchesControlNumber, type IssuedFiscalDocument } from "@/modules/cash-register/lib/local-sale-persist";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
 import {
   resolveAuthorizedCajaId,
@@ -20,6 +21,14 @@ import {
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
   currentRate: number;
+  /**
+   * Comprobantes fiscales ya emitidos, indexados por carrito. Mientras exista
+   * uno para el carrito en curso, esa venta no puede volver a pedir un COO (ni
+   * como venta ni como presupuesto). Es un mapa y no un slot unico porque el POS
+   * cobra varios carritos: el comprobante de uno no puede borrarse al registrar
+   * otro.
+   */
+  fiscalIssued: Record<string, IssuedFiscalDocument>;
   load: (pharmacyId?: string) => Promise<void>;
   ensureSession: () => Promise<void>;
   selectCashBox: (id: string | null) => void;
@@ -38,7 +47,8 @@ interface CashierWorkflowStore extends CashierWorkflowState {
   setInfo: (msg: string | null) => void;
 }
 
-const initialState: CashierWorkflowState & { currentRate: number } = {
+const initialState: CashierWorkflowState &
+  Pick<CashierWorkflowStore, "currentRate" | "fiscalIssued"> = {
   isLoading: false,
   isSubmitting: false,
   isCashierRole: true,
@@ -52,11 +62,38 @@ const initialState: CashierWorkflowState & { currentRate: number } = {
   lastQuoteNumber: null,
   currentRate: 0,
   fiscalAvailable: null,
+  fiscalIssued: {},
 };
 
 // Un solo intento de auto-apertura por montaje del POS: evita reintentos en
 // cada `load()` cuando la caja no se puede abrir (inactiva, sin cajas, etc.).
 let autoOpenAttempted = false;
+
+/**
+ * true si el comprobante con ese numero de control ya figura entre las facturas
+ * de la sesion. Es la unica lectura con la que el POS decide NO reenviar una
+ * venta cuya persistencia fallo.
+ */
+async function findIssuedInvoice(
+  cashBoxId: string | undefined,
+  control: string,
+): Promise<boolean> {
+  const facturas = await cashierAccountantService.fetchSessionInvoices(cashBoxId);
+  return facturas.some((factura) => matchesControlNumber(factura.controlNumber, control));
+}
+
+/** carrito que se esta cobrando: ata el comprobante fiscal a su venta. */
+function currentCart(): Record<string, any> | undefined {
+  return useCurrentOrderStore.getState().getCurrentOrder();
+}
+
+/** comprobante emitido para el carrito en curso, si lo hay. */
+function issuedForCurrentCart(
+  issued: Record<string, IssuedFiscalDocument>,
+): IssuedFiscalDocument | undefined {
+  const id = currentCart()?.id;
+  return id ? issued[String(id)] : undefined;
+}
 
 export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) => ({
   ...initialState,
@@ -269,37 +306,99 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       };
 
       if (saleType === "local") {
+        // Si esta misma venta ya emitio su comprobante (el registro fallo y el
+        // cajero vuelve a cobrar), NO se le pide otro a la fiscal: se reusa el
+        // COO. Volver a imprimir aqui emitia un segundo comprobante fiscal.
+        const cart = currentCart();
+        const alreadyIssued = issuedFiscalForCart(get().fiscalIssued[String(order.id)], cart);
+
         // /health verificado como caido al abrir el pago: la fiscal no puede
         // emitir, directo a No Fiscal sin intentar (sin falsos positivos).
-        // ponytail: si el servicio esta vivo pero la fiscal imprime y no confirma,
-        // ya no hay guard anti-duplicado; agregarlo si aparecen duplicados.
-        if (get().fiscalAvailable === false) return await runFallback();
+        // Con un comprobante ya emitido para este carrito no se puede caer a No
+        // Fiscal: ese papel fiscal existe y hay que registrar ESA venta.
+        if (get().fiscalAvailable === false && !alreadyIssued) return await runFallback();
 
-        const fiscalPayload = buildFiscalPayload(order);
-        let fiscalResult: Awaited<ReturnType<typeof fiscalPrinterClient.createInvoice>> | null = null;
-        try {
-          fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
-        } catch (error: any) {
-          const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
-          console.error("❌ [registerSale] Error fiscal local:", mensaje);
-          // La fiscal fallo (rechazo/void, o servicio caido a mitad de venta): No Fiscal.
-          return await runFallback();
-        }
-        // 200 sin numero de control: la fiscal no emitio COO -> No Fiscal.
-        if (!fiscalResult?.fiscal_number) return await runFallback();
+        let controlNumber: string;
+        let fiscalSerial: string | null;
 
-        const recon = reconcileFiscalTotal(fiscalResult.total, fiscalPayload.items);
-        if (recon) {
-          order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
+        if (alreadyIssued) {
+          controlNumber = alreadyIssued.control;
+          fiscalSerial = alreadyIssued.serial;
+        } else {
+          const fiscalPayload = buildFiscalPayload(order);
+          let fiscalResult: Awaited<ReturnType<typeof fiscalPrinterClient.createInvoice>> | null = null;
+          try {
+            fiscalResult = await fiscalPrinterClient.createInvoice(fiscalPayload);
+          } catch (error: any) {
+            const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
+            console.error("❌ [registerSale] Error fiscal local:", mensaje);
+            // La fiscal fallo (rechazo/void, o servicio caido a mitad de venta): No Fiscal.
+            return await runFallback();
+          }
+          // 200 sin numero de control: la fiscal no emitio COO -> No Fiscal.
+          if (!fiscalResult?.fiscal_number) return await runFallback();
+
+          const recon = reconcileFiscalTotal(fiscalResult.total, fiscalPayload.items);
+          if (recon) {
+            order.observaciones = order.observaciones ? `${order.observaciones} ${recon}` : recon;
+          }
+          controlNumber = fiscalResult.fiscal_number;
+          fiscalSerial = fiscalResult.fiscal_serial ?? null;
         }
-        order.numeroControlInterno = fiscalResult.fiscal_number;
+
+        order.numeroControlInterno = controlNumber;
         // Serial fiscal de la maquina: se guarda junto al numero de control para
         // poder conciliar el libro de ventas contra el papel. Nunca se inventa.
-        order.serieFiscal = fiscalResult.fiscal_serial ?? null;
-        const result = await cashierAccountantService.submitOrder(order, "local", activeSession.id);
-        set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
+        order.serieFiscal = fiscalSerial;
+
+        // Desde aca el comprobante existe en el papel: la venta se registra o se
+        // reconcilia, pero nunca se "recupera" como presupuesto.
+        set({
+          fiscalIssued: {
+            ...get().fiscalIssued,
+            [String(order.id)]: {
+              control: controlNumber,
+              serial: fiscalSerial,
+              orderId: String(order.id),
+              signature: cartSignature(cart),
+            },
+          },
+        });
+
+        const persist = await persistLocalSale({
+          order,
+          saleType: "local",
+          sessionId: activeSession.id,
+          controlNumber,
+          // Volver a cobrar el mismo carrito es un reintento: primero se pregunta
+          // al libro si el comprobante ya quedo registrado.
+          reconcileFirst: Boolean(alreadyIssued),
+          submitOrder: cashierAccountantService.submitOrder,
+          findPersistedInvoice: (control) => findIssuedInvoice(activeSession.cashBoxId, control),
+        });
+
+        if (!persist.persisted) {
+          const mensaje = persist.uncertainty
+            ? `La máquina fiscal emitió el comprobante ${controlNumber}, pero no se pudo confirmar si la venta quedó registrada. Verifique el libro de ventas antes de reintentar: reintentar a ciegas duplica el comprobante.`
+            : `La máquina fiscal emitió el comprobante ${controlNumber} y la venta no se pudo registrar: ${persist.error ?? "error desconocido"}. Verifique el libro de ventas antes de reintentar: la orden pudo guardarse igual.`;
+          console.error("❌ [registerSale] Persistencia local fallida:", mensaje);
+          set({ isSubmitting: false, errorMessage: mensaje });
+          return null;
+        }
+
+        // Solo se descarta el comprobante de ESTE carrito: los de otros carritos
+        // siguen pendientes de registrar y no se pueden perder.
+        const remaining = { ...get().fiscalIssued };
+        delete remaining[String(order.id)];
+        set({
+          isSubmitting: false,
+          fiscalIssued: remaining,
+          infoMessage: persist.reconciled
+            ? "Venta registrada: el comprobante ya estaba en el libro"
+            : "Venta procesada exitosamente",
+        });
         await get().load();
-        return result;
+        return persist.result;
       }
 
       let result: Awaited<ReturnType<typeof cashierAccountantService.submitOrder>> | null = null;
@@ -347,6 +446,14 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
   },
 
   saveQuote: async () => {
+    // Una venta cuyo comprobante fiscal ya salio no puede guardarse como
+    // presupuesto: al llamarla de nuevo a venta la fiscal emite un segundo COO.
+    const blocked = quoteBlockReasonForCart(issuedForCurrentCart(get().fiscalIssued), currentCart());
+    if (blocked) {
+      set({ errorMessage: blocked });
+      return null;
+    }
+
     const { activeSession } = get();
     if (!activeSession?.id) {
       set({ errorMessage: "No hay sesión de caja activa" });
@@ -389,6 +496,14 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
   },
 
   saveDeliveryNote: async () => {
+    // Igual que la cotizacion: con el comprobante fiscal ya emitido, sacar la
+    // venta por nota de entrega la vuelve a facturar al convertirla a venta.
+    const blockedNote = quoteBlockReasonForCart(issuedForCurrentCart(get().fiscalIssued), currentCart());
+    if (blockedNote) {
+      set({ errorMessage: blockedNote });
+      return null;
+    }
+
     const { activeSession } = get();
     if (!activeSession?.id) {
       set({ errorMessage: "No hay sesión de caja activa" });

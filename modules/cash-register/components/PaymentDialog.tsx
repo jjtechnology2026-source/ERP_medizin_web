@@ -11,6 +11,7 @@ import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
+import { quoteBlockReasonForCart } from "@/modules/cash-register/lib/local-sale-persist";
 import type {
   PaymentMethod,
   CashPayment,
@@ -81,10 +82,20 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, saveQuote, saveDeliveryNote, checkFiscalHealth, activeSession, errorMessage, setError } = useCashierWorkflowStore();
+  const { registerSale, saveQuote, saveDeliveryNote, checkFiscalHealth, activeSession, errorMessage, setError, fiscalIssued } = useCashierWorkflowStore();
+
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
   const currentClient = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]?.client);
+  const currentOrder = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]);
+
+  // El comprobante fiscal esta atado al carrito que lo emitio: mientras ese
+  // carrito siga en pantalla, cobrar de nuevo reusa el COO en vez de emitir otro,
+  // y guardar el presupuesto queda bloqueado.
+  const quoteBlocked = quoteBlockReasonForCart(
+    currentOrder?.id ? fiscalIssued[String(currentOrder.id)] : undefined,
+    currentOrder,
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [manualChanges, setManualChanges] = useState<ManualChangeEntry[]>([]);
@@ -354,7 +365,11 @@ export default function PaymentDialog({
       );
 
       if (!result) {
-        throw new Error(errorMessage || "No se pudo procesar la venta");
+        throw new Error(
+          useCashierWorkflowStore.getState().errorMessage ||
+            errorMessage ||
+            "No se pudo procesar la venta"
+        );
       }
 
       if (result.facturacion?.success) {
@@ -515,6 +530,14 @@ export default function PaymentDialog({
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
               {localError || errorMessage}
+            </div>
+          </div>
+        )}
+
+        {quoteBlocked && (
+          <div className="px-6 pb-3 flex-shrink-0">
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
+              {quoteBlocked}
             </div>
           </div>
         )}
@@ -820,10 +843,15 @@ export default function PaymentDialog({
             </button>
             <button
               onClick={handleSaveQuote}
-              disabled={isProcessing || !activeSession || totals.itemCount === 0}
+              disabled={isProcessing || !activeSession || totals.itemCount === 0 || Boolean(quoteBlocked)}
+              title={quoteBlocked ?? undefined}
               className="flex-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isProcessing ? "Guardando..." : "Guardar presupuesto"}
+              {quoteBlocked
+                ? "Factura ya emitida"
+                : isProcessing
+                  ? "Guardando..."
+                  : "Guardar presupuesto"}
             </button>
             <button
               onClick={handleSaveDeliveryNote}
