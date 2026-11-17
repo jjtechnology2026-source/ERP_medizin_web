@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown, derivePrice, effectiveVat, parseVatInput, displayedChargePrice, profitFromPrice, minimumSellingPrice, DEFAULT_VAT_PCT } from "../modules/products/lib/pricing.ts";
+import { isValidProfit, sellingPrice, costFromPrice, bulkSellingPrice, taxBreakdown, derivePrice, effectiveVat, parseVatInput, displayedChargePrice, profitFromPrice, minimumSellingPrice, chargePricePreview, DEFAULT_VAT_PCT } from "../modules/products/lib/pricing.ts";
 import { toBs2, fiscalUnitPriceBs } from "../modules/cash-register/lib/money.ts";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
@@ -207,4 +207,20 @@ test("taxBreakdown sin costo asume ganancia 0 y sin IVA el neto es el final", ()
   assert.equal(sinIva.saleNoVat, 10);
   assert.equal(sinIva.iva, 0);
   assert.equal(sinIva.profit, 6);
+});
+
+test("chargePricePreview: la derivación en vivo gana sobre el precio persistido", () => {
+  assert.equal(chargePricePreview(16.57, 10), 16.57);
+  assert.equal(chargePricePreview(0.01, 10), 0.01);
+});
+
+test("chargePricePreview cae al precio persistido cuando no hay derivación (costo o ganancia inválidos)", () => {
+  assert.equal(chargePricePreview(undefined, 10), 10);
+  assert.equal(chargePricePreview(NaN, 10), 10);
+  assert.equal(chargePricePreview(0, 10), 10);
+});
+
+test("chargePricePreview sin derivación ni precio persistido devuelve 0 (nunca NaN en pantalla)", () => {
+  assert.equal(chargePricePreview(undefined, NaN), 0);
+  assert.equal(chargePricePreview(undefined, Number.POSITIVE_INFINITY), 0);
 });

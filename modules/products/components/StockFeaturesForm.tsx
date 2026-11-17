@@ -7,7 +7,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
 import { productTypeChipClass } from "@/modules/products/lib/catalog";
 import { discountFieldFor } from "@/modules/products/lib/inventory-write";
-import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT, profitFromPrice, minimumSellingPrice } from "@/modules/products/lib/pricing";
+import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT, profitFromPrice, minimumSellingPrice, derivePrice, chargePricePreview } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
 
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
@@ -88,9 +88,6 @@ export default function StockFeaturesForm({
     return priceWithVat * (1 - discountPercent / 100);
   }, [priceWithVat, discountPercent, hasDiscount]);
 
-  const finalPriceUSD = discountedPrice;
-  const finalPriceVES = discountedPrice * rate;
-
   const base = parseInput(priceWithoutVat);
   const profitPct = parseInput(profit);
   const discountPct = hasDiscount ? discountPercent : 0;
@@ -98,6 +95,21 @@ export default function StockFeaturesForm({
   const ganancia = priceWithProfit - base;
   const subtotal = priceWithProfit * (1 - discountPct / 100);
   const iva = subtotal * selectedVat / 100;
+
+  // Precio final que se cobrará al confirmar: manda la derivación en vivo
+  // (costo + ganancia + IVA − descuento), no el precio que ya está guardado.
+  // Sin costo, o con ganancia inválida, todavía no hay derivación y se muestra el persistido.
+  const persistedChargePrice = displayedChargePrice(currentMedicine);
+  // Ganancia efectiva: la tipeada o, con el campo vacío, la guardada — el payload omite
+  // `profit_percentage` en ese caso y el backend conserva la ganancia ya persistida.
+  const effectiveProfitPct = profit.trim() === "" ? (currentMedicine?.profitPercentage ?? 0) : profitPct;
+  const derivedFinalPrice =
+    base > 0 && isValidProfit(effectiveProfitPct)
+      ? derivePrice(base, effectiveProfitPct, selectedVat, discountPct)
+      : undefined;
+  const chargeFinalPrice = chargePricePreview(derivedFinalPrice, persistedChargePrice);
+  const finalPriceUSD = chargeFinalPrice;
+  const finalPriceVES = chargeFinalPrice * rate;
 
   // Precio final directo (con IVA): deriva la ganancia desde el precio tipeado.
   // `base` es el costo (sin IVA) y `discountPct` el descuento ya aplicado.
@@ -343,24 +355,29 @@ export default function StockFeaturesForm({
               </div>
 
               <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-100">
-                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Precio Final (cobrado)</span>
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Precio Final (se cobrará)</span>
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mt-1">
                   <p className="text-3xl font-black text-emerald-700">
-                    ${displayedChargePrice(currentMedicine).toFixed(2)}
+                    ${chargeFinalPrice.toFixed(2)}
                   </p>
                   <p className="text-sm font-black text-emerald-600">
-                    {toBs2(displayedChargePrice(currentMedicine) * rate).toFixed(2)} Bs
+                    {toBs2(chargeFinalPrice * rate).toFixed(2)} Bs
                   </p>
                 </div>
                 <p className="text-[10px] text-emerald-600/70 font-medium mt-2">
-                  Precio persistido en el inventario: es el que cobra la caja registradora.
+                  Costo + ganancia + IVA − descuento. Al confirmar es el precio que cobra la caja registradora.
                 </p>
+                {chargeFinalPrice !== persistedChargePrice && (
+                  <p className="text-[10px] text-emerald-700/80 font-bold mt-1">
+                    En inventario ahora: ${persistedChargePrice.toFixed(2)} — cambia cuando confirmás.
+                  </p>
+                )}
               </div>
 
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-3xl p-6 border border-blue-100">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Vista previa (no cobrado)</span>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Desglose</span>
                     {hasDiscount ? (
                       <div>
                         <p className="text-lg font-bold text-slate-400 line-through">{fmt(priceWithVat)}</p>
