@@ -30,7 +30,8 @@ export interface InventoryIncreaseItem {
   stock: number;
   price: number;
   minimum: number;
-  discount?: number;
+  /** Tri-state: omitted = leave stored, `null` = clear, number = set (explicit `0` is a value). */
+  discount?: number | null;
   base_price?: number;
   profit_percentage?: number;
   /** Tri-state: omitted = leave stored, `null` = clear, number = set (explicit `0` is a value). */
@@ -101,6 +102,29 @@ export function shouldWriteInventory(params: {
 }
 
 /**
+ * Resolve the form's "Descuento (%)" field to the tri-state the backend expects.
+ *
+ * `raw` is what the operator typed. An empty field means "nothing typed": when a
+ * discount was already stored the save must clear it (`null`); when there was
+ * none the field is omitted (`undefined`) so stored pricing is not rewritten. A
+ * typed value is forwarded as-is — an explicit `0` is a real discount and must
+ * be sent, not read as "empty".
+ *
+ * `parse` is injected so the form keeps its single decimal parser
+ * (`useFormatCurrency().parseInput`) instead of this module duplicating it.
+ */
+export function discountFieldFor(
+  raw: string,
+  stored: number | null | undefined,
+  parse: (value: string) => number
+): number | null | undefined {
+  if (raw.trim() === "") {
+    return stored === undefined || stored === null ? undefined : null;
+  }
+  return parse(raw);
+}
+
+/**
  * Build the `increaseInventory` item for a save.
  *
  * `stock` is always the additive delta. `lote`/`fecha_vencimiento_lote` are
@@ -128,8 +152,14 @@ export function buildIncreaseItem(
     minimum: normDelta(medicine.minimum),
   };
 
-  const discount = normNum(medicine.discount);
-  if (discount !== undefined) item.discount = discount;
+  // Discount tri-state mirrors the backend DTO: absent = leave stored, `null` = clear,
+  // number = set (an explicit `0` is a value and must be sent).
+  if (medicine.discount === null) {
+    item.discount = null;
+  } else {
+    const discount = normNum(medicine.discount);
+    if (discount !== undefined) item.discount = discount;
+  }
 
   const basePrice = normNum(medicine.basePrice);
   if (basePrice !== undefined) item.base_price = basePrice;

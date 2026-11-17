@@ -97,6 +97,7 @@ function resetStores() {
     _fetchPromise: null,
     _countsPharmacyId: null,
     recentMutations: {},
+    lastSaveError: null,
     searchFeed: {
       items: [],
       nextCursor: null,
@@ -318,6 +319,90 @@ test("mergeEcho still adds the delta outside the window (control)", async () => 
   });
 
   assert.equal(merged.stock, 20, "outside the window the remote delta is added");
+});
+
+/* ------------------------------------------------------------------ *
+ * lastSaveError: the backend's own rejection text reaches the form
+ * ------------------------------------------------------------------ */
+
+// Shape the backend answers with on a rejected write: the reason lives in the
+// response body as plain text (e.g. the profit_percentage range check).
+const BACKEND_REJECTION =
+  "profit_percentage must be between 0 and 100 with at most 2 decimals (20 == 20%)";
+
+function rejectWithBackendText(message) {
+  const error = new Error("Request failed with status code 400");
+  error.response = { status: 400, data: message };
+  return error;
+}
+
+test("a failed price-only write exposes the backend message in lastSaveError", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  productsService.createProduct = async (m) => m;
+  productsService.increaseInventory = async () => {
+    throw rejectWithBackendText(BACKEND_REJECTION);
+  };
+
+  const result = await useProductsStore.getState().saveMedicine({
+    ...SERVER_EXISTING,
+    price: 1100,
+    profitPercentage: 37.5,
+    stock: 0,
+  });
+
+  assert.equal(result, false);
+  assert.equal(
+    useProductsStore.getState().lastSaveError,
+    BACKEND_REJECTION,
+    "the operator must see the backend's own reason, not a generic message"
+  );
+  assert.deepEqual(
+    useProductsStore.getState().inventory,
+    [],
+    "a rejected write still reverts the optimistic upsert"
+  );
+});
+
+test("a successful save clears a previous lastSaveError", async () => {
+  useProductsStore.setState({ lastSaveError: "stale rejection" });
+  stubServerInventory([SERVER_EXISTING]);
+  productsService.createProduct = async (m) => m;
+  productsService.increaseInventory = async () => {};
+
+  const result = await useProductsStore.getState().saveMedicine({
+    ...SERVER_EXISTING,
+    price: 1100,
+    stock: 0,
+  });
+
+  assert.equal(result, true);
+  assert.equal(
+    useProductsStore.getState().lastSaveError,
+    null,
+    "a later success must not keep showing the previous failure"
+  );
+});
+
+test("a failed server resolution also records lastSaveError", async () => {
+  stubServerInventory([], { throwOnSearch: true });
+  let writeCalls = 0;
+  productsService.increaseInventory = async () => {
+    writeCalls++;
+  };
+
+  const result = await useProductsStore.getState().saveMedicine({
+    ...SERVER_EXISTING,
+    price: 1100,
+    stock: 0,
+  });
+
+  assert.equal(result, false);
+  assert.equal(
+    useProductsStore.getState().lastSaveError,
+    "inventory search failed",
+    "a resolution failure is surfaced with the error's own message"
+  );
+  assert.equal(writeCalls, 0, "nothing is written after a failed resolution");
 });
 
 /* ------------------------------------------------------------------ *

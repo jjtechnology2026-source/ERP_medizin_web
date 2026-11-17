@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   shouldWriteInventory,
   buildIncreaseItem,
+  discountFieldFor,
   mergeEcho,
   ECHO_WINDOW_MS,
 } from "../modules/products/lib/inventory-write.ts";
@@ -45,6 +46,17 @@ test("discount-only edit on existing product writes", () => {
     shouldWriteInventory({
       stockDelta: 0,
       submitted: { ...existing, discount: 15 },
+      existing,
+    }),
+    true
+  );
+});
+
+test("clearing a stored discount writes (submitted null, existing 10%)", () => {
+  assert.equal(
+    shouldWriteInventory({
+      stockDelta: 0,
+      submitted: { ...existing, discount: null },
       existing,
     }),
     true
@@ -197,6 +209,23 @@ test("buildIncreaseItem sends null to clear VAT (tri-state)", () => {
   assert.equal("vat" in item, true);
 });
 
+test("buildIncreaseItem forwards an explicit 0 discount instead of dropping it", () => {
+  const item = buildIncreaseItem({ ...med, discount: 0 }, 0);
+  assert.equal(item.discount, 0, "an explicit 0% discount must be sent, not dropped");
+  assert.equal("discount" in item, true);
+});
+
+test("buildIncreaseItem sends null to clear the discount (tri-state)", () => {
+  const item = buildIncreaseItem({ ...med, discount: null }, 0);
+  assert.equal(item.discount, null);
+  assert.equal("discount" in item, true);
+});
+
+test("buildIncreaseItem omits an absent discount (leave stored)", () => {
+  const item = buildIncreaseItem({ ...med }, 0);
+  assert.equal("discount" in item, false);
+});
+
 test("buildIncreaseItem omits lote and expiry when stock delta is 0", () => {
   const item = buildIncreaseItem(
     { ...med, stock: 0, lote: " L-1 ", fechaVencimiento: " 2026-01-01 " },
@@ -213,6 +242,32 @@ test("buildIncreaseItem trims and forwards lote and expiry when delta > 0", () =
   );
   assert.equal(item.lote, "L-1");
   assert.equal(item.fecha_vencimiento_lote, "2026-01-01");
+});
+
+// ─── discountFieldFor: tri-state of the form's Descuento (%) field ───────────
+
+// Same contract as the form's `useFormatCurrency().parseInput`: comma decimals,
+// NaN collapses to 0. Injected so the helper never re-implements it.
+const parseDecimal = (raw) => {
+  const parsed = parseFloat(raw.replace(",", "."));
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+test("discountFieldFor: clearing an empty field when a discount was stored sends null", () => {
+  assert.equal(discountFieldFor("", 10, parseDecimal), null);
+});
+
+test("discountFieldFor: an empty field with no stored discount is omitted", () => {
+  assert.equal(discountFieldFor("", undefined, parseDecimal), undefined);
+  assert.equal(discountFieldFor("", null, parseDecimal), undefined);
+});
+
+test("discountFieldFor: an explicit 0 is a real discount and is sent", () => {
+  assert.equal(discountFieldFor("0", 10, parseDecimal), 0);
+});
+
+test("discountFieldFor: a typed discount is forwarded", () => {
+  assert.equal(discountFieldFor("15", undefined, parseDecimal), 15);
 });
 
 // ─── mergeEcho: realtime echo reconciliation (5s window) ─────────────────────

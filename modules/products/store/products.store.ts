@@ -3,6 +3,7 @@ import { Medication, StockFilter } from "@/modules/products/types/products.types
 import { productsService } from "@/modules/products/api/products.service";
 import { shouldWriteInventory, buildIncreaseItem } from "@/modules/products/lib/inventory-write";
 import type { PricingSnapshot } from "@/modules/products/lib/inventory-write";
+import { saveErrorMessage } from "@/modules/products/lib/save-error";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { mqttServer } from "@/modules/core/mqtt/advanced-service";
 import { MQTT_TOPICS } from "@/modules/core/mqtt/topics";
@@ -105,6 +106,8 @@ interface ProductsState {
   _fetchPromise: Promise<void> | null;
   _countsPharmacyId: string | null;
   recentMutations: Record<string, number>;
+  /** Motivo del último guardado fallido (`saveMedicine`), con el texto del backend cuando lo hay. */
+  lastSaveError: string | null;
 }
 
 interface ProductsActions {
@@ -221,6 +224,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     _fetchPromise: null,
     _countsPharmacyId: null,
     recentMutations: {},
+    lastSaveError: null,
 
     clearStorage: () => {
       feedSeq++;
@@ -465,6 +469,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
     setCurrentMedicine: (currentMedicine) => set({ currentMedicine }),
 
     saveMedicine: async (medicine) => {
+      set({ lastSaveError: null });
       const pharmacyId = useAuthStore.getState().profile?.pharmacyId;
       const barCode = medicine.barCode || "";
       const stockDelta = typeof medicine.stock === "number" ? medicine.stock : 0;
@@ -477,6 +482,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         serverExisting = await get().findInventoryItem(barCode, { strict: true });
       } catch (error) {
         console.error("[saveMedicine] findInventoryItem error:", error);
+        set({ lastSaveError: saveErrorMessage(error) });
         return false;
       }
 
@@ -494,6 +500,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         }
       } catch (error) {
         console.error("API error while saving medicine:", error);
+        set({ lastSaveError: saveErrorMessage(error) });
         return false;
       }
 
@@ -551,7 +558,7 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
         // A failed write must NOT stamp recentMutations: the optimistic stock
         // was rolled back, so an echo arriving later must still be applied.
         console.error("[saveMedicine] increaseInventory error:", e);
-        set({ inventory: previousInventory });
+        set({ inventory: previousInventory, lastSaveError: saveErrorMessage(e) });
         return false;
       }
 

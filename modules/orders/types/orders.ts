@@ -16,7 +16,8 @@ export interface Medication {
   vat?: number;
   antibiotic: boolean;
   minimum: number;
-  discount?: number;
+  /** Tri-state como en el catálogo: `null` significa "sin descuento guardado". */
+  discount?: number | null;
 }
 
 export interface Client {

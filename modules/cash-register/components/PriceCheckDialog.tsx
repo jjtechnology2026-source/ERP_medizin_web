@@ -7,7 +7,7 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 export default function PriceCheckDialog({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState("");
-  const [result, setResult] = useState<{ name: string; price: number; discount?: number; stock: number; vat?: number; basePrice?: number } | null>(null);
+  const [result, setResult] = useState<{ name: string; price: number; discount?: number | null; stock: number; vat?: number; basePrice?: number } | null>(null);
   const [notFound, setNotFound] = useState(false);
   const { findInventoryItem } = useProductsStore();
   const { isDollar, getEffectiveRate } = useCurrencyStore();

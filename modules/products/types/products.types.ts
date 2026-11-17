@@ -25,7 +25,12 @@ export interface Medication {
   vat?: number;
   antibiotic: boolean;
   minimum: number;
-  discount?: number;
+  /**
+   * Tri-state, espejo del DTO del backend (`Option<Option<f64>>`): ausente deja
+   * el valor guardado, `null` limpia el descuento y un número lo fija (`0` es un
+   * valor real, no "sin descuento").
+   */
+  discount?: number | null;
   basePrice?: number;
   profitPercentage?: number;
   lote?: string;

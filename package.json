@@ -14,6 +14,7 @@
     "test:cierre-caja": "node --experimental-strip-types --test test/cierre-caja.test.mjs",
     "test:nota-credito": "node --experimental-strip-types --test test/nota-credito-flow.test.mjs",
     "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
+    "test:save-error": "node --experimental-strip-types --test test/save-error.test.mjs",
     "test:inventory": "node --experimental-strip-types --test test/inventory-write.test.mjs",
     "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs",
     "test:session-binding": "node --experimental-strip-types --test test/cash-session-binding.test.mjs",

@@ -6,6 +6,7 @@ import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
 import { productTypeChipClass } from "@/modules/products/lib/catalog";
+import { discountFieldFor } from "@/modules/products/lib/inventory-write";
 import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT, profitFromPrice, minimumSellingPrice } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
 
@@ -68,7 +69,7 @@ export default function StockFeaturesForm({
     setLote("");
     setFechaVencimiento("");
     setMinStock(String(currentMedicine.minimum ?? 0));
-    setDiscount(currentMedicine.discount !== undefined ? String(currentMedicine.discount) : "");
+    setDiscount(currentMedicine.discount != null ? String(currentMedicine.discount) : "");
     setProfit(currentMedicine.profitPercentage !== undefined ? String(currentMedicine.profitPercentage) : "");
   }, [currentMedicine]);
 
@@ -147,7 +148,11 @@ export default function StockFeaturesForm({
     const c = parseInput(priceWithoutVat); // costo
     const q = parseInput(quantity);
     const min = parseInput(minStock);
-    const disc = parseInput(discount);
+
+    // Descuento tri-state, igual que el DTO del backend: un número fija el valor
+    // (`0` es un valor real), vacío limpia el descuento guardado y, si nunca hubo
+    // descuento, el campo se omite para no escribir pricing de más.
+    const discountField = discountFieldFor(discount, currentMedicine.discount, parseInput);
 
     // El FE no calcula ni envía el precio cobrado: el backend lo deriva de
     // base_price/profit/IVA/descuento. `price` queda en el valor persistido para
@@ -158,7 +163,7 @@ export default function StockFeaturesForm({
       stock: q,
       vat: selectedVat,
       minimum: min,
-      discount: disc || undefined,
+      discount: discountField,
       basePrice: c || undefined,
       profitPercentage: profit ? parseInput(profit) : undefined,
       lote: lote.trim() || undefined,
@@ -179,7 +184,10 @@ export default function StockFeaturesForm({
       }
       setShowSuccessDialog(true);
     } else {
-      setFeedback({ type: "error", message: "Error al guardar el producto" });
+      setFeedback({
+        type: "error",
+        message: useProductsStore.getState().lastSaveError ?? "Error al guardar el producto",
+      });
     }
     setIsSaving(false);
   };
