@@ -75,10 +75,18 @@ export default function StockFeaturesForm({
 
   const profitInvalid = profit.trim() !== "" && !isValidProfit(parseInput(profit));
 
+  // Ganancia efectiva: la tipeada o, con el campo vacío, la guardada — el payload omite
+  // `profit_percentage` en ese caso y el backend conserva la ganancia ya persistida.
+  // La tarjeta, el desglose y el rótulo usan este mismo número: un solo precio en pantalla.
+  const profitFromStorage = profit.trim() === "" && currentMedicine?.profitPercentage !== undefined;
+  const effectiveProfitPct = profitFromStorage
+    ? (currentMedicine?.profitPercentage ?? 0)
+    : parseInput(profit);
+
   const priceWithVat = useMemo(() => {
     const c = parseInput(priceWithoutVat); // costo
-    return sellingPrice(c, parseInput(profit) || 0, selectedVat);
-  }, [priceWithoutVat, selectedVat, profit, parseInput]);
+    return sellingPrice(c, effectiveProfitPct, selectedVat);
+  }, [priceWithoutVat, selectedVat, effectiveProfitPct, parseInput]);
 
   const discountPercent = parseInput(discount);
   const hasDiscount = discountPercent > 0;
@@ -89,9 +97,8 @@ export default function StockFeaturesForm({
   }, [priceWithVat, discountPercent, hasDiscount]);
 
   const base = parseInput(priceWithoutVat);
-  const profitPct = parseInput(profit);
   const discountPct = hasDiscount ? discountPercent : 0;
-  const priceWithProfit = isValidProfit(profitPct) ? base / (1 - profitPct / 100) : NaN;
+  const priceWithProfit = isValidProfit(effectiveProfitPct) ? base / (1 - effectiveProfitPct / 100) : NaN;
   const ganancia = priceWithProfit - base;
   const subtotal = priceWithProfit * (1 - discountPct / 100);
   const iva = subtotal * selectedVat / 100;
@@ -100,9 +107,6 @@ export default function StockFeaturesForm({
   // (costo + ganancia + IVA − descuento), no el precio que ya está guardado.
   // Sin costo, o con ganancia inválida, todavía no hay derivación y se muestra el persistido.
   const persistedChargePrice = displayedChargePrice(currentMedicine);
-  // Ganancia efectiva: la tipeada o, con el campo vacío, la guardada — el payload omite
-  // `profit_percentage` en ese caso y el backend conserva la ganancia ya persistida.
-  const effectiveProfitPct = profit.trim() === "" ? (currentMedicine?.profitPercentage ?? 0) : profitPct;
   const derivedFinalPrice =
     base > 0 && isValidProfit(effectiveProfitPct)
       ? derivePrice(base, effectiveProfitPct, selectedVat, discountPct)
@@ -395,7 +399,9 @@ export default function StockFeaturesForm({
                         <span className="font-black text-slate-700">{format(base)}</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-500">Ganancia {profit || "0"}%</span>
+                        <span className="font-bold text-slate-500">
+                          Ganancia {effectiveProfitPct}%{profitFromStorage ? " (guardada)" : ""}
+                        </span>
                         <span className="font-black text-blue-600">{fmt(ganancia)}</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">

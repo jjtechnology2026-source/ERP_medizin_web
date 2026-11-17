@@ -217,7 +217,12 @@ test("chargePricePreview: la derivación en vivo gana sobre el precio persistido
 test("chargePricePreview cae al precio persistido cuando no hay derivación (costo o ganancia inválidos)", () => {
   assert.equal(chargePricePreview(undefined, 10), 10);
   assert.equal(chargePricePreview(NaN, 10), 10);
-  assert.equal(chargePricePreview(0, 10), 10);
+  assert.equal(chargePricePreview(-1, 10), 10);
+});
+
+test("chargePricePreview acepta una derivación de 0: descuento 100% o costo sub-centavo se muestran como 0", () => {
+  assert.equal(chargePricePreview(0, 16.57), 0);
+  assert.equal(chargePricePreview(derivePrice(10, 30, 16, 100), 16.57), 0);
 });
 
 test("chargePricePreview sin derivación ni precio persistido devuelve 0 (nunca NaN en pantalla)", () => {

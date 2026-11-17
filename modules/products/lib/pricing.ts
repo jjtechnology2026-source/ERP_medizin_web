@@ -131,13 +131,14 @@ export function profitFromPrice(
  * Price to show as "the one that will be charged" while the operator edits the
  * economics of a product (cost, profit, VAT, discount).
  *
- * The live derivation ({@link derivePrice}) wins whenever it is computable; the
- * persisted listing price is only the fallback for inputs that cannot derive one
- * (no cost yet, profit outside `[0, 100)`), so the caller never shows a stale value
- * as if it were the edited one, and never shows `NaN`.
+ * The live derivation ({@link derivePrice}) wins whenever it is computable — including a
+ * derived `0` (a 100% discount or a sub-cent cost), which is what the backend will store — and
+ * the persisted listing price is only the fallback for inputs that cannot derive one at all
+ * (no cost yet, profit outside `[0, 100)`). The caller therefore never shows a stale value as
+ * the edited one, and never shows `NaN`.
  */
 export function chargePricePreview(derived: number | undefined, persisted: number): number {
-  if (derived !== undefined && Number.isFinite(derived) && derived > 0) return derived;
+  if (derived !== undefined && Number.isFinite(derived) && derived >= 0) return derived;
   return typeof persisted === "number" && Number.isFinite(persisted) ? persisted : 0;
 }
 
