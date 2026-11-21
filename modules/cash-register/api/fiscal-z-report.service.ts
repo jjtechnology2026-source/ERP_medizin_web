@@ -1,4 +1,5 @@
 import api from "@/modules/core/api/client";
+import type { ZReportDayEntry } from "@/modules/cash-register/lib/z-report-day-guard";
 import type {
   ZReportResult,
   ZReportResponse,
@@ -403,6 +404,52 @@ export const fiscalZReportService = {
       // Sin respuesta del listado no se puede afirmar nada: se devuelve null y
       // el llamador trata el caso como "no registrado" (falla segura).
       return null;
+    }
+  },
+
+  /**
+   * Reportes Z de un dia fiscal concreto, con su serial.
+   *
+   * Lo usa el aviso de "ya se emitio un Z hoy en esta maquina": a diferencia
+   * del historial legacy, este listado si trae `fiscal_serial`, que es lo que
+   * permite distinguir una maquina fiscal de otra dentro de la misma farmacia.
+   * `ok: false` significa que no se pudo consultar (red o respuesta sin
+   * listado): el llamador lo trata como "no verificado", nunca como "no hay".
+   */
+  async listZReportsByDate(
+    pharmacyId: string,
+    fiscalDate: string,
+  ): Promise<{ ok: boolean; reports: ZReportDayEntry[] }> {
+    const day = fiscalDate.trim();
+    if (!pharmacyId.trim() || !day) return { ok: false, reports: [] };
+    try {
+      const response = await api.get(
+        `/admin/farmacias/${encodeURIComponent(pharmacyId.trim())}/z-reports`,
+        {
+          params: {
+            fecha_desde: day,
+            fecha_hasta: day,
+            page: 1,
+            page_size: 50,
+          },
+        },
+      );
+      const body = readMap(response.data);
+      const reportes = body?.["reportes"];
+      if (!Array.isArray(reportes)) return { ok: false, reports: [] };
+
+      const reports: ZReportDayEntry[] = reportes
+        .map((item) => parseCreatedZReport(item))
+        .filter((report): report is CreatedZReport => !!report)
+        .map((report) => ({
+          zNumber: report.zNumber,
+          fiscalSerial: report.fiscalSerial,
+          fiscalDate: report.fiscalDate,
+        }));
+
+      return { ok: true, reports };
+    } catch {
+      return { ok: false, reports: [] };
     }
   },
 
