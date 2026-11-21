@@ -778,7 +778,7 @@ export default function CreateProductPage({ setView }: any) {
                   label="Ganancia (%)"
                   placeholder="ej: 20"
                   type="number"
-                  step="1"
+                  step="0.01"
                   value={formData.profit}
                   onChange={(e: any) => {
                     setFinalPriceInput("");
