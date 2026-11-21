@@ -1,10 +1,19 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import fiscalPrinterClient, { type FiscalSerialPort, setFiscalBrand } from "@/modules/cash-register/api/fiscal-printer-client";
 import { useChatToast } from "@/modules/core/providers/ChatToastProvider";
 import FiscalDiagnosticDialog from "@/modules/settings/components/FiscalDiagnosticDialog";
 import ZReportDialog from "@/modules/cash-register/components/ZReportDialog";
 import type { ZReportMode } from "@/modules/cash-register/components/ZReportDialog";
+import ZReportDayWarningDialog from "@/modules/cash-register/components/ZReportDayWarningDialog";
+import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
+import { caracasCalendarDate, readLastZPrint } from "@/modules/cash-register/lib/fiscal-fallback";
+import {
+  pickMachineSerial,
+  resolveZReportDayGuard,
+  usableMachineSerial,
+  type ZReportDayGuardResult,
+} from "@/modules/cash-register/lib/z-report-day-guard";
 import ZReportHistoryDialog from "@/modules/cash-register/components/ZReportHistoryDialog";
 import { pairPrinter, isWebUsbSupported, prepairPrinter, printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
@@ -60,6 +69,26 @@ function pickBestPort(ports: FiscalSerialPort[]): string {
   );
 }
 
+/**
+ * Tope de espera para el status de la impresora: el boton no puede quedarse
+ * colgado si el servicio fiscal local esta lento o no responde.
+ */
+function withShortTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export default function FiscalConfigCard() {
   const chatToast = useChatToast();
   const [implementation, setImplementation] = useState<string>(() => {
@@ -74,6 +103,12 @@ export default function FiscalConfigCard() {
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null);
   const [serviceVersion, setServiceVersion] = useState<string | null>(null);
   const [showZReport, setShowZReport] = useState<ZReportMode | null>(null);
+  // Aviso "ya hay un Z hoy en esta maquina" + que operacion queria ejecutar
+  // la persona cuando se topo con el aviso.
+  const [zGuard, setZGuard] = useState<{ result: ZReportDayGuardResult; mode: ZReportMode } | null>(
+    null,
+  );
+  const [zGuardBusy, setZGuardBusy] = useState<ZReportMode | null>(null);
   const [showZHistory, setShowZHistory] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "done" | "error">("idle");
@@ -82,6 +117,69 @@ export default function FiscalConfigCard() {
   // detectado y no pisa una seleccion manual reciente del operador.
   const lastAutoApplyRef = useRef<Record<string, number>>({});
   const manualOverrideRef = useRef(false);
+
+  // El dialogo del Z arranca solo al montarse (imprime o registra de una), asi
+  // que la verificacion de "ya hay un Z hoy en esta maquina" tiene que correr
+  // ANTES de abrirlo: adentro ya no hay donde frenar.
+  const requestZReport = useCallback(async (target: ZReportMode) => {
+    const profile = useAuthStore.getState().profile;
+    const idPharmacy = profile?.pharmacyId || profile?.id_group || "";
+    // Sin farmacia el alta falla igual: que lo explique el dialogo del Z.
+    if (!idPharmacy) {
+      setShowZReport(target);
+      return;
+    }
+    // Fecha fiscal = dia calendario de Caracas, igual que el Z de la POS80.
+    const fiscalDate = caracasCalendarDate();
+    const preferSerial = !(profile?.usesDigitalBilling ?? false);
+
+    setZGuardBusy(target);
+    try {
+      const result = await resolveZReportDayGuard({
+        pharmacyId: idPharmacy,
+        fiscalDate,
+        preferSerial,
+        readMachineSerial: async () => {
+          let fromStatus: string | null = null;
+          try {
+            const status = await withShortTimeout(fiscalPrinterClient.getPrinterStatus(), 2500);
+            fromStatus = pickMachineSerial([
+              status?.fiscal_serial,
+              status?.serial,
+              status?.fiscalSerial,
+              status?.response?.fiscal_serial,
+              status?.response?.serial,
+              status?.data?.fiscal_serial,
+              status?.data?.serial,
+            ]);
+          } catch {
+            fromStatus = null;
+          }
+          // Servicio local caido: queda el serial del ultimo Z impreso aca, pero
+          // solo si es de una maquina real (usableMachineSerial descarta el
+          // sintetico de un Z de POS80).
+          return (
+            fromStatus ?? usableMachineSerial(readLastZPrint(idPharmacy)?.fiscalSerial, idPharmacy)
+          );
+        },
+        // Sin tope, un listado colgado dejaria el boton en "Verificando..."
+        // para siempre: el corte cuenta como "no se pudo verificar".
+        fetchToday: () =>
+          withShortTimeout(
+            fiscalZReportService.listZReportsByDate(idPharmacy, fiscalDate),
+            8000,
+          ),
+      });
+
+      if (result.status === "none") {
+        setShowZReport(target);
+        return;
+      }
+      setZGuard({ result, mode: target });
+    } finally {
+      setZGuardBusy(null);
+    }
+  }, []);
 
   useEffect(() => {
     const checkService = () => {
@@ -534,18 +632,20 @@ export default function FiscalConfigCard() {
                       : "Generar reporte X"}
               </button>
               <button
-                onClick={() => setShowZReport("print")}
+                onClick={() => void requestZReport("print")}
+                disabled={zGuardBusy !== null}
                 title="Solo imprime el reporte Z en la máquina fiscal. No lo registra en el libro de ventas."
-                className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+                className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
               >
-                Generar reporte Z
+                {zGuardBusy === "print" ? "Verificando el día..." : "Generar reporte Z"}
               </button>
               <button
-                onClick={() => setShowZReport("register")}
+                onClick={() => void requestZReport("register")}
+                disabled={zGuardBusy !== null}
                 title="Carga las ventas del día en el libro de ventas. No imprime nada."
-                className="px-10 py-5 bg-[#5b21b6] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+                className="px-10 py-5 bg-[#5b21b6] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
               >
-                Registrar en libro de ventas
+                {zGuardBusy === "register" ? "Verificando el día..." : "Registrar en libro de ventas"}
               </button>
               <button
                 onClick={handlePairPos80}
@@ -624,6 +724,18 @@ export default function FiscalConfigCard() {
         </div>
       </div>
     </div>
+      {zGuard && (
+        <ZReportDayWarningDialog
+          result={zGuard.result}
+          mode={zGuard.mode}
+          onCancel={() => setZGuard(null)}
+          onConfirm={() => {
+            const target = zGuard.mode;
+            setZGuard(null);
+            setShowZReport(target);
+          }}
+        />
+      )}
       {showZReport && <ZReportDialog mode={showZReport} onClose={() => setShowZReport(null)} />}
       {showZHistory && <ZReportHistoryDialog onClose={() => setShowZHistory(false)} />}
       {showDiagnostic && <FiscalDiagnosticDialog onClose={() => setShowDiagnostic(false)} />}

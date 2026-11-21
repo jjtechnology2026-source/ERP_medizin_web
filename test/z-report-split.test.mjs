@@ -74,9 +74,27 @@ test("la tarjeta abre las dos operaciones por separado", () => {
     new URL("../modules/settings/components/FiscalConfigCard.tsx", import.meta.url),
     "utf8",
   );
-  // Cada modo se abre desde su propio click: dos aperturas distintas, no una sola
+  // Cada modo se pide desde su propio click: dos pedidos distintos, no uno solo
   // que decida adentro.
-  assert.match(src, /setShowZReport\("print"\)/, "falta la apertura del modo imprimir");
-  assert.match(src, /setShowZReport\("register"\)/, "falta la apertura del modo registrar");
+  assert.match(src, /requestZReport\("print"\)/, "falta el pedido del modo imprimir");
+  assert.match(src, /requestZReport\("register"\)/, "falta el pedido del modo registrar");
   assert.match(src, /<ZReportDialog mode=/, "el dialogo debe recibir el modo explicito");
+});
+
+// El aviso de "ya hay un Z hoy" no puede vivir adentro del dialogo del Z: ese
+// dialogo arranca solo al montarse, asi que la verificacion corre antes de
+// abrirlo y el boton ya no lo abre de forma directa.
+test("el aviso de Z duplicado corre antes de abrir el dialogo del Z", () => {
+  const src = readFileSync(
+    new URL("../modules/settings/components/FiscalConfigCard.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /resolveZReportDayGuard/, "falta la verificacion del dia antes de abrir");
+  assert.match(src, /<ZReportDayWarningDialog/, "falta el modal de aviso");
+  assert.match(src, /listZReportsByDate/, "la verificacion debe consultar el libro del dia");
+  assert.doesNotMatch(
+    src,
+    /onClick=\{\(\) => setShowZReport\(/,
+    "ningun boton puede saltarse la verificacion abriendo el dialogo directo",
+  );
 });
