@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (status === "unauthenticated" && !isTestMode) return null;
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-hidden bg-[#FBFCFE] font-sans text-slate-900">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#FBFCFE] font-sans text-slate-900">
       <UserNavbar
         isSidebarExpanded={isSidebarExpanded}
         onExpandToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
