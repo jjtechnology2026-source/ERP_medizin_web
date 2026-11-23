@@ -14,8 +14,13 @@ export default function LoginWrapper({ children }: LoginWrapperProps) {
       </div>
 
       {/* Contenedor del Formulario (Más ancho) */}
-      <div className="relative z-10 w-full max-w-xl px-4 mt-20">
-        <div className="bg-white rounded-[3rem] shadow-[0_30px_70px_rgba(0,0,0,0.15)] p-10 md:p-14 border border-gray-100">{children}</div>
+      {/* Phone: the page adds `p-4`, this wrapper added `px-4` and the card another
+          `p-10`, which left the login form 246px of usable width on a 390px
+          screen — the first screen anyone sees on a phone (spec S7). Below `sm`
+          the wrapper hands its horizontal padding to the card and the card keeps
+          24px; from `sm` up the original 40/56px padding is untouched (spec S4). */}
+      <div className="relative z-10 w-full max-w-xl px-0 mt-20 sm:px-4">
+        <div className="bg-white rounded-[3rem] shadow-[0_30px_70px_rgba(0,0,0,0.15)] p-6 border border-gray-100 sm:p-10 md:p-14">{children}</div>
       </div>
 
       {/* Versión del sistema */}

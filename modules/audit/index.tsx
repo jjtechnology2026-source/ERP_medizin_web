@@ -73,7 +73,7 @@ export function AuditLogsSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="gap-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm md:flex md:items-end md:justify-between">
+      <div className="gap-4 rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:flex md:items-end md:justify-between">
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.35em] text-slate-500 font-bold">Auditoría</p>
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Logs de auditoría</h1>
@@ -96,7 +96,7 @@ export function AuditLogsSection() {
         </div>
       </div>
 
-      <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-6">
           <AuditFilters
             filters={filters}
@@ -106,7 +106,10 @@ export function AuditLogsSection() {
             onReset={resetFilters}
           />
 
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          {/* Phone: three nested paddings (page `p-4`, card `p-4` and this `p-3`)
+              left the entry cards ~270px wide for a three-field block. Below `sm`
+              they shrink; from `sm` up the original 24/16px stack is intact (S4/S7). */}
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
             {isLoading ? (
               <div className="py-16 text-center text-slate-400 font-bold italic">Cargando registros...</div>
             ) : logs.length === 0 ? (

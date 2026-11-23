@@ -365,15 +365,18 @@ export function DataTable<T, F extends Record<string, any>>({
                 <div key={rowIdx} className="bg-white">
                   <div className="p-5 flex flex-col gap-4">
                     {columns.map((col, colIdx) => (
+                      /* Phone card row: a long value used to run past the card
+                         because nothing could shrink and nothing wrapped. The
+                         label keeps its width, the value wraps (spec S7). */
                       <div
                         key={colIdx}
-                        className="flex justify-between items-center text-sm"
+                        className="flex justify-between items-center gap-3 text-sm"
                       >
-                        <span className="font-black text-gray-400 uppercase text-[10px] tracking-tighter">
+                        <span className="shrink-0 font-black text-gray-400 uppercase text-[10px] tracking-tighter">
                           {col.header}
                         </span>
                         <span
-                          className={`text-gray-800 ${colIdx === 0 ? "font-bold" : ""}`}
+                          className={`min-w-0 text-right wrap-break-word text-gray-800 ${colIdx === 0 ? "font-bold" : ""}`}
                         >
                           {col.render
                             ? col.render(item)

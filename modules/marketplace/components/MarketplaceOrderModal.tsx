@@ -66,30 +66,33 @@ export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, on
               {/* Customer Info */}
               <div className="space-y-3 sm:space-y-4">
                 <h3 className="text-[10px] sm:text-base font-bold text-slate-500 uppercase tracking-wider">Información del Cliente</h3>
-                <div className="grid grid-cols-[80px_1fr] sm:grid-cols-[110px_1fr] gap-y-2 sm:gap-y-3">
+                {/* Phone: `1fr` resolves to the longest unbreakable word, so an
+                    unbroken client name (or address) widened the whole modal; the
+                    value track is `minmax(0,1fr)` and the values break (spec S7). */}
+                <div className="grid grid-cols-[80px_minmax(0,1fr)] sm:grid-cols-[110px_minmax(0,1fr)] gap-y-2 sm:gap-y-3">
                   <span className="text-xs font-bold text-slate-400">Cliente:</span>
-                  <span className="text-xs font-black text-slate-700">{order.clientName}</span>
+                  <span className="min-w-0 text-xs font-black text-slate-700 wrap-break-word">{order.clientName}</span>
                   
                   <span className="text-xs font-bold text-slate-400">Cédula:</span>
-                  <span className="text-xs font-black text-slate-700">{order.clientIdNumber || "---"}</span>
+                  <span className="min-w-0 text-xs font-black text-slate-700 wrap-break-word">{order.clientIdNumber || "---"}</span>
                   
                   <span className="text-xs font-bold text-slate-400">Dirección:</span>
-                  <span className="text-xs font-black text-slate-700 leading-tight sm:leading-relaxed">{order.clientAddress}</span>
+                  <span className="min-w-0 text-xs font-black text-slate-700 leading-tight wrap-break-word sm:leading-relaxed">{order.clientAddress}</span>
                 </div>
               </div>
 
               {/* Order Info */}
               <div className="space-y-3 sm:space-y-4">
                 <h3 className="text-[10px] sm:text-base font-bold text-slate-500 uppercase tracking-wider">Información de la Orden</h3>
-                <div className="grid grid-cols-[80px_1fr] sm:grid-cols-[110px_1fr] gap-y-2 sm:gap-y-3">
+                <div className="grid grid-cols-[80px_minmax(0,1fr)] sm:grid-cols-[110px_minmax(0,1fr)] gap-y-2 sm:gap-y-3">
                   <span className="text-xs font-bold text-slate-400">ID Orden:</span>
-                  <span className="text-xs font-black text-slate-700 break-all">{order.orderId}</span>
+                  <span className="min-w-0 text-xs font-black text-slate-700 break-all">{order.orderId}</span>
                   
                   <span className="text-xs font-bold text-slate-400">Entrega:</span>
-                  <span className="text-xs font-black text-slate-700 capitalize">{order.saleType || "Marketplace"}</span>
+                  <span className="min-w-0 text-xs font-black text-slate-700 capitalize wrap-break-word">{order.saleType || "Marketplace"}</span>
                   
                   <span className="text-xs font-bold text-slate-400">Fecha:</span>
-                  <span className="text-xs font-black text-slate-700">
+                  <span className="min-w-0 text-xs font-black text-slate-700 wrap-break-word">
                     {order.createdAt ? new Date(order.createdAt).toLocaleString('es-ES', { 
                       day: '2-digit', 
                       month: 'short', 

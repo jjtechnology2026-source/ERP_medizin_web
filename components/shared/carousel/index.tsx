@@ -31,8 +31,12 @@ export function Carousel({ slides, autoPlay = true, interval = 5000 }: CarouselP
   }, [autoPlay, interval, next, isHovered]);
 
   return (
+    /* Phone: the height used to be a fixed `h-[600px]`, taller than on desktop,
+       on a box with `overflow-hidden` — long slide copy was clipped with no way to
+       reach it. Below `md` the slide is in flow so its own content sets the height
+       (with a 360px floor); from `md` up the original fixed 500px remains (S4/S7). */
     <div 
-      className="relative w-full h-[600px] md:h-[500px] rounded-[3rem] overflow-hidden bg-[#f8fafc] group"
+      className="relative w-full min-h-[360px] md:h-[500px] rounded-[3rem] overflow-hidden bg-[#f8fafc] group"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -43,7 +47,7 @@ export function Carousel({ slides, autoPlay = true, interval = 5000 }: CarouselP
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
-          className="absolute inset-0 flex flex-col md:flex-row"
+          className="relative flex flex-col md:absolute md:inset-0 md:flex-row"
         >
           {/* Contenedor de Imagen */}
           <div className="absolute inset-0 md:relative md:flex-1 h-full w-full order-1 md:order-2">
@@ -100,10 +104,14 @@ export function Carousel({ slides, autoPlay = true, interval = 5000 }: CarouselP
       {/* Indicadores */}
       <div className="absolute bottom-10 left-8 md:left-24 flex gap-3 z-30">
         {slides.map((_, idx) => (
+          /* Phone: this is the only slide control below `md` (the arrows are
+             desktop-only) and a 6px bar is far under the 44px target; the
+             pseudo-element grows the hit area to ~46px without changing the
+             drawn bar or the row layout. Desktop is byte-identical (spec S3/S4). */
           <button
             key={idx}
             onClick={() => setCurrent(idx)}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
+            className={`relative h-1.5 rounded-full transition-all duration-500 max-lg:after:absolute max-lg:after:-inset-x-2 max-lg:after:-inset-y-5 max-lg:after:content-[''] ${
               current === idx ? "w-10 bg-blue-600" : "w-2 bg-slate-300"
             }`}
           />

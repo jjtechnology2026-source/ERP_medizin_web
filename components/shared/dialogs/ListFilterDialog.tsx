@@ -45,8 +45,13 @@ export const ListFilterDialog = ({
   }, [search, items]);
 
   return (
-    /* Cambiamos el contenedor a absoluto para que se posicione respecto al padre */
-    <div className="absolute top-full left-0 mt-2 z-[100] w-[320px]">
+    /* Desktop keeps the panel as a dropdown anchored under its trigger. Below `lg`
+       it becomes a bottom-anchored panel pinned to the viewport: the trigger is a
+       ~120px chip, so a 320px panel hanging off its `left-0` ran ~200px past the
+       phone column and only looked fine while the chip sat at the far left edge
+       (spec S7). `85dvh` (not `vh`) keeps it usable with the mobile keyboard up
+       (spec S8). */
+    <div className="absolute top-full left-0 mt-2 z-[100] w-[320px] max-lg:fixed max-lg:bottom-4 max-lg:left-4 max-lg:right-4 max-lg:top-auto max-lg:mt-0 max-lg:max-h-[85dvh] max-lg:w-auto max-lg:overflow-y-auto">
       <motion.div
         ref={dropdownRef}
         initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -60,7 +65,7 @@ export const ListFilterDialog = ({
           <h2 className="text-[18px] font-bold text-[#202224]">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors max-lg:flex max-lg:size-11 max-lg:items-center max-lg:justify-center max-lg:rounded-xl"
           >
             <RiCloseLine size={24} />
           </button>

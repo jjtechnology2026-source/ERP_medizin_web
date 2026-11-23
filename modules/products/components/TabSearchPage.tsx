@@ -168,14 +168,19 @@ export default function CatalogSearchPage({
         <h1 className="text-3xl font-black text-slate-800 leading-tight">
           Agregar producto al inventario
         </h1>
-        <div className="flex items-center gap-3">
-          <p className="text-blue-500 font-bold text-sm tracking-wide">
+        {/* Phone: the sentence and the refresh action used to share one row with
+            neither `min-w-0` nor `shrink-0`, so at 358px they fought for space and
+            the label wrapped mid-word (spec S7). Below `sm` they stack and the
+            action keeps a 44px tap target (spec S3); from `sm` up the row is the
+            one it always was (spec S4). */}
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <p className="min-w-0 text-blue-500 font-bold text-sm tracking-wide">
             Busca en el catálogo nacional de medicamentos y agrégalo a tu stock con precio e IVA.
           </p>
           {!isLoading && catalog.length > 0 && (
             <button
               onClick={() => fetchCatalog(true)}
-              className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors cursor-pointer"
+              className="flex shrink-0 items-center gap-1 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors cursor-pointer max-lg:min-h-11"
               title="Recargar catálogo"
             >
               <HiOutlineRefresh size={14} /> Recargar catálogo

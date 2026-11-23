@@ -107,14 +107,19 @@ export default function OrderStatsCards({ stats, scopeTotals, loading }: OrderSt
           key={idx}
           className="bg-white border border-slate-100 rounded-2xl p-5 flex items-center gap-4 shadow-sm"
         >
-          <div className="p-3 bg-slate-50 rounded-xl text-slate-600">
+          <div className="p-3 bg-slate-50 rounded-xl text-slate-600 shrink-0">
             {card.icon}
           </div>
-          <div className="flex flex-col">
+          {/* Phone: the money figures (net, gross and returned) are long and the
+              breakdown used to be `whitespace-nowrap` inside a column with no
+              `min-w-0`, so its min-content width pushed the card past the phone
+              column (spec S7). Below `lg` the column may shrink and the breakdown
+              wraps; from `lg` up it is the same single line as before (spec S4). */}
+          <div className="flex min-w-0 flex-col">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{card.title}</span>
-            <span className="text-xl font-bold text-slate-800">{loading ? "---" : card.value}</span>
+            <span className="text-xl font-bold text-slate-800 wrap-break-word">{loading ? "---" : card.value}</span>
             {!loading && card.breakdown ? (
-              <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">{card.breakdown}</span>
+              <span className="text-[10px] font-semibold text-slate-500 wrap-break-word lg:whitespace-nowrap">{card.breakdown}</span>
             ) : null}
           </div>
         </div>

@@ -16,7 +16,7 @@ export default function AuditEntryCard({ entry }: { entry: AuditLogEntry }) {
 
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
-      <div className="p-5 sm:p-6">
+      <div className="p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap gap-3">
@@ -72,7 +72,7 @@ export default function AuditEntryCard({ entry }: { entry: AuditLogEntry }) {
       </div>
 
       {open ? (
-        <div className="border-t border-slate-200 bg-slate-50 px-5 py-5 sm:px-6">
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-3xl bg-white p-4 shadow-sm">
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Valores anteriores</p>
