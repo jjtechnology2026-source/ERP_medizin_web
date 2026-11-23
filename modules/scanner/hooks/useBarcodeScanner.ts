@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReadInputBarcodeFormat, ReadResult } from "zxing-wasm/reader";
+import {
+  RETAIL_BARCODE_FORMATS,
+  createStabilityGate,
+  selectBarcodeResult,
+} from "../lib/barcode-acceptance.ts";
 import { mustReleaseStream } from "../lib/stream-abandonment.ts";
 
 /**
@@ -70,16 +75,9 @@ const START_TIMEOUT_MS = 20000;
  * conjuntos predefinidos del paquete (`LINEAR_BARCODE_FORMATS`) incluyen
  * variantes que el lector no acepta (EAN-2 / EAN-5 sueltos).
  */
-const PRODUCT_BARCODE_FORMATS: ReadInputBarcodeFormat[] = [
-  "EAN13",
-  "EAN8",
-  "UPCA",
-  "UPCE",
-  "Code128",
-  "Code39",
-  "ITF",
-  "Codabar",
-];
+// Las simbologías permitidas viven en lib/barcode-acceptance.ts: sólo las que
+// traen control de integridad. Code39/ITF/Codabar quedaron afuera porque no
+// tienen checksum y devuelven números inventados sobre etiquetas sucias.
 
 type ReaderApi = typeof import("zxing-wasm/reader");
 
@@ -170,13 +168,15 @@ async function decodeVideoFrame(
   const frame = context.getImageData(0, 0, width, height);
   const results: ReadResult[] = await reader.readBarcodes(frame, {
     // Restringir el conjunto evita gastar tiempo buscando simbologías 2D que el
-    // mostrador no usa.
-    formats: PRODUCT_BARCODE_FORMATS,
-    maxNumberOfSymbols: 1,
+    // mostrador no usa, y descarta las que no validan nada.
+    formats: [...RETAIL_BARCODE_FORMATS] as ReadInputBarcodeFormat[],
+    // 3 y no 1: con una sola lectura, una decodificación sucia gana el turno y el
+    // EAN-13 correcto del mismo frame nunca se ve.
+    maxNumberOfSymbols: 3,
     tryHarder: true,
   });
 
-  const hit = results.find((result) => result.isValid && result.text.trim().length > 0);
+  const hit = selectBarcodeResult(results);
   return hit ? hit.text.trim() : null;
 }
 
@@ -193,6 +193,8 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
   const sessionRef = useRef(0);
   const decodingRef = useRef(false);
   const lastHitRef = useRef<{ code: string; at: number } | null>(null);
+  /** Confirmación por repetición: ver `createStabilityGate`. */
+  const gateRef = useRef(createStabilityGate(2));
 
   const onDetectRef = useRef(onDetect);
   useEffect(() => {
@@ -208,6 +210,10 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
   }, []);
 
   const handleCode = useCallback((code: string) => {
+    // Dos lecturas iguales seguidas antes de buscar producto: una decodificación
+    // sucia no se repite idéntica, un código real sí.
+    if (!gateRef.current.accept(code)) return;
+
     const now = Date.now();
     const last = lastHitRef.current;
     if (last && last.code === code && now - last.at < REPEAT_COOLDOWN_MS) return;
@@ -269,6 +275,7 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
     }
     decodingRef.current = false;
     lastHitRef.current = null;
+    gateRef.current.reset();
     releaseStream();
     setStatus("idle");
     setError(null);
@@ -324,7 +331,16 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
       let settled = false;
       const streamPromise = withTimeout(
         mediaDevices
-          .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+          .getUserMedia({
+            // Más resolución que el default: en una caja chica cada milímetro de
+            // barra cuenta, y a 640x480 el código ocupa poquísimos píxeles.
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          })
           .then((stream) => {
             if (mustReleaseStream({ settled, session, currentSession: sessionRef.current })) {
               stream.getTracks().forEach((track) => track.stop());
