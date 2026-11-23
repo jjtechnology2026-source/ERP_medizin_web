@@ -208,6 +208,32 @@ export const productsService = {
     await api.put("/admin/products/update-name", { barCode, name });
   },
 
+  /**
+   * Actualiza los campos de catálogo de un producto (todos menos `productType`).
+   *
+   * `ProductUpdateDto` se mapea con `unwrap_or_default()` en el backend, así que
+   * una clave ausente **limpia** la columna guardada. El payload se envía siempre
+   * completo: el llamador pasa el producto ya resuelto desde el servidor.
+   */
+  async updateProduct(medication: Medication): Promise<void> {
+    await api.put("/admin/products/update", {
+      barCode: medication.barCode,
+      activeIngredient: medication.activeIngredient ?? "",
+      antibiotic: Boolean(medication.antibiotic),
+      brand: medication.brand ?? "",
+      category: medication.category ?? "",
+      controlled: Boolean(medication.controlled),
+      description: medication.description ?? "",
+      dosage: medication.dosage ?? "",
+      image:
+        medication.image && typeof medication.image === "string" ? medication.image : "",
+      name: medication.name ?? "",
+      subcategory: medication.subcategory ?? "",
+      tablets: medication.tablets ?? "",
+      vat: Number(medication.vat) || 0,
+    });
+  },
+
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
   async increaseInventory(pharmacyId: string, medications: { bar_code: string; stock: number; price?: number; minimum: number; discount?: number | null; base_price?: number | null; profit_percentage?: number | null; vat?: number | null; lote?: string | null; fecha_vencimiento_lote?: string | null }[]): Promise<void> {
     await api.post("/admin/MedicationsAgent/increase", {

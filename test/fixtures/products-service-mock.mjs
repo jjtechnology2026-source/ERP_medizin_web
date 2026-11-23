@@ -18,6 +18,9 @@ export const productsService = {
   getCatalog: async () => ({ medications: [], next_cursor: null }),
   deleteProduct: async () => {},
   updateName: async () => {},
+  updateProduct: async () => {
+    throw new Error("updateProduct stub not configured");
+  },
 };
 
 /** Restore every stub to a rejecting/neutral default. Call in beforeEach. */
@@ -34,4 +37,7 @@ export function resetProductsServiceMock() {
   productsService.getCatalog = async () => ({ medications: [], next_cursor: null });
   productsService.deleteProduct = async () => {};
   productsService.updateName = async () => {};
+  productsService.updateProduct = async () => {
+    throw new Error("updateProduct stub not configured");
+  };
 }
