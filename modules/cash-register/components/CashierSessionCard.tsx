@@ -85,7 +85,7 @@ export default function CashierSessionCard() {
             Este terminal está atado a la caja
           </span>
           <span
-            className="text-[10px] font-black text-[#0057FF] bg-[#f0f7ff] border border-blue-100/60 px-2.5 py-1 rounded-full"
+            className="max-w-full truncate text-[10px] font-black text-[#0057FF] bg-[#f0f7ff] border border-blue-100/60 px-2.5 py-1 rounded-full"
             title={boundCajaId}
           >
             {boundCajaLabel}
@@ -148,10 +148,14 @@ export default function CashierSessionCard() {
             <HiOutlineCash size={18} className="text-slate-400" />
             <span className="text-xs font-black text-slate-500">Caja:</span>
           </div>
+          {/* `min-w-0` + `max-w-full` let the select shrink below the intrinsic
+              width of its longest option (`code - name`) instead of widening the
+              wrapped row past the card; below `lg` it takes its own full-width
+              line and keeps a 44px target (spec S3). */}
           <select
             value={selectedCashBoxId ?? ""}
             onChange={(e) => selectCashBox(e.target.value || null)}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="min-w-0 max-w-full truncate px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20 max-lg:min-h-11 max-lg:w-full"
           >
             <option value="">Seleccionar caja</option>
             {cashBoxes.map((cb) => (

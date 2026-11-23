@@ -5,6 +5,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { productsService } from "@/modules/products/api/products.service";
+import RecordCard from "@/components/ui/record-card";
 import { productTypeChipClass } from "@/modules/products/lib/catalog";
 import type { Medication, ViewState } from "@/modules/products/types/products.types";
 
@@ -326,7 +327,89 @@ export default function CatalogSearchPage({
 
           {paginatedResults.length > 0 && (
             <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
-              <div className="overflow-x-auto">
+              {/* Phone: one card per product with the fields the operator decides
+                  with — name, presentation, price and stock — and the rest behind
+                  the disclosure (spec S7). The seven-column table cannot fit a
+                  390px screen and the shell clips horizontal overflow, so the
+                  table below is desktop-only. */}
+              <ul className="flex flex-col gap-2 p-3 lg:hidden">
+                {paginatedResults.map((med, idx) => {
+                  const isSelected = selectedMed?.barCode === med.barCode;
+                  return (
+                    <RecordCard
+                      key={med.barCode || idx}
+                      title={med.name}
+                      subtitle={
+                        <span className="font-mono">
+                          {med.barCode}
+                          {isSelected ? " · Seleccionado" : ""}
+                        </span>
+                      }
+                      onSelect={() => handleSelectRow(med)}
+                      className={isSelected ? "border-blue-400 bg-blue-50/60" : undefined}
+                      fields={[
+                        { label: "Presentación", value: med.tablets || "—" },
+                        { label: "Precio", value: formatPrice(med.price), emphasis: "strong" },
+                        {
+                          label: "Stock",
+                          value: (
+                            <span className={med.stock > 0 ? "text-emerald-600" : "text-slate-400"}>
+                              {med.stock > 0 ? `${med.stock} und` : "Sin stock"}
+                            </span>
+                          ),
+                          emphasis: "strong",
+                        },
+                      ]}
+                    >
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                        <div className="min-w-0">
+                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Principio activo
+                          </dt>
+                          <dd className="truncate font-bold text-slate-600">
+                            {med.activeIngredient || "—"}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Dosis
+                          </dt>
+                          <dd className="truncate font-bold text-slate-600">{med.dosage || "—"}</dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Marca
+                          </dt>
+                          <dd className="truncate font-bold text-slate-600">{med.brand || "—"}</dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Tipo
+                          </dt>
+                          <dd className="flex items-center gap-1.5 font-bold text-slate-600">
+                            {med.productType ? (
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${productTypeChipClass(med.productType)}`}
+                              >
+                                {med.productType}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                            {med.controlled && (
+                              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-black text-rose-600">
+                                Rx
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                    </RecordCard>
+                  );
+                })}
+              </ul>
+
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-white border-b border-slate-100">
@@ -399,13 +482,15 @@ export default function CatalogSearchPage({
               </div>
 
               {totalPages > 1 && (
-                <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 bg-white">
+                <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 bg-white max-lg:flex-wrap max-lg:gap-2 max-lg:px-3">
                   <span className="text-[10px] font-bold text-slate-400">
                     Página {safePage} de {totalPages} ({(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, filteredResults.length)} de {filteredResults.length})
                   </span>
-                  <div className="flex gap-1.5">
+                  {/* Phone: the same seven-page window, but with 44×44 targets and
+                      a row that wraps instead of running past the card (spec S3). */}
+                  <div className="flex gap-1.5 max-lg:flex-wrap max-lg:gap-2">
                     <button onClick={() => setSearchPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer"
+                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer max-lg:min-h-11 max-lg:px-4"
                     >Anterior</button>
                     {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
                       const start = Math.max(1, Math.min(safePage - 3, totalPages - 6));
@@ -413,7 +498,7 @@ export default function CatalogSearchPage({
                       if (p > totalPages) return null;
                       return (
                         <button key={p} onClick={() => setSearchPage(p)}
-                          className={`w-8 h-8 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                          className={`w-8 h-8 rounded-xl text-[11px] font-black transition-all cursor-pointer max-lg:min-h-11 max-lg:min-w-11 ${
                             safePage === p
                               ? "bg-blue-600 text-white shadow-md"
                               : "bg-white border border-slate-200 text-slate-500 hover:border-blue-200 hover:text-blue-600"
@@ -422,7 +507,7 @@ export default function CatalogSearchPage({
                       );
                     })}
                     <button onClick={() => setSearchPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer"
+                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-all cursor-pointer max-lg:min-h-11 max-lg:px-4"
                     >Siguiente</button>
                   </div>
                 </div>

@@ -53,39 +53,46 @@ function TaxGroupCard({ group, formatPrice }: TaxGroupProps) {
         </span>
       </div>
 
-      {/* Grilla de 3 Columnas para Métricas del Grupo */}
-      <div className="grid grid-cols-3 gap-4 bg-slate-50/50 rounded-3xl p-5 border border-slate-100/50">
+      {/* Grupo de métricas: tres columnas desde `md`; en el teléfono una sola
+          columna, porque tres celdas de ~79px cortaban la etiqueta y el dinero
+          (specs S3, S7). */}
+      <div className="grid grid-cols-1 gap-3 bg-slate-50/50 rounded-3xl p-4 border border-slate-100/50 md:grid-cols-3 md:gap-4 md:p-5">
         <div className="flex flex-col text-center">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Stock total</span>
-          <span className="text-base font-black text-slate-700">{group.totalStock} und</span>
+          <span className="text-base font-black text-slate-700 break-words">{group.totalStock} und</span>
         </div>
-        <div className="flex flex-col text-center border-x border-slate-200/60">
+        <div className="flex flex-col text-center border-slate-200/60 md:border-x">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor stock</span>
-          <span className="text-base font-black text-blue-600">{formatPrice(group.totalValue)}</span>
-          <span className="text-[9px] font-medium text-slate-400 mt-0.5">
+          <span className="text-base font-black text-blue-600 break-words">{formatPrice(group.totalValue)}</span>
+          <span className="text-[9px] font-medium text-slate-400 mt-0.5 break-words">
             Base {formatPrice(group.totalBase)} · IVA {formatPrice(group.totalIva)}
           </span>
         </div>
         <div className="flex flex-col text-center">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio promedio</span>
-          <span className="text-base font-black text-slate-700">{formatPrice(avgPrice)}</span>
+          <span className="text-base font-black text-slate-700 break-words">{formatPrice(avgPrice)}</span>
         </div>
       </div>
 
       {/* Lista de Productos Estilizada */}
       <div className="divide-y divide-slate-100">
         {displayedItems.map((med, i) => (
-          <div key={med.barCode || i} className="py-4 flex justify-between items-center group/item hover:bg-slate-50/30 px-3 rounded-2xl transition-all duration-300">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-700 group-hover/item:text-blue-600 transition-colors">{med.name}</span>
-              <span className="text-[10px] font-medium text-slate-400 mt-0.5">{med.brand}</span>
+          <div key={med.barCode || i} className="py-4 flex justify-between items-center gap-3 group/item hover:bg-slate-50/30 px-3 rounded-2xl transition-all duration-300">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span
+                title={med.name}
+                className="text-sm font-bold text-slate-700 break-words group-hover/item:text-blue-600 transition-colors"
+              >
+                {med.name}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 mt-0.5 break-words">{med.brand}</span>
             </div>
-            <div className="flex items-center gap-12">
+            <div className="flex shrink-0 items-center gap-3 lg:gap-12">
               <div className="text-right">
                 <span className="text-xs font-black text-slate-500">{med.stock} und</span>
                 <p className="text-[9px] text-slate-400 mt-0.5">Stock</p>
               </div>
-              <div className="text-right min-w-[100px]">
+              <div className="text-right lg:min-w-[100px]">
                 <span className="text-sm font-black text-slate-700">{formatPrice(med.price * med.stock)}</span>
                 <p className="text-[9px] text-slate-400 mt-0.5">{formatPrice(med.price)} c/u</p>
                 {unitBreakdown(med)}
@@ -276,10 +283,10 @@ export default function StockTaxBreakdown({
           </div>
 
           {/* Valor Total Global del Inventario */}
-          <div className="bg-white text-slate-800 border border-slate-200 rounded-[2.5rem] p-8 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white text-slate-800 border border-slate-200 rounded-[2.5rem] p-5 lg:p-8 flex items-center justify-between gap-3 shadow-sm hover:shadow-md transition-shadow max-lg:flex-col max-lg:items-start">
             <span className="text-lg font-black uppercase tracking-wider">Valor Total del Inventario</span>
-            <div className="text-right">
-              <span className="text-3xl font-black text-blue-600">{formatPrice(globalTotal)}</span>
+            <div className="text-right max-lg:text-left">
+              <span className="text-2xl lg:text-3xl font-black text-blue-600 break-words">{formatPrice(globalTotal)}</span>
               <span className="block text-[11px] font-medium text-slate-400 mt-0.5">
                 Base {formatPrice(globalBase)} · IVA {formatPrice(globalIva)}
               </span>

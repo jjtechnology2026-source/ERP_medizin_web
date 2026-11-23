@@ -6,6 +6,27 @@ import InvoiceDetailDialog from "@/modules/cash-register/components/InvoiceDetai
 import RecordCard from "@/components/ui/record-card";
 import type { CashierInvoice } from "@/modules/cash-register/types/cashier.types";
 
+/**
+ * The page numbers a phone pager shows: first, last and the pages around the
+ * current one, with a gap marker where pages are skipped. Rendering one 44px
+ * target per page overflows the ~310px card once a shift has more than a few
+ * documents, so the window is capped at five numbers plus two gaps.
+ */
+function phonePageItems(current: number, total: number): (number | "gap")[] {
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const items: (number | "gap")[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  if (start > 2) items.push("gap");
+  for (let page = start; page <= end; page++) items.push(page);
+  if (end < total - 1) items.push("gap");
+  items.push(total);
+
+  return items;
+}
+
 export default function RecentInvoicesCard() {
   const { sessionInvoices, activeSession } = useCashierWorkflowStore();
   const [selectedInvoice, setSelectedInvoice] = useState<CashierInvoice | null>(null);
@@ -204,11 +225,57 @@ export default function RecentInvoicesCard() {
           <span className="text-[10px] font-bold text-slate-400">
             Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, sortedInvoices.length)} de {sortedInvoices.length} documentos
           </span>
-          <div className="flex items-center gap-1.5">
+          {/* Phone pager: a wrapped row of 44×44 targets over a bounded window of
+              pages (specs S3, S6). One target per page used to overflow the card
+              silently, because the shell clips horizontal overflow. */}
+          <div className="flex flex-wrap items-center gap-1.5 lg:hidden">
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-2.5 py-1.5 max-lg:min-h-11 max-lg:px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-h-11 px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            {phonePageItems(currentPage, totalPages).map((item, i) =>
+              item === "gap" ? (
+                <span
+                  key={`gap-${i}`}
+                  aria-hidden="true"
+                  className="flex min-h-11 min-w-6 items-center justify-center px-1 text-[9px] font-black text-slate-400"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setCurrentPage(item)}
+                  aria-label={`Página ${item}`}
+                  aria-current={currentPage === item ? "page" : undefined}
+                  className={`min-h-11 min-w-11 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
+                    currentPage === item
+                      ? "bg-[#0057FF] text-white border-[#0057FF] shadow-xs"
+                      : "bg-white text-slate-600 border-slate-200/60 hover:bg-slate-50"
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="min-h-11 px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Siguiente
+            </button>
+          </div>
+
+          {/* Desktop pager: unchanged, one target per page (spec S4). */}
+          <div className="hidden items-center gap-1.5 lg:flex">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1.5 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Anterior
             </button>
@@ -216,7 +283,7 @@ export default function RecentInvoicesCard() {
               <button
                 key={i}
                 onClick={() => setCurrentPage(i + 1)}
-                className={`w-6 h-6 max-lg:h-11 max-lg:w-11 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
+                className={`w-6 h-6 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
                   currentPage === i + 1
                     ? "bg-[#0057FF] text-white border-[#0057FF] shadow-xs"
                     : "bg-white text-slate-600 border-slate-200/60 hover:bg-slate-50"
@@ -228,7 +295,7 @@ export default function RecentInvoicesCard() {
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-2.5 py-1.5 max-lg:min-h-11 max-lg:px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2.5 py-1.5 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Siguiente
             </button>
