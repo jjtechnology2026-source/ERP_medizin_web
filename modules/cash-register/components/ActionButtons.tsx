@@ -34,7 +34,9 @@ export default function ActionButtons({ onCheckout }: { onCheckout: () => void }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2.5">
+      {/* Desktop toolbar, unchanged (spec S4). On a phone these actions live in
+          the single overflow sheet of the screen (spec S6). */}
+      <div className="hidden lg:flex flex-wrap gap-2.5">
         <button
           onClick={() => setShowManual(true)}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-[#4d6bfe] hover:bg-[#3b5bdb] text-white rounded-xl font-black text-[11px] tracking-wider shadow-xs hover:scale-105 active:scale-95 transition-all"

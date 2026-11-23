@@ -11,7 +11,7 @@ export default function OrderTabs() {
         <button
           key={i}
           onClick={() => switchOrder(i)}
-          className={`px-4 py-2 rounded-lg font-black text-[10px] tracking-wider uppercase transition-all whitespace-nowrap ${
+          className={`px-4 py-2 max-lg:min-h-11 rounded-lg font-black text-[10px] tracking-wider uppercase transition-all whitespace-nowrap ${
             currentOrderIndex === i
               ? "bg-[#00d2ff] text-white shadow-xs"
               : "bg-slate-100 text-slate-500 hover:bg-slate-200"
@@ -23,8 +23,9 @@ export default function OrderTabs() {
       ))}
       <button
         onClick={newOrder}
-        className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0057FF] text-white hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shadow-xs shrink-0"
+        className="flex items-center justify-center w-6 h-6 max-lg:w-11 max-lg:h-11 rounded-full bg-[#0057FF] text-white hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shadow-xs shrink-0"
         title="Nueva Orden"
+        aria-label="Nueva orden"
       >
         <HiPlus size={13} />
       </button>

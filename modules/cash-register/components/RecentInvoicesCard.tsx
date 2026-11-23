@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import InvoiceDetailDialog from "@/modules/cash-register/components/InvoiceDetailDialog";
+import RecordCard from "@/components/ui/record-card";
 import type { CashierInvoice } from "@/modules/cash-register/types/cashier.types";
 
 export default function RecentInvoicesCard() {
@@ -82,7 +83,59 @@ export default function RecentInvoicesCard() {
           Sin facturas emitidas en esta sesión activa.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Phone: one card per document with number, total, state and a visible
+            row action (specs S5, S7). The eight-column table goes `min-w-[900px]`
+            wide, so it only renders from `lg` up and keeps its desktop look. */}
+        <ul className="flex flex-col gap-2 lg:hidden">
+          {currentInvoices.map((inv) => (
+            <RecordCard
+              key={inv.id}
+              title={<span className="font-mono">{inv.controlNumber}</span>}
+              subtitle={formatDate(inv.emittedAt)}
+              fields={[
+                { label: "Total Bs", value: `Bs ${inv.totalVes.toFixed(2)}`, emphasis: "strong" },
+                {
+                  label: "Total USD",
+                  value: `$ ${(inv.totalVes / (inv.exchangeRate || 1)).toFixed(2)}`,
+                },
+                { label: "Estado", value: "Emitida" },
+              ]}
+              actions={
+                <button
+                  type="button"
+                  onClick={() => setSelectedInvoice(inv)}
+                  className="flex items-center justify-center rounded-xl bg-blue-50 px-3 text-[11px] font-black uppercase tracking-wide text-[#0057FF] transition-colors active:bg-blue-100"
+                >
+                  Ver
+                </button>
+              }
+            >
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div className="min-w-0">
+                  <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cliente</dt>
+                  <dd className="truncate font-bold text-slate-600">{inv.clientName || "—"}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Usuario</dt>
+                  <dd className="truncate font-bold text-slate-600">{currentUser}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tipo</dt>
+                  <dd className="font-bold text-slate-600">Factura</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tasa</dt>
+                  <dd className="font-bold text-slate-600 font-mono">
+                    {(inv.exchangeRate || 0).toFixed(2)}
+                  </dd>
+                </div>
+              </dl>
+            </RecordCard>
+          ))}
+        </ul>
+
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-100 pb-2">
@@ -138,6 +191,7 @@ export default function RecentInvoicesCard() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {selectedInvoice && (
@@ -154,7 +208,7 @@ export default function RecentInvoicesCard() {
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-2.5 py-1.5 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2.5 py-1.5 max-lg:min-h-11 max-lg:px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Anterior
             </button>
@@ -162,7 +216,7 @@ export default function RecentInvoicesCard() {
               <button
                 key={i}
                 onClick={() => setCurrentPage(i + 1)}
-                className={`w-6 h-6 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
+                className={`w-6 h-6 max-lg:h-11 max-lg:w-11 flex items-center justify-center text-[9px] font-black rounded-lg transition-all border cursor-pointer ${
                   currentPage === i + 1
                     ? "bg-[#0057FF] text-white border-[#0057FF] shadow-xs"
                     : "bg-white text-slate-600 border-slate-200/60 hover:bg-slate-50"
@@ -174,7 +228,7 @@ export default function RecentInvoicesCard() {
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-2.5 py-1.5 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2.5 py-1.5 max-lg:min-h-11 max-lg:px-3 text-[9px] font-black bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Siguiente
             </button>

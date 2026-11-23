@@ -499,14 +499,54 @@ export default function PaymentDialog({
     }
   };
 
+  // Labels and gating of the confirm/document actions live here so the desktop
+  // footer and the phone footer cannot drift apart (spec S4).
+  const confirmDisabled =
+    isProcessing ||
+    !activeSession ||
+    activeSession.approvalStatus !== "approved" ||
+    remaining > VES_TOLERANCE ||
+    hasInvalidActiveMethod ||
+    (exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE);
+
+  const confirmLabel = isProcessing
+    ? "Procesando..."
+    : !activeSession
+      ? "Sin sesión activa"
+      : activeSession.approvalStatus !== "approved"
+        ? "Sesión no aprobada"
+        : remaining > VES_TOLERANCE
+          ? `Falta ${formatPrice(remaining / rate)}`
+          : hasInvalidActiveMethod
+            ? "Complete los métodos de pago"
+            : exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE
+              ? "Asigne el cambio"
+              : "Cobrar e Imprimir";
+
+  const quoteDisabled =
+    isProcessing || !activeSession || totals.itemCount === 0 || Boolean(quoteBlocked);
+  const quoteLabel = quoteBlocked
+    ? "Factura ya emitida"
+    : isProcessing
+      ? "Guardando..."
+      : "Guardar presupuesto";
+  const deliveryNoteDisabled = isProcessing || !activeSession || totals.itemCount === 0;
+
   return (
     <>
     {createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-md">
-      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col text-slate-800">
-        <div className="flex items-center justify-between p-6 pb-3 flex-shrink-0">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/30 backdrop-blur-md sm:items-center">
+      {/* Phone: the checkout takes the whole screen, with a scrollable body and a
+          fixed footer that carries the total and the confirm action (S6, S8).
+          From `sm` up it is the same centered panel as before (S4). */}
+      <div className="bg-white shadow-2xl w-full h-[100dvh] flex flex-col text-slate-800 sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:mx-4 sm:rounded-[40px]">
+        <div className="flex items-center justify-between px-4 pb-3 pt-4 sm:p-6 sm:pb-3 flex-shrink-0">
           <h2 className="text-xl font-black text-slate-800">Procesar Pago</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center"
+          >
             <HiX size={20} />
           </button>
         </div>
@@ -558,7 +598,7 @@ export default function PaymentDialog({
           </div>
         )}
 
-        <div className="px-6 flex-1 overflow-y-auto">
+        <div className="px-4 flex-1 overflow-y-auto max-lg:overscroll-contain sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-6">
             <div className="lg:col-span-2 space-y-5">
               <p className="text-xs font-black text-slate-500 uppercase tracking-wider">
@@ -804,6 +844,30 @@ export default function PaymentDialog({
                   </div>
                 </div>
               )}
+
+              {/* Phone: the two document actions leave the fixed footer so it can
+                  carry only the total and the confirm action (S6). Same handlers
+                  and same gating as the desktop footer. */}
+              <div className="flex flex-col gap-2 lg:hidden">
+                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Documentos
+                </p>
+                <button
+                  onClick={handleSaveQuote}
+                  disabled={quoteDisabled}
+                  title={quoteBlocked ?? undefined}
+                  className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 text-sm font-black text-white transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {quoteLabel}
+                </button>
+                <button
+                  onClick={handleSaveDeliveryNote}
+                  disabled={deliveryNoteDisabled}
+                  className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-amber-600 text-sm font-black text-white transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Nota de entrega
+                </button>
+              </div>
             </div>
 
             <div className="space-y-6">
@@ -836,55 +900,61 @@ export default function PaymentDialog({
           </div>
         </div>
 
-        <div className="flex-shrink-0 p-6 pt-0">
+        {/* Phone footer: total + the single confirm action, always reachable. */}
+        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(12px_+_var(--mobile-tabbar-safe-bottom))] pt-3 lg:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <span className="pt-0.5 text-[11px] font-black uppercase tracking-wide text-slate-500">
+              Total a cobrar
+            </span>
+            <span className="text-right">
+              <span className="block text-base font-black text-slate-900 font-mono leading-tight">
+                {formatBs(totalConIgtfVes)}
+              </span>
+              <span className="block text-[11px] font-bold text-slate-400 font-mono leading-tight">
+                {formatUsd(rate > 0 ? totalConIgtfVes / rate : 0)}
+              </span>
+            </span>
+          </div>
+          {remaining > 0 && (
+            <p className="mt-1 text-[11px] font-bold text-red-500">
+              Pendiente: {formatBs(remaining)}
+            </p>
+          )}
+          <button
+            onClick={handlePaymentSubmit}
+            disabled={confirmDisabled}
+            className="mt-2 flex min-h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-100 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+
+        <div className="hidden lg:block flex-shrink-0 p-6 pt-0">
           <div className="flex gap-3 pt-4 border-t border-slate-100">
             <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all">
               Cancelar
             </button>
             <button
               onClick={handleSaveQuote}
-              disabled={isProcessing || !activeSession || totals.itemCount === 0 || Boolean(quoteBlocked)}
+              disabled={quoteDisabled}
               title={quoteBlocked ?? undefined}
               className="flex-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {quoteBlocked
-                ? "Factura ya emitida"
-                : isProcessing
-                  ? "Guardando..."
-                  : "Guardar presupuesto"}
+              {quoteLabel}
             </button>
             <button
               onClick={handleSaveDeliveryNote}
-              disabled={isProcessing || !activeSession || totals.itemCount === 0}
+              disabled={deliveryNoteDisabled}
               className="flex-1 py-3.5 bg-amber-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-amber-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Nota de entrega
             </button>
             <button
               onClick={handlePaymentSubmit}
-              disabled={
-                isProcessing ||
-                !activeSession ||
-                activeSession.approvalStatus !== "approved" ||
-                remaining > VES_TOLERANCE ||
-                hasInvalidActiveMethod ||
-                (exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE)
-              }
+              disabled={confirmDisabled}
               className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isProcessing
-                ? "Procesando..."
-                : !activeSession
-                  ? "Sin sesión activa"
-                  : activeSession.approvalStatus !== "approved"
-                    ? "Sesión no aprobada"
-                    : remaining > VES_TOLERANCE
-                      ? `Falta ${formatPrice(remaining / rate)}`
-                      : hasInvalidActiveMethod
-                        ? "Complete los métodos de pago"
-                        : exceso > VES_TOLERANCE && Math.abs(cambioPendiente) > VES_TOLERANCE
-                          ? "Asigne el cambio"
-                          : "Cobrar e Imprimir"}
+              {confirmLabel}
             </button>
           </div>
         </div>

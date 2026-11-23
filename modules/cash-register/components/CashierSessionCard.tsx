@@ -3,6 +3,7 @@ import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-w
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { resolveAuthorizedCajaId } from "@/modules/cash-register/lib/cash-session-binding";
+import SessionMetrics from "@/modules/cash-register/components/SessionMetrics";
 import { useRouter } from "next/navigation";
 import { 
   HiOutlineCash, 
@@ -27,7 +28,6 @@ export default function CashierSessionCard() {
     infoMessage,
     clearMessages,
     sessionInvoices,
-    sessionTransactions,
     load,
   } = useCashierWorkflowStore();
 
@@ -59,19 +59,6 @@ export default function CashierSessionCard() {
     }
   };
 
-  const getStatusLabel = (status?: string) => {
-    switch (status) {
-      case "approved":
-        return "Aprobada";
-      case "pending":
-        return "Pendiente";
-      case "rejected":
-        return "Rechazada";
-      default:
-        return status || "Desconocido";
-    }
-  };
-
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5">
       {/* Encabezado del Turno */}
@@ -80,9 +67,11 @@ export default function CashierSessionCard() {
           <span className="w-1.5 h-4 bg-[#0057FF] rounded-full inline-block"></span>
           Turno del cajero
         </h2>
+        {/* Mobile keeps the card informational; refreshing the session lives in
+            the overflow sheet so the screen stays within its action budget (S6). */}
         <button
           onClick={handleRefresh}
-          className="text-xs font-bold text-[#0057FF] hover:text-blue-800 transition-colors flex items-center gap-1.5"
+          className="hidden lg:flex text-xs font-bold text-[#0057FF] hover:text-blue-800 transition-colors items-center gap-1.5"
         >
           <HiRefresh className="animate-hover-spin" size={14} />
           Actualizar
@@ -127,7 +116,13 @@ export default function CashierSessionCard() {
       {errorMessage && (
         <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between">
           <span className="text-xs font-bold text-red-600">{errorMessage}</span>
-          <button onClick={clearMessages} className="text-red-400 hover:text-red-600">
+          {/* 44×44 under `lg` (spec S3): a 16px icon alone is below the 24px
+              floor. Desktop keeps its bare icon (spec S4). */}
+          <button
+            onClick={clearMessages}
+            aria-label="Descartar el aviso"
+            className="text-red-400 hover:text-red-600 max-lg:flex max-lg:min-h-11 max-lg:min-w-11 max-lg:items-center max-lg:justify-center"
+          >
             <HiOutlineXCircle size={16} />
           </button>
         </div>
@@ -136,7 +131,11 @@ export default function CashierSessionCard() {
       {infoMessage && (
         <div className="mb-4 px-4 py-3 bg-green-50 border border-green-100 rounded-2xl flex items-center justify-between">
           <span className="text-xs font-bold text-green-600">{infoMessage}</span>
-          <button onClick={clearMessages} className="text-green-400 hover:text-green-600">
+          <button
+            onClick={clearMessages}
+            aria-label="Descartar el aviso"
+            className="text-green-400 hover:text-green-600 max-lg:flex max-lg:min-h-11 max-lg:min-w-11 max-lg:items-center max-lg:justify-center"
+          >
             <HiOutlineCheckCircle size={16} />
           </button>
         </div>
@@ -199,81 +198,36 @@ export default function CashierSessionCard() {
             </div>
             <button
               onClick={() => router.push("/cierre-caja")}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-[#0057FF] text-[#0057FF] hover:bg-blue-50/50 rounded-full font-black text-[10px] tracking-wide shadow-sm hover:scale-[1.02] active:scale-95 transition-all"
+              className="hidden lg:flex items-center gap-1.5 px-4 py-1.5 bg-white border border-[#0057FF] text-[#0057FF] hover:bg-blue-50/50 rounded-full font-black text-[10px] tracking-wide shadow-sm hover:scale-[1.02] active:scale-95 transition-all"
             >
               <HiOutlinePrinter size={13} />
               Ir a cierre
             </button>
           </div>
 
-          {/* Grid de 9 Métricas */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2">
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Sesion</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono truncate mt-0.5" title={activeSession.id}>
-                {activeSession.id}
-              </span>
+          {/* Phone: only the three numbers the cashier needs at the counter.
+              The whole breakdown lives in the overflow sheet (S6). */}
+          <dl className="grid grid-cols-3 gap-2 lg:hidden">
+            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5">
+              <dt className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Vendido Bs</dt>
+              <dd className="text-xs font-black text-slate-800 font-mono mt-0.5 truncate">
+                {totalSold.toFixed(2)}
+              </dd>
             </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Estado</span>
-              <span className="text-[10px] font-black text-emerald-600 mt-0.5">
-                {getStatusLabel(activeSession.approvalStatus)}
-              </span>
+            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5">
+              <dt className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Facturas</dt>
+              <dd className="text-xs font-black text-slate-800 font-mono mt-0.5">{invoiceCount}</dd>
             </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Apertura Bs</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {activeSession.openingAmountVes.toFixed(2)}
-              </span>
-            </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Apertura USD</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {activeSession.openingAmountUsd.toFixed(2)}
-              </span>
-            </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Saldo teorico Bs</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
+            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5">
+              <dt className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Saldo Bs</dt>
+              <dd className="text-xs font-black text-slate-800 font-mono mt-0.5 truncate">
                 {activeSession.theoreticalAmountVes.toFixed(2)}
-              </span>
+              </dd>
             </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Saldo teorico USD</span>
-              {activeSession.saldoTeoricoUsd ? (
-                <div className="mt-0.5 space-y-0.5">
-                  <div className="text-[10px] font-black text-slate-700 font-mono leading-tight">
-                    Efc $ {activeSession.saldoTeoricoUsd.efectivo_usd.toFixed(2)}
-                  </div>
-                  <div className="text-[10px] font-black text-slate-500 font-mono leading-tight">
-                    Div $ {activeSession.saldoTeoricoUsd.divisa_electronica_usd.toFixed(2)}
-                  </div>
-                </div>
-              ) : (
-                <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                  {activeSession.theoreticalAmountUsd.toFixed(2)}
-                </span>
-              )}
-            </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Facturas del turno</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {invoiceCount}
-              </span>
-            </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Movimientos del turno</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {sessionTransactions.length}
-              </span>
-            </div>
-            <div className="bg-white border border-slate-100/60 rounded-xl p-2.5 flex flex-col justify-between shadow-xs">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Tasa</span>
-              <span className="text-[10px] font-black text-slate-700 font-mono mt-0.5">
-                {currentRate.toFixed(2)}
-              </span>
-            </div>
-          </div>
+          </dl>
+
+          {/* Desktop keeps the nine-metric grid exactly as before (S4). */}
+          <SessionMetrics className="hidden lg:grid lg:grid-cols-5 xl:grid-cols-9" />
         </div>
       )}
     </div>
