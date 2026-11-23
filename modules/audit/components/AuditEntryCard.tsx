@@ -35,15 +35,20 @@ export default function AuditEntryCard({ entry }: { entry: AuditLogEntry }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-right">
-            <div>
+          {/* The card sits inside three nested paddings (index.tsx:68, :113 and
+              this card's own p-5), so a long locale date string used to push the
+              44px chevron out of the card. Below `sm` the timestamp is the only
+              flexible child: it shrinks and wraps, the chevron never does. */}
+          <div className="flex min-w-0 items-center gap-3 text-right max-lg:justify-between">
+            <div className="min-w-0 max-lg:text-left">
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Fecha</p>
-              <p className="mt-2 text-sm font-semibold text-slate-900">{formatTimestamp(entry.timestamp)}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900 wrap-break-word">{formatTimestamp(entry.timestamp)}</p>
             </div>
             <button
               type="button"
               onClick={() => setOpen((current) => !current)}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              aria-expanded={open}
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 max-lg:w-11 max-lg:px-0"
             >
               {open ? <HiOutlineChevronUp className="h-5 w-5" /> : <HiOutlineChevronDown className="h-5 w-5" />}
             </button>

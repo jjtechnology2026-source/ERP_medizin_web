@@ -166,8 +166,12 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
   // One pager for both compositions: the desktop table keeps it in its footer,
   // and the phone list renders the same component under its cards.
   const paginationBar = (
-    <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
-      <p className="text-xs font-bold text-slate-400">
+    // On a phone the count line and the pager compete for ~310px: "Mostrando
+    // 1001 - 1020 de 1020 ordenes" is wider than the three 44px targets, so the
+    // pager was the part that got pushed out of the card (the shell clips the
+    // overflow). Below `lg` the count takes its own row and truncates.
+    <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white max-lg:flex-wrap max-lg:gap-2">
+      <p className="min-w-0 truncate text-xs font-bold text-slate-400 max-lg:basis-full">
         Mostrando {currentOrders.length > 0 ? (safePage - 1) * itemsPerPage + 1 : 0} - {Math.min(safePage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
       </p>
       <button
@@ -179,7 +183,7 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
       >
         <HiOutlineRefresh className={`w-5 h-5 text-slate-600${isRefreshing ? " animate-spin" : ""}`} />
       </button>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 max-lg:gap-2">
         <button 
           disabled={safePage === 1} 
           onClick={() => setCurrentPage(p => p - 1)} 

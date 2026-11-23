@@ -130,6 +130,9 @@ export default function OrderCardList({
       {orders.map((order) => {
         const key = statusKey(order);
         const id = String(order.id || (order as any).idOrder || "");
+        // One unbroken address token used to widen the whole card; it now breaks
+        // and the full value lives in the disclosure, so nothing is hidden.
+        const address = order.client?.direccion || (order as any).address || "";
 
         return (
           <RecordCard
@@ -181,8 +184,11 @@ export default function OrderCardList({
                 <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                   Dirección
                 </dt>
-                <dd className="font-bold capitalize text-slate-600">
-                  {order.client?.direccion || (order as any).address || "—"}
+                <dd
+                  className="font-bold capitalize text-slate-600 wrap-break-word"
+                  title={address}
+                >
+                  {address || "—"}
                 </dd>
               </div>
               <div className="col-span-2 min-w-0">

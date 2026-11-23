@@ -37,7 +37,25 @@ export const SalesTypeCard = ({ monthOptions, selectedMonthKey, onMonthChange, c
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-100">
-        <table className="w-full text-left border-collapse">
+        {/* Phone: the three-column table does not fit ~326px, so each sale type
+            becomes a stacked "label: value" block (specs S3, S4, S7). */}
+        <ul className="divide-y divide-slate-100 lg:hidden">
+          {salesData.map((item) => (
+            <li key={item.id} className="px-3 py-3">
+              <p className="text-sm font-bold text-slate-700 wrap-break-word">{item.type}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-400">Cantidad</span>
+                <span className="text-sm font-black text-slate-800">{item.count}</span>
+                <span className={`${item.color} text-[10px] uppercase font-black px-2 py-1 rounded-md shadow-sm`}>
+                  {item.label}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Desktop table, unchanged (S4). */}
+        <table className="hidden w-full text-left border-collapse lg:table">
           <thead>
             <tr className="bg-blue-600 text-white">
               <th className="p-2.5 sm:p-4 text-[11px] sm:text-sm font-bold">Tipo de Venta</th>
