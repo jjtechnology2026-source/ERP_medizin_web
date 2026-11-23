@@ -258,8 +258,8 @@ export default function ProductSearchBar() {
             autoFocus
           />
           {showDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 bg-slate-50/70">
+            <div className="absolute top-full left-0 right-0 mt-2 z-50 max-w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-slate-100 bg-slate-50/70">
                 {STOCK_FILTERS.map((opt) => (
                   <button
                     key={opt.label}
@@ -276,7 +276,7 @@ export default function ProductSearchBar() {
                   </button>
                 ))}
               </div>
-              <div ref={scrollRef} className="max-h-[60vh] overflow-y-auto">
+              <div ref={scrollRef} className="max-h-[60vh] overflow-x-hidden overflow-y-auto">
                 {isSearching && results.length === 0 && (
                   <div className="px-4 py-3 text-xs font-bold text-slate-400">Buscando...</div>
                 )}
