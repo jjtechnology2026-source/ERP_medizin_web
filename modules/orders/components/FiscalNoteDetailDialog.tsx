@@ -54,7 +54,7 @@ export default function FiscalNoteDetailDialog({ noteId, noteType, onClose }: Fi
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-2xl text-white ${noteType === "NC" ? "bg-amber-500" : "bg-red-500"}`}>

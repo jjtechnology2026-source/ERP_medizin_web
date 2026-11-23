@@ -21,7 +21,7 @@ export const DateRangeFilterDialog = ({
   return (
     /* Same anchoring as `ListFilterDialog`: dropdown under the trigger on desktop,
        viewport-pinned panel below `lg` so it cannot leave a phone screen (spec S7). */
-    <div className="absolute top-full left-0 mt-2 z-[100] w-[300px] max-lg:fixed max-lg:bottom-4 max-lg:left-4 max-lg:right-4 max-lg:top-auto max-lg:mt-0 max-lg:max-h-[85dvh] max-lg:w-auto max-lg:overflow-y-auto">
+    <div className="absolute top-full left-0 mt-2 z-[100] w-[300px] max-lg:fixed max-lg:bottom-4 max-lg:left-4 max-lg:right-4 max-lg:top-auto max-lg:mt-0 max-lg:max-h-[85dvh] max-lg:w-auto max-lg:overflow-x-hidden max-lg:overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, y: -10, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}

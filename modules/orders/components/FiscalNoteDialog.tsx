@@ -195,7 +195,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-slate-900 text-white rounded-2xl">
@@ -288,7 +288,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
               <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">
                 Items ({defaultItems.length})
               </h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-48 max-lg:overflow-x-hidden overflow-y-auto">
                 {defaultItems.map((item, i) => (
                   <div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded-xl">
                     <span className="font-bold text-slate-700 truncate flex-1">{item.descripcion}</span>

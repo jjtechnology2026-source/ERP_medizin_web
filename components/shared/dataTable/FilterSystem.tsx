@@ -126,7 +126,7 @@ export function MultiSelectFilter({
               </span>
             </div>
             <div className="my-1 border-t border-gray-100" />
-            <div className="max-h-[220px] overflow-y-auto">
+            <div className="max-h-[220px] max-lg:overflow-x-hidden overflow-y-auto">
               {normalizedOptions.length === 0 ? (
                 <p className="px-2 py-3 text-xs text-gray-400 text-center italic">
                   No hay opciones disponibles

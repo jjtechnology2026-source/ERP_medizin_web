@@ -94,7 +94,7 @@ export default function ChatModal({ orderId, clientName, onClose }: ChatModalPro
 
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto px-5 py-4 space-y-1 min-h-[340px] max-h-[420px] bg-[#F8FAFC]"
+          className="flex-1 max-lg:overflow-x-hidden overflow-y-auto px-5 py-4 space-y-1 min-h-[340px] max-h-[420px] bg-[#F8FAFC]"
           style={{ scrollbarWidth: "thin", scrollbarColor: "#E2E8F0 #F8FAFC" }}
         >
           {messages.length === 0 && (

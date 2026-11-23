@@ -167,7 +167,7 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
         </div>
 
         {/* ===== LINE ITEMS ===== */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 max-lg:overflow-x-hidden overflow-y-auto">
           {loading ? null : !d || d.detalles.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm font-bold text-slate-300">Sin líneas disponibles</p>

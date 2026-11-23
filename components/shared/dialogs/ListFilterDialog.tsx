@@ -51,7 +51,7 @@ export const ListFilterDialog = ({
        phone column and only looked fine while the chip sat at the far left edge
        (spec S7). `85dvh` (not `vh`) keeps it usable with the mobile keyboard up
        (spec S8). */
-    <div className="absolute top-full left-0 mt-2 z-[100] w-[320px] max-lg:fixed max-lg:bottom-4 max-lg:left-4 max-lg:right-4 max-lg:top-auto max-lg:mt-0 max-lg:max-h-[85dvh] max-lg:w-auto max-lg:overflow-y-auto">
+    <div className="absolute top-full left-0 mt-2 z-[100] w-[320px] max-lg:fixed max-lg:bottom-4 max-lg:left-4 max-lg:right-4 max-lg:top-auto max-lg:mt-0 max-lg:max-h-[85dvh] max-lg:w-auto max-lg:overflow-x-hidden max-lg:overflow-y-auto">
       <motion.div
         ref={dropdownRef}
         initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -88,7 +88,7 @@ export const ListFilterDialog = ({
         </div>
 
         {/* Lista de Items */}
-        <div className="bg-[#EBEBEB] rounded-xl p-2 max-h-[250px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
+        <div className="bg-[#EBEBEB] rounded-xl p-2 max-h-[250px] max-lg:overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col gap-2">
           <button
             onClick={() => setSelected(null)}
             className={cn(

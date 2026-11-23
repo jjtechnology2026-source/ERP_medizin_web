@@ -285,7 +285,7 @@ export default function BulkImportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h2 className="text-xl font-black text-slate-800">Carga Masiva Excel</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
@@ -345,7 +345,7 @@ export default function BulkImportDialog({
                 </p>
               </div>
 
-              <div className="max-h-60 overflow-y-auto border border-slate-100 rounded-2xl">
+              <div className="max-h-60 max-lg:overflow-x-hidden overflow-y-auto border border-slate-100 rounded-2xl">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
@@ -446,7 +446,7 @@ export default function BulkImportDialog({
                   <p className="text-xs font-bold text-amber-700 mb-2">
                     {result.errors.length} errores
                   </p>
-                  <ul className="text-[11px] text-amber-600 space-y-1 max-h-32 overflow-y-auto">
+                  <ul className="text-[11px] text-amber-600 space-y-1 max-h-32 max-lg:overflow-x-hidden overflow-y-auto">
                     {result.errors.map((e, i) => (
                       <li key={i}>{e}</li>
                     ))}

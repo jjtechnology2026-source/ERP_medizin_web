@@ -76,11 +76,11 @@ export default function AuditEntryCard({ entry }: { entry: AuditLogEntry }) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-3xl bg-white p-4 shadow-sm">
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Valores anteriores</p>
-              <pre className="mt-3 max-h-48 overflow-auto text-xs text-slate-700">{entry.oldValues ? JSON.stringify(entry.oldValues, null, 2) : "Ninguno"}</pre>
+              <pre className="mt-3 max-h-48 max-lg:overflow-x-hidden overflow-auto text-xs text-slate-700">{entry.oldValues ? JSON.stringify(entry.oldValues, null, 2) : "Ninguno"}</pre>
             </div>
             <div className="rounded-3xl bg-white p-4 shadow-sm">
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Valores nuevos</p>
-              <pre className="mt-3 max-h-48 overflow-auto text-xs text-slate-700">{entry.newValues ? JSON.stringify(entry.newValues, null, 2) : "Ninguno"}</pre>
+              <pre className="mt-3 max-h-48 max-lg:overflow-x-hidden overflow-auto text-xs text-slate-700">{entry.newValues ? JSON.stringify(entry.newValues, null, 2) : "Ninguno"}</pre>
             </div>
           </div>
         </div>

@@ -332,7 +332,7 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
           <div className="grid grid-cols-[60px_1fr_80px] text-[10px] font-black text-white bg-[#1D68EF] p-4 uppercase tracking-tight">
             <span>Cant</span><span>Producto</span><span className="text-right">Importe</span>
           </div>
-          <div className="max-h-[450px] overflow-y-auto divide-y divide-slate-50">
+          <div className="max-h-[450px] max-lg:overflow-x-hidden overflow-y-auto divide-y divide-slate-50">
             {visibleOrder.medications?.map((med, idx) => (
               <div key={idx} className="grid grid-cols-[60px_1fr_80px] text-xs p-4 items-center hover:bg-blue-50/30 transition-colors">
                 <span className="text-slate-400 font-bold">{med.quantity}.0</span>
@@ -385,7 +385,7 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
           </button>
         </div>
 
-        <div className="px-10 pb-10 grid grid-cols-1 md:grid-cols-2 gap-10 overflow-y-auto max-h-[75vh]">
+        <div className="px-10 pb-10 grid grid-cols-1 md:grid-cols-2 gap-10 max-lg:overflow-x-hidden overflow-y-auto max-h-[75vh]">
           {detailColumns}
         </div>
       </div>

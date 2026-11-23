@@ -598,7 +598,7 @@ export default function PaymentDialog({
           </div>
         )}
 
-        <div className="px-4 flex-1 overflow-y-auto max-lg:overscroll-contain sm:px-6">
+        <div className="px-4 flex-1 max-lg:overflow-x-hidden overflow-y-auto max-lg:overscroll-contain sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-6">
             <div className="lg:col-span-2 space-y-5">
               <p className="text-xs font-black text-slate-500 uppercase tracking-wider">

@@ -108,7 +108,7 @@ export function NotificationsDialog({ isOpen, onClose }: { isOpen: boolean; onCl
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 max-h-[260px] no-scrollbar pb-5">
+        <div className="flex-1 max-lg:overflow-x-hidden overflow-y-auto px-5 max-h-[260px] no-scrollbar pb-5">
           {paginatedNotifs.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center opacity-30">
               <HiOutlineBell size={40} className="mb-2" />

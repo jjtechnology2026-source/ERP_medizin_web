@@ -372,7 +372,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-[32px] shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white rounded-[32px] shadow-xl w-full max-w-2xl max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto animate-in fade-in duration-200">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-[#E4E7EB]">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-sm">
@@ -558,7 +558,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
                   {seleccion.seleccionadas} de {seleccion.totalLineas} seleccionados
                 </span>
               </div>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-48 max-lg:overflow-x-hidden overflow-y-auto">
                 {lineas.map((l, i) => {
                   const problema = validateNotaCreditoLine(l);
                   return (

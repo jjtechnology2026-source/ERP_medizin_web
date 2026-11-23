@@ -118,7 +118,7 @@ export default function ProductSearchDialog({ onClose }: { onClose: () => void }
           </div>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+        <div ref={scrollRef} className="flex-1 max-lg:overflow-x-hidden overflow-y-auto p-4">
           {items.length === 0 ? (
             error ? (
               <div className="py-12 flex flex-col items-center gap-2">

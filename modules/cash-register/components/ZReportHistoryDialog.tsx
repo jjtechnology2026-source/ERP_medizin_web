@@ -129,7 +129,7 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between gap-2 p-6 border-b border-slate-100 max-lg:px-4">
           <div className="flex min-w-0 items-center gap-3">
             {selectedReport ? (

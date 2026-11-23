@@ -157,7 +157,7 @@ export default function PendingQuotesDialog({
           </div>
         )}
 
-        <div className="px-6 flex-1 overflow-y-auto pb-6 max-lg:px-4">
+        <div className="px-6 flex-1 max-lg:overflow-x-hidden overflow-y-auto pb-6 max-lg:px-4">
           {!activeSession ? (
             <p className="text-xs font-bold text-slate-400 text-center py-10">
               {isDeliveryNote

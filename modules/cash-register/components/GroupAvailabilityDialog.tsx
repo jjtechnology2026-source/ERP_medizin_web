@@ -78,7 +78,7 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
           </button>
         </div>
 
-        <div className="px-6 flex-1 overflow-y-auto pb-6 max-lg:px-4">
+        <div className="px-6 flex-1 max-lg:overflow-x-hidden overflow-y-auto pb-6 max-lg:px-4">
           {!pharmacyId ? (
             <p className="text-xs font-bold text-red-500 text-center py-10">
               No hay farmacia asignada. No se puede consultar el grupo.

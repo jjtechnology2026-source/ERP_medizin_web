@@ -89,7 +89,7 @@ function SearchableSelect({ label, placeholder, required, value, options, onChan
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          <div className="overflow-y-auto flex-1 py-2">
+          <div className="max-lg:overflow-x-hidden overflow-y-auto flex-1 py-2">
             {filteredOptions.length === 0 && !showAddCustom && (
               <div className="px-6 py-3 text-xs text-slate-400 italic">No se encontraron opciones</div>
             )}
@@ -659,7 +659,7 @@ export default function CreateProductPage({ setView }: any) {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+              <div className="space-y-4 max-h-[500px] max-lg:overflow-x-hidden overflow-y-auto pr-2">
                 {images.map((imgItem, index) => (
                   <div key={imgItem.id} className="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-100 rounded-2xl">
                     <div className="flex items-center gap-4">

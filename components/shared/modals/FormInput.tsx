@@ -235,7 +235,7 @@ export function FormSelect({
             </div>
 
             {/* Lista con Scroll de Alto Contraste */}
-            <div className="overflow-y-auto p-2 custom-select-scroll flex-1 bg-white">
+            <div className="max-lg:overflow-x-hidden overflow-y-auto p-2 custom-select-scroll flex-1 bg-white">
               {filteredOptions.length > 0 ? (
                 <>
                   {filteredOptions.map((opt, index) => (

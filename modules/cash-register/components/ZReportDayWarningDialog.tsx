@@ -45,7 +45,7 @@ export default function ZReportDayWarningDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] max-lg:overflow-x-hidden overflow-y-auto">
         <div className="p-6 flex flex-col gap-5">
           <div className="flex items-start gap-4">
             <div

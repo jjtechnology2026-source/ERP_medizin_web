@@ -154,7 +154,7 @@ export default function Navbar({
           <HiSearch className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
           
           {searchFocused && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[200] max-h-96 overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[200] max-h-96 max-lg:overflow-x-hidden overflow-y-auto">
               {searchResults.map((med) => (
                 <button
                   key={med.barCode}

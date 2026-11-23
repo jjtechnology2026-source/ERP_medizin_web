@@ -58,7 +58,7 @@ export function MultiStepModal({
 
         {/* Contenido - Ajustado para que el scroll sea interno y no rompa el modal
          */}
-        <div className="px-5 md:px-8 py-4 md:pb-10 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="px-5 md:px-8 py-4 md:pb-10 flex-1 max-lg:overflow-x-hidden overflow-y-auto custom-scrollbar">
           <div className="w-full h-full">{children}</div>
         </div>
 

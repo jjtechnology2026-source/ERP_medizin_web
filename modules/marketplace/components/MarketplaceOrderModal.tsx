@@ -57,7 +57,7 @@ export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, on
         </div>
 
         {/* Scrollable Content Section */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-5 sm:px-10 py-4 sm:py-6">
+        <div className="flex-1 max-lg:overflow-x-hidden overflow-y-auto custom-scrollbar px-5 sm:px-10 py-4 sm:py-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-10">
             
             {/* Left Column: Info */}
@@ -126,7 +126,7 @@ export default function MarketplaceOrderModal({ order, secondsLeft, onAccept, on
                 </div>
 
                 {/* Items List */}
-                <div className="p-1 sm:p-2 flex flex-col gap-1 sm:gap-2 max-h-[250px] lg:max-h-[400px] overflow-y-auto custom-scrollbar">
+                <div className="p-1 sm:p-2 flex flex-col gap-1 sm:gap-2 max-h-[250px] lg:max-h-[400px] max-lg:overflow-x-hidden overflow-y-auto custom-scrollbar">
                   {order.items?.map((item, index) => (
                     <div key={index} className="grid grid-cols-[40px_1fr_70px] sm:grid-cols-[60px_1fr_90px] items-center py-1.5 px-0.5 sm:px-1 hover:bg-white/60 rounded-lg transition-colors">
                       <span className="text-center text-[10px] sm:text-xs font-black text-slate-600">{item.quantity}</span>

@@ -95,7 +95,7 @@ export default function Sidebar({
       )}
 
       {/* Botón para colapsar/expandir (opcional, integrado en el diseño) */}
-      <nav className="flex-1 overflow-y-auto px-3 py-6 scrollbar-hide space-y-1">
+      <nav className="flex-1 max-lg:overflow-x-hidden overflow-y-auto px-3 py-6 scrollbar-hide space-y-1">
         {menuItems.map((item, index) => (
           <React.Fragment key={index}>
             {item.isHeader ? (
