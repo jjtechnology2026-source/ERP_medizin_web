@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/modules/core/utils/ui";
 
 interface ActionBarProps {
@@ -30,15 +31,29 @@ export default function ActionBar({
 }: ActionBarProps) {
   const secondaryActions = (secondary ?? []).slice(0, 2);
 
-  return (
+  /**
+   * The bar is portalled to <body>. `position: fixed` resolves against the
+   * nearest ancestor that establishes a containing block, and this bar is
+   * rendered inside the shell's scrolling <main>: without the portal it was laid
+   * out at its static position — right under the section title — instead of
+   * pinned to the bottom of the screen (seen on a real 390px render).
+   */
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+
+  const bar = (
     <div
       className={cn(
         "fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-md lg:hidden",
         // Stacked bars sit above the tab bar, which already owns the safe-area
         // strip; a standalone bar has to clear the home indicator itself.
-        stacked
-          ? "pb-3 bottom-[var(--mobile-tabbar-total-height)]"
-          : "pb-[calc(12px_+_var(--mobile-tabbar-safe-bottom))]",
+        // The offset must be a CORE utility. An arbitrary
+        // `bottom-[var(--mobile-tabbar-total-height)]` is not emitted by the
+        // compiler, and tailwind-merge then collapses `bottom-0`, leaving a fixed
+        // element with no offsets at all: it lays out at its static position,
+        // under the title or off screen. Caught only on a real 390px render.
+        // bottom-14 = 56px, the tab bar's item height, so the bar sits on top of it.
+        stacked ? "bottom-14 pb-3" : "bottom-0 pb-3",
       )}
     >
       <div className="flex items-stretch gap-2 px-3 pt-2">
@@ -56,4 +71,6 @@ export default function ActionBar({
       </div>
     </div>
   );
+
+  return host ? createPortal(bar, host) : null;
 }
