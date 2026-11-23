@@ -1,22 +1,30 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   HiOutlineEye,
   HiOutlineDocumentText,
   HiOutlineRefresh,
   HiOutlineSearch,
 } from "react-icons/hi";
-import type { FacturaListItem, NotaCreditoResumen, FacturaFilters } from "../types";
+import type {
+  FacturaListItem,
+  NotaCreditoResumen,
+  FacturaFilters,
+  FacturaEstadoFilter,
+} from "../types";
 import { facturasService } from "../api/facturas.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import FacturaNotaCreditoDialog from "./FacturaNotaCreditoDialog";
 import FacturaDetailDialog from "./FacturaDetailDialog";
+import FacturasCardList from "./FacturasCardList";
 
 interface FacturasTableProps {
   facturas: FacturaListItem[];
   isLoading: boolean;
   onRefresh: () => void;
   filtros: FacturaFilters;
+  /** Document state chosen in the phone filter sheet (spec S6). */
+  estado: FacturaEstadoFilter;
 }
 
 function SkeletonRow() {
@@ -31,7 +39,7 @@ function SkeletonRow() {
   );
 }
 
-export default function FacturasTable({ facturas, isLoading, onRefresh, filtros }: FacturasTableProps) {
+export default function FacturasTable({ facturas, isLoading, onRefresh, filtros, estado }: FacturasTableProps) {
   const profile = useAuthStore((s) => s.profile);
   const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const [selectedFactura, setSelectedFactura] = useState<FacturaListItem | null>(null);
@@ -64,11 +72,27 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
     onRefresh();
   };
 
+  const hasNotaCredito = (id: string) => (ncPorFactura[id]?.length ?? 0) > 0;
+
+  // The state filter is a view over the list the service already returned: it
+  // never changes the request, so it cannot alter what desktop asks for (S4).
+  const visibleFacturas = useMemo(() => {
+    if (estado === "all") return facturas;
+    return facturas.filter((f) =>
+      estado === "con-nc" ? hasNotaCredito(f.id) : !hasNotaCredito(f.id),
+    );
+  }, [facturas, estado, ncPorFactura]);
+
+  // A narrower list must not leave the pager past the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [estado]);
+
   const perPage = 20;
 
-  const totalPages = Math.ceil(facturas.length / perPage);
+  const totalPages = Math.ceil(visibleFacturas.length / perPage);
   const start = (page - 1) * perPage;
-  const pageItems = facturas.slice(start, start + perPage);
+  const pageItems = visibleFacturas.slice(start, start + perPage);
 
   const formatDate = (d: string) => {
     if (!d) return "—";
@@ -83,13 +107,16 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E4E7EB] shadow-sm overflow-hidden">
+    <>
+    {/* Desktop: the seven-column table, its toolbar and the numbered pager stay
+        exactly as they were (S4). */}
+    <div className="hidden lg:block bg-white rounded-2xl border border-[#E4E7EB] shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E4E7EB]">
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-bold text-[#0F172A]">Facturas</span>
           {!isLoading && (
             <span className="text-[11px] font-bold text-slate-400 bg-[#F8FAFC] px-2 py-0.5 rounded-md border border-[#E4E7EB]">
-              {facturas.length}
+              {visibleFacturas.length}
             </span>
           )}
         </div>
@@ -119,7 +146,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
           <tbody className="divide-y divide-[#F8FAFC]">
             {isLoading ? (
               Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
-            ) : facturas.length === 0 ? (
+            ) : visibleFacturas.length === 0 ? (
               <tr>
                 <td colSpan={7}>
                   <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -187,7 +214,10 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200" onClick={(e) => e.stopPropagation()}>
+                    {/* Always visible: these used to be `opacity-0 group-hover`
+                        only, so on a phone — and with a keyboard — they did not
+                        exist (spec S5). Each one is at least 24×24 (S3 floor). */}
+                    <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       {f.url_pdf && (
                         <a
                           href={f.url_pdf}
@@ -195,6 +225,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-[#2563EB] hover:bg-[#2563EB]/5 transition-all duration-200"
                           title="Ver PDF"
+                          aria-label={`Ver PDF de la factura ${f.numero_control}`}
                         >
                           <HiOutlineEye size={15} />
                         </a>
@@ -203,6 +234,7 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
                         onClick={(e) => { e.stopPropagation(); setSelectedFactura(f); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-[#059669] hover:bg-[#059669]/5 transition-all duration-200"
                         title="Emitir Nota de Crédito"
+                        aria-label={`Emitir nota de crédito de la factura ${f.numero_control}`}
                       >
                         <HiOutlineDocumentText size={15} />
                       </button>
@@ -215,10 +247,10 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
         </table>
       </div>
 
-      {!isLoading && facturas.length > 0 && totalPages > 1 && (
+      {!isLoading && visibleFacturas.length > 0 && totalPages > 1 && (
         <div className="flex items-center justify-between px-5 py-3 border-t border-[#E4E7EB] bg-[#F8FAFC]/50">
           <span className="text-[10px] font-semibold text-slate-400">
-            {start + 1}–{Math.min(start + perPage, facturas.length)} de {facturas.length}
+            {start + 1}–{Math.min(start + perPage, visibleFacturas.length)} de {visibleFacturas.length}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -261,22 +293,78 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros 
           </div>
         </div>
       )}
+    </div>
 
-      {selectedDetailFactura && (
-        <FacturaDetailDialog
-          factura={selectedDetailFactura}
-          onClose={() => setSelectedDetailFactura(null)}
-          notasCredito={ncPorFactura[selectedDetailFactura.id] ?? []}
-        />
-      )}
-      {selectedFactura && (
-        <FacturaNotaCreditoDialog
-          factura={selectedFactura}
-          onClose={() => setSelectedFactura(null)}
-          onSuccess={handleRefresh}
-          mode={usesDigitalBilling ? "tfhka" : "legacy"}
-        />
+    {/* Phone: cards plus the compact pager instead of the 900px table (S7). The
+        eight numbered buttons stay in the desktop pager above. */}
+    <div className="flex flex-col gap-3 lg:hidden">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold text-slate-400">
+          {isLoading ? "Cargando facturas..." : `${visibleFacturas.length} facturas`}
+        </p>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black uppercase text-slate-500 transition-colors active:bg-slate-100 disabled:opacity-40"
+        >
+          <HiOutlineRefresh size={14} aria-hidden="true" className={isLoading ? "animate-spin" : ""} />
+          Actualizar
+        </button>
+      </div>
+
+      <FacturasCardList
+        facturas={pageItems}
+        isLoading={isLoading}
+        ncPorFactura={ncPorFactura}
+        onOpenDetail={setSelectedDetailFactura}
+        onOpenNotaCredito={setSelectedFactura}
+      />
+
+      {!isLoading && visibleFacturas.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-bold text-slate-400">
+            Página {page} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page === 1}
+              className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-black uppercase text-slate-500 transition-colors active:bg-slate-100 disabled:opacity-30"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              disabled={page >= totalPages}
+              className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-black uppercase text-slate-500 transition-colors active:bg-slate-100 disabled:opacity-30"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
       )}
     </div>
+
+    {/* The dialogs live outside the `hidden lg:block` container: a `display:none`
+        ancestor would hide their fixed overlay too. */}
+    {selectedDetailFactura && (
+      <FacturaDetailDialog
+        factura={selectedDetailFactura}
+        onClose={() => setSelectedDetailFactura(null)}
+        notasCredito={ncPorFactura[selectedDetailFactura.id] ?? []}
+      />
+    )}
+    {selectedFactura && (
+      <FacturaNotaCreditoDialog
+        factura={selectedFactura}
+        onClose={() => setSelectedFactura(null)}
+        onSuccess={handleRefresh}
+        mode={usesDigitalBilling ? "tfhka" : "legacy"}
+      />
+    )}
+    </>
   );
 }

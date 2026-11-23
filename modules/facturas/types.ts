@@ -72,6 +72,16 @@ export interface NotaCreditoResumen {
   total_usd: number;
 }
 
+/**
+ * Document state the invoice list can filter by on a phone.
+ *
+ * `FacturaListItem` carries no status column (`facturas.service.ts:129-144`), so
+ * the only state the screen can read without touching the service is whether the
+ * invoice already has a credit note. `all` is the default and the only value
+ * reachable from `lg` up, so desktop keeps listing exactly what it lists today.
+ */
+export type FacturaEstadoFilter = "all" | "con-nc" | "sin-nc";
+
 export interface FacturaFilters {
   pharmacy_id: string;
   search?: string;

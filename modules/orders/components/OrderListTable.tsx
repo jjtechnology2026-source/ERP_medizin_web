@@ -1,11 +1,13 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { 
-  HiOutlineEye, HiOutlineRefresh, HiX, HiOutlineExternalLink 
+import {
+  HiOutlineEye, HiOutlineRefresh, HiOutlineFilter
 } from "react-icons/hi";
 import { Order } from "../types/orders";
 import OrderDetailModal from "./OrderDetailModal";
 import OrderFilters from "./OrderFilters";
+import OrderCardList from "./OrderCardList";
+import MobileOrderFiltersSheet from "./MobileOrderFiltersSheet";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 
 /** Shape carrying the order status: the backend may send `saleStatus` or (legacy) `sale_status`. */
@@ -104,6 +106,7 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
   };
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const colSpan = 8;
@@ -140,7 +143,9 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
     setCurrentPage(1);
   }, [filters.status]);
 
-  const filterClass = "px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 flex items-center gap-2 hover:border-blue-400 transition-all min-w-[140px] outline-none shadow-sm";
+  const resetFilters = () => {
+    setFilters({ date_start: "", date_end: "", type_sale: "", status: "" });
+  };
 
   const getNoDataMessage = () => {
     const messages = [];
@@ -150,21 +155,110 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
     return messages.length > 0 ? `No hay órdenes para ${messages.join(', ')}.` : 'No hay órdenes disponibles.';
   };
 
+  // The phone button carries how many of the four filters are set (spec S6).
+  const activeFilterCount = [
+    filters.date_start,
+    filters.date_end,
+    filters.type_sale,
+    filters.status,
+  ].filter(Boolean).length;
+
+  // One pager for both compositions: the desktop table keeps it in its footer,
+  // and the phone list renders the same component under its cards.
+  const paginationBar = (
+    <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
+      <p className="text-xs font-bold text-slate-400">
+        Mostrando {currentOrders.length > 0 ? (safePage - 1) * itemsPerPage + 1 : 0} - {Math.min(safePage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
+      </p>
+      <button
+        onClick={onRefresh}
+        disabled={loading || isRefreshing}
+        aria-label="Actualizar"
+        title="Actualizar"
+        className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95 disabled:opacity-30 max-lg:flex max-lg:size-11 max-lg:items-center max-lg:justify-center"
+      >
+        <HiOutlineRefresh className={`w-5 h-5 text-slate-600${isRefreshing ? " animate-spin" : ""}`} />
+      </button>
+      <div className="flex items-center gap-4">
+        <button 
+          disabled={safePage === 1} 
+          onClick={() => setCurrentPage(p => p - 1)} 
+          className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95 max-lg:flex max-lg:size-11 max-lg:items-center max-lg:justify-center"
+        >
+          <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex items-center gap-1 font-bold text-xs">
+          <span className="bg-[#4A69BD] text-white px-3 py-1.5 rounded-lg shadow-md shadow-blue-100 min-w-[32px] text-center">
+            {safePage}
+          </span>
+          <span className="text-slate-400 px-1 text-[10px] uppercase">de</span>
+          <span className="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg min-w-[32px] text-center">
+            {totalPages || 1}
+          </span>
+        </div>
+        <button 
+          disabled={safePage === totalPages} 
+          onClick={() => {
+            setCurrentPage(safePage + 1);
+            // ponytail: pre-fetch when approaching the edge of loaded data (2 pages ahead)
+            const next = safePage + 1;
+            if ((next + 1) * itemsPerPage > orders.length && hasNextPage && fetchNextPage) {
+              fetchNextPage();
+            }
+          }} 
+          className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95 max-lg:flex max-lg:size-11 max-lg:items-center max-lg:justify-center"
+        >
+          <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full gap-6 bg-white p-2">
       <h1 className="text-3xl font-bold text-[#4A69BD]">Ordenes</h1>
 
       {/* --- FILTROS --- */}
-      <OrderFilters 
-        filters={filters} 
-        onFiltersChange={setFilters} 
-        onReset={() => {
-          setFilters({ date_start: "", date_end: "", type_sale: "", status: "" });
-        }}
-      />
+      {/* Desktop toolbar, untouched (S4): the two dates, the two selects and the
+          reset button keep their place and their 140px floor from `lg` up. */}
+      <div className="hidden lg:block">
+        <OrderFilters 
+          filters={filters} 
+          onFiltersChange={setFilters} 
+          onReset={resetFilters}
+        />
+      </div>
 
-      {/* --- TABLA --- */}
-      <div className="flex-grow overflow-hidden border border-slate-100 rounded-2xl shadow-sm bg-white">
+      {/* Phone: the four filters collapse into one button with the active count
+          (S6), and the list becomes cards instead of the 1000px table (S7). */}
+      <div className="flex flex-col gap-2 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setShowFiltersSheet(true)}
+          aria-label={`Filtros de órdenes${activeFilterCount > 0 ? `, ${activeFilterCount} activos` : ""}`}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-wide text-slate-600 transition-colors active:bg-slate-100"
+        >
+          <HiOutlineFilter size={18} aria-hidden="true" />
+          Filtros
+          {activeFilterCount > 0 && (
+            <span className="flex size-5 items-center justify-center rounded-full bg-[#4A69BD] text-[10px] font-black text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+        <p className="px-1 text-[11px] font-bold text-slate-400">
+          {`${filteredOrders.length} ${filteredOrders.length === 1 ? "orden" : "órdenes"}`}
+          {filters.type_sale ? ` · tipo ${filters.type_sale}` : ""}
+          {filters.status ? ` · ${statusLabel(String(filters.status).trim().toLowerCase())}` : ""}
+        </p>
+      </div>
+
+      {/* --- TABLA (desktop) --- */}
+      <div className="hidden lg:block flex-grow overflow-hidden border border-slate-100 rounded-2xl shadow-sm bg-white">
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-320px)] scrollbar-hide">
           <table className="w-full text-left relative min-w-[1000px]">
             <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.05)] z-10">
@@ -208,60 +302,34 @@ export default function OrdersPage({ orders, loading, isRefreshing, filters, set
         </div>
 
         {/* --- PAGINATION --- */}
-        <div className="p-4 border-t border-slate-50 flex justify-between items-center bg-white">
-          <p className="text-xs font-bold text-slate-400">
-            Mostrando {currentOrders.length > 0 ? (safePage - 1) * itemsPerPage + 1 : 0} - {Math.min(safePage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length} ordenes
-          </p>
-          <button
-            onClick={onRefresh}
-            disabled={loading || isRefreshing}
-            aria-label="Actualizar"
-            title="Actualizar"
-            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95 disabled:opacity-30"
-          >
-            <HiOutlineRefresh className={`w-5 h-5 text-slate-600${isRefreshing ? " animate-spin" : ""}`} />
-          </button>
-          <div className="flex items-center gap-4">
-            <button 
-              disabled={safePage === 1} 
-              onClick={() => setCurrentPage(p => p - 1)} 
-              className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
-            >
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-1 font-bold text-xs">
-              <span className="bg-[#4A69BD] text-white px-3 py-1.5 rounded-lg shadow-md shadow-blue-100 min-w-[32px] text-center">
-                {safePage}
-              </span>
-              <span className="text-slate-400 px-1 text-[10px] uppercase">de</span>
-              <span className="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg min-w-[32px] text-center">
-                {totalPages || 1}
-              </span>
-            </div>
-            <button 
-              disabled={safePage === totalPages} 
-              onClick={() => {
-                setCurrentPage(safePage + 1);
-                // ponytail: pre-fetch when approaching the edge of loaded data (2 pages ahead)
-                const next = safePage + 1;
-                if ((next + 1) * itemsPerPage > orders.length && hasNextPage && fetchNextPage) {
-                  fetchNextPage();
-                }
-              }} 
-              className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 shadow-sm transition-all active:scale-95"
-            >
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+        {paginationBar}
+      </div>
+
+      {/* --- LISTA (phone) --- */}
+      <div className="flex flex-col gap-3 lg:hidden">
+        <OrderCardList
+          orders={currentOrders}
+          loading={loading}
+          emptyMessage={getNoDataMessage()}
+          onOpenDetail={setSelectedOrder}
+          formatOrderTotal={formatOrderTotal}
+        />
+
+        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+          {paginationBar}
         </div>
       </div>
 
       {/* --- MODAL DETALLES --- */}
       <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+
+      <MobileOrderFiltersSheet
+        open={showFiltersSheet}
+        onOpenChange={setShowFiltersSheet}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onReset={resetFilters}
+      />
     </div>
   );
 }
