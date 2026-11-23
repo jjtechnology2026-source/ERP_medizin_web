@@ -14,7 +14,16 @@ export const SearchBar = ({ value, onChange }: any) => (
   </div>
 );
 
-export const CurrencySwitch = () => {
+export const CurrencySwitch = ({
+  layout = "inline",
+}: {
+  /**
+   * `inline` es la fila del navbar de desktop (sin cambios).
+   * `stacked` es la variante del hub `/mas`, donde no hay ancho para la fila.
+   */
+  layout?: "inline" | "stacked";
+} = {}) => {
+  const stacked = layout === "stacked";
   const { isDollar, toggleCurrency, fetchRate, isLoading, rateSource,
     setRateSource, manualRate, setManualRate } = useCurrencyStore();
   const rate = useCurrencyStore((s) => s.getEffectiveRate());
@@ -25,7 +34,12 @@ export const CurrencySwitch = () => {
   const isDigital = profile?.usesDigitalBilling ?? false;
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm">
+    <div
+      className={cn(
+        "flex items-center gap-3 px-3 py-1.5 bg-slate-100/60 rounded-xl border border-slate-200/50 shadow-sm",
+        stacked && "w-full flex-col items-stretch gap-2.5 p-3"
+      )}
+    >
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">Tasa:</span>
         {rateSource === "manual" ? (
@@ -39,7 +53,11 @@ export const CurrencySwitch = () => {
               setManualRate(isNaN(v) ? 0 : v);
             }}
             onFocus={(e) => e.target.select()}
-            className="min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-amber-600 text-center shadow-sm tabular-nums outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className={cn(
+              "min-w-[80px] bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-sm font-black text-amber-600 text-center shadow-sm tabular-nums outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+              // 16px: por debajo iOS hace zoom al enfocar (spec S8).
+              stacked && "text-base"
+            )}
             placeholder="0.00"
           />
         ) : (
@@ -72,7 +90,8 @@ export const CurrencySwitch = () => {
             "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
             rateSource === "api"
               ? "bg-blue-600 text-white shadow"
-              : "text-slate-400 hover:text-blue-600"
+              : "text-slate-400 hover:text-blue-600",
+            stacked && "py-2"
           )}
         >
           API
@@ -83,14 +102,15 @@ export const CurrencySwitch = () => {
             "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
             rateSource === "manual"
               ? "bg-amber-500 text-white shadow"
-              : "text-slate-400 hover:text-amber-600"
+              : "text-slate-400 hover:text-amber-600",
+            stacked && "py-2"
           )}
         >
           Manual
         </button>
       </div>
 
-      <div className="h-4 w-[1px] bg-slate-200" />
+      <div className={cn("h-4 w-[1px] bg-slate-200", stacked && "hidden")} />
 
       <div
         className={cn(
@@ -105,13 +125,15 @@ export const CurrencySwitch = () => {
         {isDigital ? "Digital" : "Fiscal"}
       </div>
 
-      <div className="h-4 w-[1px] bg-slate-200" />
+      <div className={cn("h-4 w-[1px] bg-slate-200", stacked && "hidden")} />
 
       <button
         onClick={toggleCurrency}
+        aria-label={isDollar ? "Cambiar a bolívares" : "Cambiar a dólares"}
         className={cn(
           "relative w-14 h-7 rounded-full transition-all flex items-center px-1 shadow-sm",
-          isDollar ? "bg-blue-600" : "bg-slate-300"
+          isDollar ? "bg-blue-600" : "bg-slate-300",
+          stacked && "self-start"
         )}
       >
         <span
@@ -169,6 +191,9 @@ export const NotificationsDropdown = ({ onShowAll, onClose }: any) => {
 };
 
 export const ProfileDropdown = ({ onLogout }: { onLogout: () => void }) => {
+  // No hay rutas de perfil / actividad / seguridad todavía, así que las filas son
+  // botones reales (enfocables y anunciados) marcados como no disponibles en vez
+  // de `<div>` inertes. Se activan cuando exista su pantalla.
   const items = [
     { icon: <HiOutlineUserCircle />, label: "Mi Perfil" },
     { icon: <HiOutlineClipboardList />, label: "Actividad" },
@@ -178,13 +203,23 @@ export const ProfileDropdown = ({ onLogout }: { onLogout: () => void }) => {
     <div className="absolute right-0 mt-3 w-64 bg-white border border-slate-100 rounded-[1.8rem] shadow-2xl p-4 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
       <div className="space-y-1">
         {items.map((it, i) => (
-          <div key={i} className="flex items-center gap-4 p-3.5 hover:bg-slate-50 rounded-2xl cursor-pointer font-black text-sm text-slate-600 hover:text-blue-600 transition-all group">
-            <span className="text-slate-400 group-hover:text-blue-500 transition-colors">{React.cloneElement(it.icon as any, { size: 22 })}</span>
-            {it.label}
-          </div>
+          <button
+            key={i}
+            type="button"
+            disabled
+            aria-disabled="true"
+            title={`${it.label}: disponible próximamente`}
+            className="flex min-h-[48px] w-full items-center gap-4 p-3.5 rounded-2xl text-left font-black text-sm text-slate-600 transition-all group disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="text-slate-400 transition-colors">{React.cloneElement(it.icon as any, { size: 22 })}</span>
+            <span className="flex-1">{it.label}</span>
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-400">
+              Pronto
+            </span>
+          </button>
         ))}
         <div className="h-px bg-slate-50 my-3 mx-2" />
-        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLogout(); }} className="flex items-center gap-4 w-full p-3.5 text-rose-500 hover:bg-rose-50 rounded-2xl transition-all font-black text-sm group cursor-pointer">
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLogout(); }} className="flex items-center gap-4 min-h-[48px] w-full p-3.5 text-rose-500 hover:bg-rose-50 rounded-2xl transition-all font-black text-sm group cursor-pointer">
           <HiOutlineLogout size={22} className="group-hover:translate-x-1 transition-transform pointer-events-none" />
           <span className="pointer-events-none">Cerrar sesión</span>
         </button>

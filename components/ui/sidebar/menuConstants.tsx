@@ -135,6 +135,33 @@ export const MENU_ITEMS: MenuItem[] = [
   },
 ];
 
+/**
+ * Routes that only exist in the mobile shell, so they are not in `MENU_ITEMS`
+ * (the desktop sidebar must never offer them) and would otherwise fall back to
+ * the generic panel name.
+ */
+const MOBILE_ONLY_SECTION_NAMES: Record<string, string> = {
+  "/mas": "Más",
+};
+
+/**
+ * Nombre de la sección activa para un pathname.
+ *
+ * Es la única fuente del título del documento (`usePageTitle`) y del header
+ * sticky del shell mobile: si cambia el menú, cambian los dos a la vez.
+ */
+export const resolveSectionName = (pathname: string): string => {
+  const mobileOnlyName = MOBILE_ONLY_SECTION_NAMES[pathname];
+  if (mobileOnlyName) return mobileOnlyName;
+
+  for (const item of MENU_ITEMS) {
+    if (item.href === pathname) return item.name;
+    const activeChild = item.children?.find((child) => child.href === pathname);
+    if (activeChild) return activeChild.name;
+  }
+  return "Panel General";
+};
+
 const normalize = (value: string) =>
   value
     .toLowerCase()

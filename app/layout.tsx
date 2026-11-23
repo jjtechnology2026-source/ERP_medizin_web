@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import "@/app/globals.css";
 import Providers from "@/modules/core/providers";
@@ -27,6 +27,15 @@ export const metadata: Metadata = {
     icon: "/mara-icon.svg",
     apple: "/mara-icon.svg",
   },
+};
+
+// `viewportFit: "cover"` is what makes `env(safe-area-inset-*)` report a real
+// value on iOS (spec S8). Without it the bottom bar sits under the home
+// indicator. Next merges this with the default viewport meta tag.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

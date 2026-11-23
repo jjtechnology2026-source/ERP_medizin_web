@@ -22,18 +22,14 @@ function cn(...inputs: ClassValue[]) {
 
 const Logo = () => (
   <div className="flex items-center gap-3 shrink-0">
-    <img src="/mara-wordmark.svg" alt="Mara POS" className="w-[104px] sm:w-[124px] lg:w-[152px] h-auto object-contain" />
+    <img src="/mara-wordmark.svg" alt="Mara POS" className="w-[88px] sm:w-[104px] lg:w-[152px] h-auto object-contain" />
   </div>
 );
 
 export default function Navbar({ 
-  toggleSidebar, 
-  isSidebarOpen,
   isSidebarExpanded,
   onExpandToggle
 }: { 
-  toggleSidebar?: () => void;
-  isSidebarOpen?: boolean;
   isSidebarExpanded?: boolean;
   onExpandToggle?: () => void;
 }) {
@@ -127,15 +123,9 @@ export default function Navbar({
         onClose={() => setIsNotifModalOpen(false)} 
       />
 
-      {/* Izquierda: Hamburguesa (Móvil) + Logo */}
+      {/* Izquierda: Logo. El hamburger ya no existe: en mobile la navegación
+          son la barra inferior y el hub /mas. */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={toggleSidebar}
-          className="lg:hidden text-slate-500 hover:text-blue-600 transition-colors p-2.5 rounded-xl hover:bg-slate-50 relative z-20 -ml-0.5 mr-1"
-          aria-label="Abrir menú"
-        >
-          <HiMenuAlt2 size={22} />
-        </button>
         <Logo />
       </div>
 
@@ -314,14 +304,13 @@ export default function Navbar({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
-                  className="w-full bg-[#F3F4F6] border-none rounded-xl py-2.5 pl-4 pr-10 text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none placeholder:text-slate-400"
+                  className="w-full bg-[#F3F4F6] border-none rounded-xl py-2.5 pl-4 pr-10 text-base font-medium text-slate-600 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none placeholder:text-slate-400"
                 />
                 <HiSearch className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               </div>
             </div>
           )}
         </div>
-        <CurrencySwitch />
         <div ref={mobileNotifRef} className="flex items-center">
           <button
             onClick={() => {

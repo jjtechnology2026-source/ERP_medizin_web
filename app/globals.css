@@ -40,6 +40,41 @@
   }
 }
 
+/* `components/ui/layout/index.tsx` caps the content width with `max-w-8xl`,
+   which Tailwind v4 does not ship: without this the container had no ceiling. */
+@theme {
+  --container-8xl: 88rem;
+}
+
+/* ---------- Mobile shell (odd/tasks/mobile-mara-responsive.md, T1) ---------- */
+
+:root {
+  /* Touchable item of the bottom bar: 44px is the floor (S3), 56px the goal. */
+  --mobile-tabbar-item-height: 56px;
+  --mobile-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-tabbar-total-height: calc(
+    var(--mobile-tabbar-item-height) + var(--mobile-tabbar-safe-bottom)
+  );
+}
+
+/* Fixed bars clear the iPhone home indicator (spec S8). `env()` only reports a
+   value when `viewport-fit=cover` is set — see `app/layout.tsx`. */
+.mobile-tabbar-safe {
+  padding-bottom: var(--mobile-tabbar-safe-bottom);
+}
+
+/* The scrolling shell reserves the bar height so no content ends up underneath
+   it. Zero above `lg`, where the desktop composition has no bottom bar (S4). */
+.mobile-shell-content {
+  padding-bottom: var(--mobile-tabbar-total-height);
+}
+
+@media (min-width: 1024px) {
+  .mobile-shell-content {
+    padding-bottom: 0px;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
