@@ -312,8 +312,18 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
         LOAD_TIMEOUT_MS,
         "No se pudo cargar el lector de códigos. Revisá la conexión e intentá de nuevo.",
       );
+      // El stream se libera aunque la promesa resuelva tarde: si el timeout ganó,
+      // nadie más va a ver este MediaStream y la luz de la cámara quedaría
+      // encendida. En iOS aceptar el permiso después de los 20s es lo normal.
       const streamPromise = withTimeout(
-        mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }),
+        mediaDevices
+          .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+          .then((stream) => {
+            if (sessionRef.current !== session) {
+              stream.getTracks().forEach((track) => track.stop());
+            }
+            return stream;
+          }),
         START_TIMEOUT_MS,
         "La cámara no respondió. Cerrá otras apps que la estén usando e intentá de nuevo.",
       );

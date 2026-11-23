@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   HiOutlineCamera,
   HiOutlineDeviceMobile,
@@ -91,6 +91,14 @@ export default function ScannerFeature() {
   );
 
   const { status, error, videoRef, start, stop } = useBarcodeScanner({ onDetect: handleDetect });
+
+  // S8: si el viewport cruza a desktop con la cámara encendida (iPad en
+  // landscape, o un resize), el `<video>` de abajo se desmonta pero el hook sigue
+  // vivo: la cámara quedaría prendida y el bucle de decodificación agendándose.
+  // Apagamos explícitamente en vez de confiar en el unmount del componente.
+  useEffect(() => {
+    if (!isMobile) stop();
+  }, [isMobile, stop]);
 
   if (!isMobile) {
     return (
