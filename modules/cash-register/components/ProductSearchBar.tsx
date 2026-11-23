@@ -226,11 +226,11 @@ export default function ProductSearchBar() {
 
   return (
     <div ref={containerRef} className="flex flex-col md:flex-row md:items-center gap-3 w-full relative">
-      <label className="text-xs font-black text-slate-600 whitespace-nowrap min-w-[130px] md:text-left">
+      <label className="text-xs font-black text-slate-600 whitespace-nowrap md:min-w-[130px] md:text-left">
         Código del Producto:
       </label>
-      <div className="flex flex-1 gap-3 w-full">
-        <div className="relative flex-1">
+      <div className="flex w-full flex-1 flex-wrap gap-3 sm:flex-nowrap">
+        <div className="relative min-w-0 flex-1">
           <HiQrcode className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             ref={inputRef}
@@ -317,7 +317,7 @@ export default function ProductSearchBar() {
         </div>
         <button
           onClick={() => handleAdd()}
-          className="px-8 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
+          className="w-full px-4 py-3 bg-[#0057FF] hover:bg-blue-700 text-white rounded-xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap sm:w-auto sm:px-8"
         >
           ENTER - Agregar
         </button>
