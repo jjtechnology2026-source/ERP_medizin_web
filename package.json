@@ -23,7 +23,7 @@
     "test:catalog": "node --experimental-strip-types --test test/catalog.test.mjs",
     "test:barcode": "node --experimental-strip-types --test test/barcode-resolve.test.mjs",
     "sync:zxing-wasm": "node scripts/sync-zxing-wasm.mjs",
-    "test:scanner": "node --experimental-strip-types --test modules/scanner/lib/barcode-lookup.test.mjs",
+    "test:scanner": "node --experimental-strip-types --test modules/scanner/lib/barcode-lookup.test.mjs modules/scanner/lib/stream-abandonment.test.mjs",
     "test:date-utils": "TZ=America/Caracas node --experimental-strip-types --test test/date-utils.test.mjs",
     "test:quote": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/quote-pdf.test.mjs",
     "test:local-sale": "node --experimental-strip-types --test test/local-sale-persist.test.mjs",
