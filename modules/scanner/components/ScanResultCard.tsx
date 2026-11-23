@@ -11,23 +11,38 @@ import type { Medication } from "@/modules/products/types/products.types";
  * `modules/cash-register/components/PriceCheckDialog.tsx:19`: nombre, precio
  * final CON IVA, desglose (precio base sin IVA + IVA) y stock. No se reusa ese
  * componente porque es un diálogo modal de la caja (estado propio, cierre por
- * overlay, botón "Cerrar") y esta pantalla es de sólo lectura, siempre visible,
- * con el escaneo corriendo detrás. Si el formato de precio cambia allá, hay que
- * replicarlo acá.
+ * overlay, botón "Cerrar") y esta tarjeta es siempre visible, con el escaneo
+ * corriendo detrás. Si el formato de precio cambia allá, hay que replicarlo acá.
+ *
+ * La tarjeta sigue siendo sólo lectura: la escritura de stock vive en
+ * `StockAdjustControl` y sólo se monta con el permiso de ajuste (T4 de
+ * `scanner-stock-adjust`). El prop `stock` existe para que la tarjeta muestre el
+ * stock que dejó ese ajuste sin volver a consultar el inventario (T3).
  *
  * Helpers compartidos en vez de matemática propia: `useFormatCurrency` (Bs/USD
  * con la tasa vigente), `taxBreakdown`/`effectiveVat` de `products/lib/pricing`,
  * y la misma regla de stock bajo que el inventario
  * (`modules/products/components/TabInventory.tsx`: `stock <= minimum`).
  */
-export default function ScanResultCard({ product }: { product: Medication }) {
+export default function ScanResultCard({
+  product,
+  stock: stockOverride,
+}: {
+  product: Medication;
+  /** Stock vigente cuando ya hubo un ajuste en esta sesión de escaneo (T3). */
+  stock?: number;
+}) {
   const { format } = useFormatCurrency();
 
   const price = Number.isFinite(product.price) ? product.price : 0;
   const vat = effectiveVat(product.vat);
   const breakdown = taxBreakdown(price, vat, product.basePrice);
   const discount = typeof product.discount === "number" && product.discount > 0 ? product.discount : null;
-  const stock = Number.isFinite(product.stock) ? product.stock : 0;
+  const stock = Number.isFinite(stockOverride)
+    ? (stockOverride as number)
+    : Number.isFinite(product.stock)
+      ? product.stock
+      : 0;
   const minimum = Number.isFinite(product.minimum) ? product.minimum : 0;
   const lowStock = stock <= minimum;
   const originalPrice = discount ? price / (1 - discount / 100) : null;

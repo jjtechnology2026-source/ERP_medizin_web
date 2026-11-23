@@ -14,8 +14,11 @@ import { useIsMobileViewport } from "@/modules/core/hooks/useIsMobileViewport";
 import { productsService } from "@/modules/products/api/products.service";
 import type { Medication } from "@/modules/products/types/products.types";
 import ScanResultCard from "./components/ScanResultCard";
+import StockAdjustControl from "./components/StockAdjustControl";
 import { useBarcodeScanner, type ScannerStatus } from "./hooks/useBarcodeScanner";
+import { useStockAdjustPermit } from "./hooks/useStockAdjustPermit";
 import { lookupScannedCode, type ScanLookup } from "./lib/barcode-lookup.ts";
+import type { StockAdjustResult } from "./lib/stock-adjust-contract.ts";
 
 /** Estados sin salida por sí solos: título y explicación accionable (S6). */
 const CAMERA_PROBLEM_COPY: Record<
@@ -50,20 +53,30 @@ const CAMERA_PROBLEM_COPY: Record<
 };
 
 /**
- * Pantalla `/escaner`: escanear un código de barras con la cámara del celular y
- * consultar precio y stock (sólo lectura, S1/S2 de
- * `odd/tasks/barcode-scan-price.md`).
+ * Pantalla `/escaner`: escanear un código de barras con la cámara del celular,
+ * consultar precio y stock (S1/S2 de `odd/tasks/barcode-scan-price.md`) y, con el
+ * permiso propio, ajustar el stock del producto leído.
  *
  * En desktop no se monta nada de la cámara (S8): ni `<video>`, ni
  * `getUserMedia`, ni permiso. La decisión es por viewport (`matchMedia`), no por
  * user-agent.
+ *
+ * Ajuste de stock (`odd/tasks/scanner-stock-adjust.md`, T3/T4): la tarjeta suma
+ * un control de cantidad que sólo se monta si la sesión tiene el permiso
+ * `Ajustar stock desde escáner`. Sin el permiso la pantalla sigue leyendo precio
+ * y stock exactamente como antes y no se llama a ningún endpoint de escritura.
  */
 export default function ScannerFeature() {
   const isMobile = useIsMobileViewport();
   const pharmacyId = useAuthStore((state) => state.profile?.pharmacyId as string | undefined);
+  // T4/S6: capacidad de la sesión, no un ítem de menú.
+  const canAdjustStock = useStockAdjustPermit();
 
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [lookup, setLookup] = useState<ScanLookup<Medication> | null>(null);
+  // Resultado del último ajuste: la tarjeta muestra ese stock sin recargar y el
+  // tope se calcula contra él. Se descarta al escanear el siguiente código.
+  const [adjustment, setAdjustment] = useState<StockAdjustResult | null>(null);
   // Descarta respuestas viejas: un escaneo posterior debe ganar siempre.
   const lookupSeqRef = useRef(0);
 
@@ -72,6 +85,7 @@ export default function ScannerFeature() {
       const seq = ++lookupSeqRef.current;
       setLastCode(code);
       setLookup(null);
+      setAdjustment(null);
       void lookupScannedCode<Medication>({
         code,
         pharmacyId,
@@ -118,6 +132,13 @@ export default function ScannerFeature() {
   const problem = status === "idle" || status === "starting" || status === "running"
     ? null
     : CAMERA_PROBLEM_COPY[status];
+
+  /** Stock vigente del producto escaneado: el leído o el que dejó el ajuste. */
+  const stockFor = (product: Medication) => {
+    const known = Number.isFinite(product.stock) ? product.stock : 0;
+    if (adjustment && adjustment.barCode === product.barCode) return adjustment.stockNuevo;
+    return known;
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -211,7 +232,21 @@ export default function ScannerFeature() {
               <p className="text-xs font-bold text-slate-400">Buscando el producto...</p>
             </div>
           ) : lookup.status === "found" ? (
-            <ScanResultCard product={lookup.product} />
+            <div className="space-y-3">
+              <ScanResultCard product={lookup.product} stock={stockFor(lookup.product)} />
+              {/* Sin el permiso no se monta nada de esto: ni campo, ni botones,
+                  ni llamada al endpoint (T4). El `key` reinicia la cantidad con
+                  cada producto escaneado. */}
+              {canAdjustStock && lookup.product.barCode && (
+                <StockAdjustControl
+                  key={lookup.product.barCode}
+                  barCode={lookup.product.barCode}
+                  pharmacyId={pharmacyId}
+                  stock={stockFor(lookup.product)}
+                  onAdjusted={setAdjustment}
+                />
+              )}
+            </div>
           ) : lookup.status === "not-found" ? (
             <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 p-5 space-y-2 text-center">
               <p className="text-sm font-black text-amber-600">Código no encontrado</p>
