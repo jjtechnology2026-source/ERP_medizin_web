@@ -78,3 +78,16 @@ Non-goals: ajustar stock, crear ventas, offline, PWA, selector de sucursal.
 **L6** (cambio de requisito, verbatim): "Esa funcionalidad debe aparecer solamente en el mobile. Tete tú que está en mobile, nada más, no en desktop."
 
 Impacto: se agrega **S8** (exclusiva de mobile, guard de viewport, menú solo bajo `lg`) y se reescribe **T3**. El resto de las tareas y specs no cambia. Definición de mobile fijada en `< 1024px` por `matchMedia`, alineada al breakpoint `lg` del shell.
+
+**L7** (review nativa, lineage `review-67305cf0820a30ff`, 2026-11-23): los tres lentes (risk, resilience, reliability) más el refuter encontraron **el mismo defecto CRITICAL** en `useBarcodeScanner.ts:315-329`, y tenían razón: la guarda del primer fix comparaba solo `sessionRef`, pero **el timeout no cambia la sesión**, así que un permiso aceptado a los 25s con timeout de 20s devolvía un `MediaStream` vivo que nadie guardaba ni apagaba — cámara encendida con la UI en error.
+
+Corrección (`63a8db3`): se libera también cuando la carrera ya se resolvió, con la regla extraída a `modules/scanner/lib/stream-abandonment.ts` y tests que fijan el caso `settled && misma sesión`.
+
+**L8** (review nativa cerrada, lineage `review-63a8db3f00d1cafe`, 2026-11-23): aprobada y con la autoridad quemada (`native-approved-acknowledgement-completed`). La corrección de L7 pasó la segunda ronda. La entrega sigue la política normal del repo: commit, push y PR son decisión del dueño.
+
+Advertencias no bloqueantes de la segunda ronda (trabajo posterior, no reabren este review):
+
+- **R3-scanner-decode-after-stop** (`useBarcodeScanner.ts:238-239`): después del `await decodeVideoFrame(...)` no se comprueba que la sesión siga vigente antes de `handleCode(code)`; un decode en vuelo entrega el código después de apagar la cámara.
+- **R3-scanner-repeat-lookup** (`modules/scanner/index.tsx:72-74`) y **R4-001** (`useBarcodeScanner.ts:210-225`): el cooldown de 1500 ms no mira si la consulta anterior sigue pendiente, así que con backend lento se repiten consultas del mismo código. **R4-002** (`barcode-lookup.ts:53-59`): el lookup no tiene timeout ni abort; una request colgada deja la UI en "Buscando el producto..." para siempre.
+
+Deuda heredada de la primera ronda que sigue abierta: **R3-004** (sin tests del hook de cámara) y **R4** (`video.play()` rechazado se traga sin error).
