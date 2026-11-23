@@ -5,6 +5,7 @@ import { HiX, HiOutlineRefresh } from "react-icons/hi";
 import { cashierAccountantService } from "@/modules/cash-register/api/cashier-accountant.service";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
+import RecordCard from "@/components/ui/record-card";
 import type { PendingQuote } from "@/modules/cash-register/types/cashier.types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -125,33 +126,38 @@ export default function PendingQuotesDialog({
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col text-slate-800">
-        <div className="flex items-center justify-between p-6 pb-3 flex-shrink-0">
-          <h2 className="text-xl font-black text-slate-800">
+        <div className="flex items-center justify-between gap-2 p-6 pb-3 flex-shrink-0 max-lg:px-4">
+          <h2 className="min-w-0 text-xl font-black text-slate-800">
             {isDeliveryNote ? "Notas de entrega pendientes" : "Cotizaciones pendientes"}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={refresh}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-2 hover:bg-slate-100 rounded-xl transition-colors max-lg:min-h-11 max-lg:min-w-11"
               title="Actualizar"
+              aria-label="Actualizar"
             >
               <HiOutlineRefresh size={20} />
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 rounded-xl transition-colors max-lg:min-h-11 max-lg:min-w-11"
+              aria-label="Cerrar"
+            >
               <HiX size={20} />
             </button>
           </div>
         </div>
 
         {(localError || errorMessage) && (
-          <div className="px-6 pb-3 flex-shrink-0">
+          <div className="px-6 pb-3 flex-shrink-0 max-lg:px-4">
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
               {localError || errorMessage}
             </div>
           </div>
         )}
 
-        <div className="px-6 flex-1 overflow-y-auto pb-6">
+        <div className="px-6 flex-1 overflow-y-auto pb-6 max-lg:px-4">
           {!activeSession ? (
             <p className="text-xs font-bold text-slate-400 text-center py-10">
               {isDeliveryNote
@@ -167,7 +173,60 @@ export default function PendingQuotesDialog({
               {isDeliveryNote ? "Sin notas de entrega pendientes." : "Sin cotizaciones pendientes."}
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Phone: one card per document with the four decision fields
+                (number, client, date, total) and a visible 44px action, so the
+                five-column `min-w-[640px]` table is never reachable below `lg`
+                (specs S3, S5, S7). Client document and state sit behind the
+                card disclosure. */}
+            <ul className="flex flex-col gap-2 lg:hidden">
+              {quotes.map((q) => {
+                const cancellable = q.saleStatus === "Cancelled";
+                const convertDisabled = cancellable || convertingId !== null;
+                return (
+                  <RecordCard
+                    key={q.id}
+                    title={<span className="font-mono">{q.quoteNumber || "-"}</span>}
+                    subtitle={`${isDeliveryNote ? "Nota de entrega" : "Cotización"} · ${formatDate(q.date)}`}
+                    fields={[
+                      { label: "Cliente", value: q.clientName || "—" },
+                      { label: "Total USD", value: `$ ${r2(q.totalUsd).toFixed(2)}`, emphasis: "strong" },
+                      { label: "Total Bs", value: `Bs ${r2(q.totalVes).toFixed(2)}` },
+                    ]}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => handleBringToSale(q)}
+                        disabled={convertDisabled}
+                        className="rounded-xl bg-[#0055ff] px-3 text-[11px] font-black text-white transition-colors active:bg-[#0046CC] disabled:opacity-40"
+                      >
+                        {convertingId === q.id ? "Cargando..." : "Llevar a venta"}
+                      </button>
+                    }
+                  >
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Documento
+                        </dt>
+                        <dd className="truncate font-bold text-slate-600">{q.clientDocument || "—"}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Estado
+                        </dt>
+                        <dd className="font-bold text-slate-600">
+                          {cancellable ? "Cancelada" : "Pendiente"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </RecordCard>
+                );
+              })}
+            </ul>
+
+            {/* Desktop table, unchanged (spec S4). */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[640px]">
                 <thead>
                   <tr className="border-b border-slate-100">
@@ -225,10 +284,11 @@ export default function PendingQuotesDialog({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
 
-        <div className="flex-shrink-0 p-6 pt-0">
+        <div className="flex-shrink-0 p-6 pt-0 max-lg:px-4">
           <button
             onClick={onClose}
             className="w-full py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"

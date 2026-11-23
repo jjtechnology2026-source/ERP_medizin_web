@@ -67,14 +67,18 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-md">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col text-slate-800">
-        <div className="flex items-center justify-between p-6 pb-3 flex-shrink-0">
-          <h2 className="text-xl font-black text-slate-800">Buscar en mi grupo</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+        <div className="flex items-center justify-between gap-2 p-6 pb-3 flex-shrink-0 max-lg:px-4">
+          <h2 className="min-w-0 text-xl font-black text-slate-800">Buscar en mi grupo</h2>
+          <button
+            onClick={onClose}
+            className="shrink-0 p-2 hover:bg-slate-100 rounded-xl transition-colors max-lg:min-h-11 max-lg:min-w-11"
+            aria-label="Cerrar"
+          >
             <HiX size={20} />
           </button>
         </div>
 
-        <div className="px-6 flex-1 overflow-y-auto pb-6">
+        <div className="px-6 flex-1 overflow-y-auto pb-6 max-lg:px-4">
           {!pharmacyId ? (
             <p className="text-xs font-bold text-red-500 text-center py-10">
               No hay farmacia asignada. No se puede consultar el grupo.
@@ -90,7 +94,7 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
                   onChange={(e) => setCode(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Código o nombre del producto"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400"
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400 max-lg:text-base"
                 />
               </div>
 
@@ -115,13 +119,17 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
                   {rows.map((g) => (
                     <li
                       key={`${g.bar_code || ""}-${g.farmacia_id}`}
-                      className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3"
+                      // Phone: the pharmacy and the price stack under the product
+                      // name so it gets the full 278px and is not truncated to a
+                      // few characters by the price column (spec S7). From `sm` up
+                      // the row is the desktop one (spec S4).
+                      className="flex flex-col gap-1.5 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                     >
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <span className="block text-sm font-bold text-slate-700 truncate">{g.producto || "Producto"}</span>
                         <span className="block text-xs font-medium text-slate-400 truncate">{g.farmacia}</span>
                       </div>
-                      <span className="text-xs font-black text-[#0057FF] whitespace-nowrap">
+                      <span className="flex flex-col text-xs font-black text-[#0057FF] whitespace-nowrap sm:block">
                         {formatPrice(g.precio ?? 0)}
                         <span className="block text-[10px] font-bold text-slate-400">
                           {g.cantidad ?? 0} unidades
@@ -135,7 +143,7 @@ export default function GroupAvailabilityDialog({ onClose }: { onClose: () => vo
           )}
         </div>
 
-        <div className="flex-shrink-0 p-6 pt-0">
+        <div className="flex-shrink-0 p-6 pt-0 max-lg:px-4">
           <button
             onClick={onClose}
             className="w-full py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"

@@ -49,19 +49,20 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
         {/* ===== HEADER ===== */}
-        <div className="shrink-0 px-6 pt-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
+        <div className="shrink-0 px-6 pt-5 pb-4 border-b border-slate-100 max-lg:px-4">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="shrink-0 w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
                 <HiDocumentText className="text-blue-600" size={18} />
               </div>
-              <h2 className="text-lg font-bold text-slate-800 tracking-tight">
+              <h2 className="min-w-0 text-lg font-bold text-slate-800 tracking-tight">
                 Factura <span className="text-slate-500">#{invoice.controlNumber}</span>
               </h2>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-all duration-200 active:scale-95"
+              className="shrink-0 p-2 hover:bg-slate-100 rounded-xl transition-all duration-200 active:scale-95 max-lg:min-h-11 max-lg:min-w-11"
+              aria-label="Cerrar"
             >
               <HiX size={20} className="text-slate-400" />
             </button>
@@ -159,7 +160,83 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
               <p className="text-sm font-bold text-slate-300">Sin líneas disponibles</p>
             </div>
           ) : (
-            <table className="w-full text-left">
+            <>
+            {/* Phone: one card per line, with the description WRAPPING instead of
+                the six-column table whose fixed widths (`w-12`…`w-28` plus
+                `px-6`) need ~500px and were silently clipped by the shell
+                (specs S7, S4). */}
+            <ul className="flex flex-col gap-2 p-4 lg:hidden">
+              {d.lines.map((line) => {
+                const lineTotal = line.subtotalVes ?? line.quantity * line.unitPriceVes;
+                return (
+                  <li
+                    key={line.id}
+                    className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 break-words text-xs font-semibold leading-relaxed text-slate-800">
+                        {line.description}
+                      </p>
+                      <span className="shrink-0 text-xs font-bold text-slate-800 font-mono">
+                        Bs {lineTotal.toFixed(2)}
+                      </span>
+                    </div>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-50 pt-2 text-[11px]">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Cant.
+                        </dt>
+                        <dd className="font-bold text-slate-600">{line.quantity}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Precio unit.
+                        </dt>
+                        <dd className="font-bold text-slate-600">
+                          {line.discount ? (
+                            <span className="flex flex-wrap items-baseline gap-1">
+                              <span className="text-[10px] text-slate-400 line-through">
+                                Bs {(line.unitPriceVes / (1 - line.discount / 100)).toFixed(2)}
+                              </span>
+                              <span className="font-mono text-emerald-600">
+                                Bs {line.unitPriceVes.toFixed(2)}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="font-mono">Bs {line.unitPriceVes.toFixed(2)}</span>
+                          )}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Desc.
+                        </dt>
+                        <dd className="font-bold text-amber-600">
+                          {line.discount ? `${line.discount}%` : "-"}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          IVA
+                        </dt>
+                        <dd className="font-bold text-slate-400">{line.vatPercentage}%</dd>
+                      </div>
+                      {line.productoId && (
+                        <div className="col-span-full min-w-0">
+                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            ID
+                          </dt>
+                          <dd className="truncate font-mono text-slate-400">{line.productoId}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop table, unchanged (spec S4). */}
+            <table className="hidden lg:table w-full text-left">
               <thead className="sticky top-0 bg-white z-10">
                 <tr className="border-b border-slate-100">
                   <th className="px-6 pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Cant.</th>
@@ -213,6 +290,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
                 })}
               </tbody>
             </table>
+            </>
           )}
         </div>
 
@@ -220,7 +298,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
         {d && (
           <div className="shrink-0 border-t border-slate-100 bg-slate-50/40">
             {/* Totales principales */}
-            <div className="px-6 pt-4 pb-3 space-y-2">
+            <div className="px-6 pt-4 pb-3 space-y-2 max-lg:px-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Bs</span>
                 <span className="text-xl font-bold text-amber-600 font-mono tracking-tight">Bs {d.totalVes.toFixed(2)}</span>
@@ -241,7 +319,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
 
             {/* Payment info */}
             {d.transacciones.length > 0 && (
-              <div className="border-t border-slate-100 px-6 py-3">
+              <div className="border-t border-slate-100 px-6 py-3 max-lg:px-4">
                 <div className="flex items-center gap-3 mb-2.5">
                   <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -283,7 +361,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
 
             {/* Observaciones */}
             {d.observaciones && (
-              <div className="border-t border-slate-100 px-6 py-3">
+              <div className="border-t border-slate-100 px-6 py-3 max-lg:px-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Observaciones</span>
                 </div>
@@ -294,7 +372,7 @@ export default function InvoiceDetailDialog({ invoice, onClose }: InvoiceDetailD
             )}
 
             {/* Tax breakdown */}
-            <div className="border-t border-slate-100 px-6 py-3 flex flex-wrap gap-4 text-[11px]">
+            <div className="border-t border-slate-100 px-6 py-3 flex flex-wrap gap-4 text-[11px] max-lg:px-4">
               {d.ivaRetenidoClienteVes != null && d.ivaRetenidoClienteVes > 0 && (
                 <span className="text-slate-400">
                   IVA retenido cliente: <span className="font-semibold text-slate-600 font-mono">Bs {d.ivaRetenidoClienteVes.toFixed(2)}</span>

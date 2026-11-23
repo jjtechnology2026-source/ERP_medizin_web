@@ -7,6 +7,7 @@ import {
   HiOutlineArrowLeft,
 } from "react-icons/hi";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import RecordCard from "@/components/ui/record-card";
 import { fiscalZReportService } from "@/modules/cash-register/api/fiscal-z-report.service";
 import { isFallbackZ } from "@/modules/cash-register/lib/fiscal-fallback";
 import type { ZReportListItem, CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
@@ -129,28 +130,36 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between gap-2 p-6 border-b border-slate-100 max-lg:px-4">
+          <div className="flex min-w-0 items-center gap-3">
             {selectedReport ? (
-              <button onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+              <button
+                onClick={handleBack}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors max-lg:min-h-11 max-lg:min-w-11"
+                aria-label="Volver al historial"
+              >
                 <HiOutlineArrowLeft size={20} className="text-slate-500" />
               </button>
             ) : (
-              <div className="p-2.5 bg-slate-900 text-white rounded-2xl">
+              <div className="shrink-0 p-2.5 bg-slate-900 text-white rounded-2xl">
                 <HiOutlineDocumentReport size={22} />
               </div>
             )}
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+            <h2 className="min-w-0 text-xl font-black text-slate-800 tracking-tight">
               {selectedReport ? `Reporte Z #${selectedReport.zNumber}` : "Historial de Reportes Z"}
             </h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button
+            onClick={onClose}
+            className="shrink-0 p-2 hover:bg-slate-100 rounded-xl transition-colors max-lg:min-h-11 max-lg:min-w-11"
+            aria-label="Cerrar"
+          >
             <HiOutlineXCircle size={22} className="text-slate-400" />
           </button>
         </div>
 
         {selectedReport ? (
-          <div className="p-6 space-y-5">
+          <div className="p-6 space-y-5 max-lg:px-4">
             {detailError && (
               <div className="p-4 bg-red-50 rounded-2xl text-red-700 text-sm font-bold text-center">
                 {detailError}
@@ -245,7 +254,7 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
               </p>
             )}
 
-            <div className="flex justify-between pt-1">
+            <div className="flex justify-between gap-3 pt-1 max-lg:flex-wrap">
               <button onClick={handleBack} className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all">
                 Volver al historial
               </button>
@@ -255,19 +264,26 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
             </div>
           </div>
         ) : (
-          <div className="p-6 space-y-5">
-            <div className="flex items-end gap-3">
-              <div>
+          <div className="p-6 space-y-5 max-lg:px-4">
+            {/* Phone: the date filters stack, because two native date inputs plus
+                the search button do not fit 358px and used to be clipped by the
+                shell (spec S7). From `sm` up the row is the desktop one (spec S4). */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Desde</label>
                 <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
-                  className="p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  className="w-full p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 max-lg:text-base sm:w-auto" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Hasta</label>
                 <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
-                  className="p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  className="w-full p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 max-lg:text-base sm:w-auto" />
               </div>
-              <button onClick={fetchList} className="p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all">
+              <button
+                onClick={fetchList}
+                className="p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all max-lg:min-h-11 max-lg:self-start"
+                aria-label="Buscar reportes"
+              >
                 <HiOutlineSearch size={20} />
               </button>
             </div>
@@ -287,7 +303,61 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
             )}
 
             {!loading && reports.length > 0 && (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <>
+              {/* Phone: one card per Z with the four decision fields (number,
+                  date, total sales, document count) and a visible 44px action
+                  (specs S3, S5, S7). Branch goes behind the disclosure. */}
+              <ul className="flex flex-col gap-2 lg:hidden">
+                {reports.map((r) => (
+                  <RecordCard
+                    key={r.id}
+                    title={
+                      <span className="flex items-center gap-2 font-mono">
+                        {r.zNumber != null ? `Z #${r.zNumber}` : "Z #—"}
+                        {r.zNumber != null && (
+                          <FallbackZBadge
+                            pharmacyId={pharmacyId}
+                            fiscalDate={r.fiscalDate}
+                            zNumber={r.zNumber}
+                          />
+                        )}
+                      </span>
+                    }
+                    subtitle={formatDate(r.fiscalDate)}
+                    fields={[
+                      { label: "Total ventas", value: formatMoney(r.totalSales), emphasis: "strong" },
+                      { label: "Facturas", value: r.invoiceCount != null ? r.invoiceCount : "—" },
+                    ]}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => handleViewDetail(r.id)}
+                        className="rounded-xl bg-blue-50 px-3 text-[11px] font-black uppercase tracking-wide text-[#0057FF] transition-colors active:bg-blue-100"
+                      >
+                        Ver
+                      </button>
+                    }
+                  >
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Sucursal
+                        </dt>
+                        <dd className="truncate font-bold text-slate-600">{r.sucursal || "—"}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Fecha fiscal
+                        </dt>
+                        <dd className="truncate font-bold text-slate-600">{r.fiscalDate || "—"}</dd>
+                      </div>
+                    </dl>
+                  </RecordCard>
+                ))}
+              </ul>
+
+              {/* Desktop table, unchanged (spec S4). */}
+              <div className="hidden lg:block overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-wider">
@@ -327,6 +397,7 @@ export default function ZReportHistoryDialog({ onClose }: ZReportHistoryDialogPr
                   </tbody>
                 </table>
               </div>
+              </>
             )}
 
             <div className="flex justify-end pt-2">
