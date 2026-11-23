@@ -1,6 +1,7 @@
 import api from "@/modules/core/api/client";
 import { Medication, BulkProductRow } from "@/modules/products/types/products.types";
 import { effectiveVat } from "@/modules/products/lib/pricing";
+import { buildProductUpdatePayload } from "@/modules/products/lib/product-update";
 
 /** Disponibilidad de un producto (código o nombre) en otras farmacias del mismo grupo. */
 export interface GroupProductAvailability {
@@ -211,27 +212,12 @@ export const productsService = {
   /**
    * Actualiza los campos de catálogo de un producto (todos menos `productType`).
    *
-   * `ProductUpdateDto` se mapea con `unwrap_or_default()` en el backend, así que
-   * una clave ausente **limpia** la columna guardada. El payload se envía siempre
-   * completo: el llamador pasa el producto ya resuelto desde el servidor.
+   * El cuerpo se arma con `buildProductUpdatePayload`: `ProductUpdateDto` se mapea
+   * con `unwrap_or_default()` en el backend, así que una clave ausente **limpia**
+   * la columna guardada.
    */
   async updateProduct(medication: Medication): Promise<void> {
-    await api.put("/admin/products/update", {
-      barCode: medication.barCode,
-      activeIngredient: medication.activeIngredient ?? "",
-      antibiotic: Boolean(medication.antibiotic),
-      brand: medication.brand ?? "",
-      category: medication.category ?? "",
-      controlled: Boolean(medication.controlled),
-      description: medication.description ?? "",
-      dosage: medication.dosage ?? "",
-      image:
-        medication.image && typeof medication.image === "string" ? medication.image : "",
-      name: medication.name ?? "",
-      subcategory: medication.subcategory ?? "",
-      tablets: medication.tablets ?? "",
-      vat: Number(medication.vat) || 0,
-    });
+    await api.put("/admin/products/update", buildProductUpdatePayload(medication));
   },
 
   /** Aumenta inventario vía HTTP (reemplaza MQTT) */
