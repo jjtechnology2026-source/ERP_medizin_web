@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePermissions } from "@/modules/core/hooks/usePermissions";
-import { HiDocumentText, HiDotsVertical, HiSearch } from "react-icons/hi";
+import { HiDocumentText, HiDotsVertical, HiOutlineCamera, HiSearch } from "react-icons/hi";
 import ActionBar from "@/components/ui/action-bar";
 import Sheet from "@/components/ui/sheet";
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
@@ -17,6 +17,7 @@ import OrderItemsCardList from "@/modules/cash-register/components/OrderItemsCar
 import CheckoutBar from "@/modules/cash-register/components/CheckoutBar";
 import RecentInvoicesCard from "@/modules/cash-register/components/RecentInvoicesCard";
 import MobileCashRegisterSheet from "@/modules/cash-register/components/MobileCashRegisterSheet";
+import ScanToCartSheet from "@/modules/cash-register/components/ScanToCartSheet";
 import CustomerDataDialog from "@/modules/cash-register/components/CustomerDataDialog";
 import PaymentDialog from "@/modules/cash-register/components/PaymentDialog";
 import PendingQuotesDialog from "@/modules/cash-register/components/PendingQuotesDialog";
@@ -41,6 +42,7 @@ export default function CashRegisterFeature() {
   const [showPendingDeliveryNotes, setShowPendingDeliveryNotes] = useState(false);
   const [showGroupAvailability, setShowGroupAvailability] = useState(false);
   const [showSearchSheet, setShowSearchSheet] = useState(false);
+  const [showScanSheet, setShowScanSheet] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
 
   // Panel of the fixed ActionBar: the phone's only primary action is `Cobrar`
@@ -75,7 +77,8 @@ export default function CashRegisterFeature() {
         showPaymentDialog ||
         showPendingQuotes ||
         showPendingDeliveryNotes ||
-        showGroupAvailability
+        showGroupAvailability ||
+        showScanSheet
       )
         return;
       setShowCustomerDialog(true);
@@ -88,6 +91,7 @@ export default function CashRegisterFeature() {
     showPendingQuotes,
     showPendingDeliveryNotes,
     showGroupAvailability,
+    showScanSheet,
   ]);
 
   return (
@@ -157,7 +161,9 @@ export default function CashRegisterFeature() {
         </div>
       )}
 
-      {/* One primary action and two shortcuts: search, overflow, cobrar (S6). */}
+      {/* One primary action (`Cobrar`) plus the shortcuts: search by hand, scan
+          to add, and the overflow (S6). Everything here is `lg:hidden` inside
+          `ActionBar`, so desktop is untouched (S4). */}
       {!isLoading && (
         <ActionBar
           stacked
@@ -175,16 +181,31 @@ export default function CashRegisterFeature() {
             </button>
           }
           secondary={[
-            <button
-              key="search"
-              type="button"
-              onClick={() => setShowSearchSheet(true)}
-              aria-label="Buscar producto"
-              title="Buscar producto"
-              className="flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition-colors active:bg-slate-200"
-            >
-              <HiSearch size={22} aria-hidden="true" />
-            </button>,
+            // Search and scan share one slot on purpose: `ActionBar` renders at
+            // most two secondary actions and `components/**` is not part of this
+            // slice, so passing them separately would silently drop the overflow
+            // (`Más`) and take quotes, delivery notes and the shift away. Both
+            // halves stay 44×44.
+            <div key="search-scan" className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSearchSheet(true)}
+                aria-label="Buscar producto"
+                title="Buscar producto"
+                className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition-colors active:bg-slate-200"
+              >
+                <HiSearch size={22} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowScanSheet(true)}
+                aria-label="Escanear producto"
+                title="Escanear producto"
+                className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition-colors active:bg-slate-200"
+              >
+                <HiOutlineCamera size={22} aria-hidden="true" />
+              </button>
+            </div>,
             <button
               key="more"
               type="button"
@@ -198,6 +219,12 @@ export default function CashRegisterFeature() {
           ]}
         />
       )}
+
+      <ScanToCartSheet
+        open={showScanSheet}
+        onOpenChange={setShowScanSheet}
+        pharmacyId={pharmacyId}
+      />
 
       <Sheet
         open={showSearchSheet}
