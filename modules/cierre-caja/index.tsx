@@ -11,93 +11,51 @@ import {
 import {
   HiOutlineDownload,
   HiOutlineLockClosed,
-  HiOutlineCash,
-  HiOutlineCreditCard,
-  HiOutlineCurrencyDollar,
-  HiOutlineDeviceMobile,
-  HiOutlineFingerPrint,
-  HiOutlineClock,
-  HiOutlineBookOpen,
-  HiOutlineGlobe,
   HiOutlineCalculator,
   HiOutlineInformationCircle,
   HiOutlineCheckCircle,
   HiOutlineXCircle,
+  HiOutlineChevronRight,
 } from "react-icons/hi";
-
-
+import ActionBar from "@/components/ui/action-bar";
+import MobileMethodBreakdown from "./components/MobileMethodBreakdown";
+import PhysicalCountSheet from "./components/PhysicalCountSheet";
+import {
+  COUNTED_FIELD_BY_METHOD,
+  METHOD_BG,
+  METHOD_COLORS,
+  METHOD_ICONS,
+  METHOD_LABELS,
+  PAYMENT_METHOD_KEYS,
+  type PaymentMethodKey,
+} from "./components/payment-method";
+import {
+  COUNT_FIELDS,
+  countFilledFields,
+  emptyPhysicalCount,
+  parseCountInput,
+  type PhysicalCount,
+} from "./lib/physical-count";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-type PaymentMethodKey = "efectivo" | "dolares" | "tarjeta" | "pagomovil" | "biopago" | "cashea" | "credito" | "divisa_electronica";
-
-interface PhysicalCount {
-  efectivo_ves: number;
-  efectivo_usd: number;
-  tarjeta_ves: number;
-  pagomovil_ves: number;
-  biopago_ves: number;
-  cashea_ves: number;
-  otros_ves: number;
-  divisa_electronica_usd: number;
+/**
+ * Resumen de la diferencia que acompaña a la accion primaria de la barra: en un
+ * telefono el total del descuadre tiene que estar siempre a la vista, sin bajar
+ * hasta el balance (T6). Se dice en palabras cuando cuadra porque el color solo
+ * no alcanza (WCAG 1.4.1).
+ */
+function describeDifference(differenceVes: number, differenceUsd: number): string {
+  if (differenceVes === 0 && differenceUsd === 0) return "Caja cuadrada";
+  const parts: string[] = [];
+  if (differenceVes !== 0) {
+    parts.push(`Bs ${differenceVes > 0 ? "+" : ""}${differenceVes.toFixed(2)}`);
+  }
+  if (differenceUsd !== 0) {
+    parts.push(`USD ${differenceUsd > 0 ? "+" : ""}${differenceUsd.toFixed(2)}`);
+  }
+  return `Dif. ${parts.join(" · ")}`;
 }
-
-const METHOD_ICONS: Record<PaymentMethodKey, React.ReactNode> = {
-  efectivo: <HiOutlineCash />,
-  dolares: <HiOutlineCurrencyDollar />,
-  tarjeta: <HiOutlineCreditCard />,
-  pagomovil: <HiOutlineDeviceMobile />,
-  biopago: <HiOutlineFingerPrint />,
-  cashea: <HiOutlineClock />,
-  credito: <HiOutlineBookOpen />,
-  divisa_electronica: <HiOutlineGlobe />,
-};
-
-const METHOD_LABELS: Record<PaymentMethodKey, string> = {
-  efectivo: "Efectivo Bs.",
-  dolares: "Divisas $",
-  tarjeta: "Tarjetas",
-  pagomovil: "Pago Móvil",
-  biopago: "Biopago",
-  cashea: "Cashea",
-  credito: "Crédito",
-  divisa_electronica: "Divisa Electrónica",
-};
-
-const METHOD_COLORS: Record<PaymentMethodKey, string> = {
-  efectivo: "text-emerald-500",
-  dolares: "text-blue-500",
-  tarjeta: "text-purple-500",
-  pagomovil: "text-pink-500",
-  biopago: "text-orange-500",
-  cashea: "text-lime-500",
-  credito: "text-rose-500",
-  divisa_electronica: "text-teal-500",
-};
-
-const METHOD_BG: Record<PaymentMethodKey, string> = {
-  efectivo: "bg-emerald-50",
-  dolares: "bg-blue-50",
-  tarjeta: "bg-purple-50",
-  pagomovil: "bg-pink-50",
-  biopago: "bg-orange-50",
-  cashea: "bg-lime-50",
-  credito: "bg-rose-50",
-  divisa_electronica: "bg-teal-50",
-};
-
-// Cada metodo del desglose lee su monto del campo correspondiente del conteo
-// fisico (el nombre de campo no coincide con la clave de metodo).
-const COUNTED_FIELD_BY_METHOD: Record<PaymentMethodKey, keyof PhysicalCount> = {
-  efectivo: "efectivo_ves",
-  dolares: "efectivo_usd",
-  tarjeta: "tarjeta_ves",
-  pagomovil: "pagomovil_ves",
-  biopago: "biopago_ves",
-  cashea: "cashea_ves",
-  credito: "otros_ves",
-  divisa_electronica: "divisa_electronica_usd",
-};
 
 export default function CashClosurePage() {
   const router = useRouter();
@@ -114,16 +72,10 @@ export default function CashClosurePage() {
     load,
   } = useCashierWorkflowStore();
 
-  const [physicalCount, setPhysicalCount] = useState<PhysicalCount>({
-    efectivo_ves: 0,
-    efectivo_usd: 0,
-    tarjeta_ves: 0,
-    pagomovil_ves: 0,
-    biopago_ves: 0,
-    cashea_ves: 0,
-    otros_ves: 0,
-    divisa_electronica_usd: 0,
-  });
+  const [physicalCount, setPhysicalCount] = useState<PhysicalCount>(emptyPhysicalCount);
+  // El conteo fisico es un sheet en el telefono (T6): siete inputs en la
+  // superficie dejaban la pantalla con nueve controles visibles (S6).
+  const [showCountSheet, setShowCountSheet] = useState(false);
 
   // La clasificacion por metodo vive en el componente; la matematica del
   // cierre (neto, saldo teorico y diferencia) vive en el modulo puro.
@@ -159,7 +111,7 @@ export default function CashClosurePage() {
 
   const countedByMethod = useMemo(() => {
     const counts = {} as Record<PaymentMethodKey, number>;
-    for (const method of Object.keys(METHOD_LABELS) as PaymentMethodKey[]) {
+    for (const method of PAYMENT_METHOD_KEYS) {
       counts[method] = physicalCount[COUNTED_FIELD_BY_METHOD[method]];
     }
     return counts;
@@ -184,7 +136,7 @@ export default function CashClosurePage() {
   const formatUsd = (amount: number) => `$ ${amount.toFixed(2)}`;
 
   const handlePhysicalCountChange = (field: keyof PhysicalCount, value: string) => {
-    const num = parseFloat(value) || 0;
+    const num = parseCountInput(value);
     setPhysicalCount((prev) => ({ ...prev, [field]: num }));
   };
 
@@ -211,7 +163,7 @@ export default function CashClosurePage() {
     );
   };
 
-  const salesData = (Object.keys(METHOD_LABELS) as PaymentMethodKey[]).map((method) => ({
+  const salesData = PAYMENT_METHOD_KEYS.map((method) => ({
     label: METHOD_LABELS[method],
     value: method === "dolares" || method === "divisa_electronica" ? `${(totalsByMethod[method] / (currentRate || 1)).toFixed(2)} USD` : totalsByMethod[method].toFixed(2),
     icon: METHOD_ICONS[method],
@@ -221,6 +173,9 @@ export default function CashClosurePage() {
 
   const fiscalResumen = useMemo(() => buildFiscalResumen(sessionInvoices), [sessionInvoices]);
 
+  const countFilled = countFilledFields(physicalCount);
+  const differenceSummary = describeDifference(differenceVes, differenceUsd);
+
   useEffect(() => {
     if (!activeSession) {
       router.push("/caja-ventas");
@@ -229,9 +184,9 @@ export default function CashClosurePage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 md:p-10 font-sans text-slate-900">
-      <header className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
+      <header className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-6 lg:mb-10">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-800">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-800">
             Cierre de <span className="text-[#0057FF]">Caja</span>
           </h1>
           <p className="text-slate-500 mt-1">
@@ -239,7 +194,9 @@ export default function CashClosurePage() {
           </p>
         </div>
 
-        <div className="flex gap-3 w-full sm:w-auto">
+        {/* Desktop keeps its two header actions untouched (S4). On a phone both
+            live in the ActionBar, one of them as the single primary (S6). */}
+        <div className="hidden lg:flex gap-3">
           <button
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
             onClick={() => window.print()}
@@ -261,8 +218,13 @@ export default function CashClosurePage() {
       {errorMessage && (
         <div className="max-w-6xl mx-auto mb-6 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between">
           <span className="text-xs font-bold text-red-600">{errorMessage}</span>
-          <button onClick={clearMessages} className="text-red-400 hover:text-red-600">
-            <HiOutlineXCircle size={16} />
+          <button
+            type="button"
+            onClick={clearMessages}
+            aria-label="Descartar mensaje de error"
+            className="-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-red-400 transition-colors hover:text-red-600 active:bg-red-100 lg:size-auto lg:rounded-none"
+          >
+            <HiOutlineXCircle size={16} className="size-5 lg:size-4" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -270,15 +232,41 @@ export default function CashClosurePage() {
       {infoMessage && (
         <div className="max-w-6xl mx-auto mb-6 px-4 py-3 bg-green-50 border border-green-100 rounded-2xl flex items-center justify-between">
           <span className="text-xs font-bold text-green-600">{infoMessage}</span>
-          <button onClick={clearMessages} className="text-green-400 hover:text-green-600">
-            <HiOutlineCheckCircle size={16} />
+          <button
+            type="button"
+            onClick={clearMessages}
+            aria-label="Descartar mensaje"
+            className="-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-green-400 transition-colors hover:text-green-600 active:bg-green-100 lg:size-auto lg:rounded-none"
+          >
+            <HiOutlineCheckCircle size={16} className="size-5 lg:size-4" aria-hidden="true" />
           </button>
         </div>
       )}
 
       <main className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
-          <section className="lg:col-span-3 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-8 items-start">
+          <section className="lg:col-span-3 bg-white rounded-3xl lg:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-4 lg:p-8">
+            {/* Phone entry point to the count. It replaces seven inputs on the
+                surface with one 64px row that says how much is left to count. */}
+            <button
+              type="button"
+              onClick={() => setShowCountSheet(true)}
+              className="mb-6 flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors active:bg-amber-100 lg:hidden"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <HiOutlineCalculator size={20} aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-amber-900">Conteo físico</span>
+                  <span className="block truncate text-[11px] font-bold text-amber-700">
+                    {countFilled} de {COUNT_FIELDS.length} montos · toca para contar
+                  </span>
+                </span>
+              </span>
+              <HiOutlineChevronRight size={20} className="shrink-0 text-amber-600" aria-hidden="true" />
+            </button>
+
             <div className="flex items-center gap-3 mb-8">
               <div className="p-3 bg-blue-50 text-[#0057FF] rounded-2xl">
                 <HiOutlineCalculator size={24} />
@@ -292,13 +280,13 @@ export default function CashClosurePage() {
                   key={index}
                   className="flex items-center justify-between p-4 rounded-3xl border border-transparent bg-slate-50/30 hover:bg-slate-50 hover:border-slate-100 transition-all group"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-2xl ${item.bg} ${item.color} transition-transform`}>
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className={`shrink-0 p-3 rounded-2xl ${item.bg} ${item.color} transition-transform`}>
                       {item.icon}
                     </div>
-                    <span className="font-bold text-slate-600 text-sm">{item.label}</span>
+                    <span className="truncate font-bold text-slate-600 text-sm">{item.label}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 pl-2 text-right">
                     <p className="font-mono font-bold text-slate-800 tracking-tighter">{item.value}</p>
                     <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Neto</span>
                   </div>
@@ -337,7 +325,9 @@ export default function CashClosurePage() {
               </div>
             </section>
 
-            <div className="mt-8 pt-8 border-t border-slate-200">
+            {/* Desktop-only section: on a phone the count rows open from the
+                `Conteo físico` entry point at the top of this card. */}
+            <div className="mt-8 hidden pt-8 border-t border-slate-200 lg:block">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
                   <HiOutlineCalculator size={24} />
@@ -347,77 +337,28 @@ export default function CashClosurePage() {
               <p className="text-slate-500 text-sm mb-6">
                 Ingrese los montos contados físicamente en caja antes de cerrar el turno.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Efectivo Bs</label>
-                  <input
-                    type="number"
-                    value={physicalCount.efectivo_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("efectivo_ves", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Efectivo USD</label>
-                  <input
-                    type="number"
-                    value={physicalCount.efectivo_usd || ""}
-                    onChange={(e) => handlePhysicalCountChange("efectivo_usd", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Tarjeta Bs</label>
-                  <input
-                    type="number"
-                    value={physicalCount.tarjeta_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("tarjeta_ves", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Pago Móvil Bs</label>
-                  <input
-                    type="number"
-                    value={physicalCount.pagomovil_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("pagomovil_ves", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Biopago Bs</label>
-                  <input
-                    type="number"
-                    value={physicalCount.biopago_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("biopago_ves", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Cashea Bs</label>
-                  <input
-                    type="number"
-                    value={physicalCount.cashea_ves || ""}
-                    onChange={(e) => handlePhysicalCountChange("cashea_ves", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Divisa Electrónica USD</label>
-                  <input
-                    type="number"
-                    value={physicalCount.divisa_electronica_usd || ""}
-                    onChange={(e) => handlePhysicalCountChange("divisa_electronica_usd", e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
+              {/* Desktop count grid, unchanged (S4): same two columns, same field
+                  order. On a phone the same fields open in `PhysicalCountSheet`. */}
+              <div className="grid grid-cols-2 gap-4">
+                {COUNT_FIELDS.map(({ field, label }) => (
+                  <div key={field}>
+                    <label
+                      htmlFor={`physical-count-desktop-${field}`}
+                      className="text-xs font-bold text-slate-600 mb-1.5 block"
+                    >
+                      {label}
+                    </label>
+                    <input
+                      id={`physical-count-desktop-${field}`}
+                      type="number"
+                      inputMode="decimal"
+                      value={physicalCount[field] || ""}
+                      onChange={(e) => handlePhysicalCountChange(field, e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -431,7 +372,8 @@ export default function CashClosurePage() {
               <p className="text-slate-500 text-sm mb-6">
                 Compare lo esperado por los movimientos contra lo contado. La diferencia total puede venir de un solo método.
               </p>
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
+              {/* Desktop keeps its four-column table byte-identical (S4). */}
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <div className="grid grid-cols-4 gap-2 px-4 py-3 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <span>Método</span>
                   <span className="text-right">Esperado</span>
@@ -474,6 +416,12 @@ export default function CashClosurePage() {
                   </span>
                 </div>
               </div>
+
+              {/* Phone composition: one block per method, three legible numbers. */}
+              <MobileMethodBreakdown
+                rows={methodBreakdown.rows}
+                authoritativeTotal={methodBreakdown.authoritativeTotal}
+              />
               {methodBreakdown.divergence !== 0 && (
                 <div className="mt-3 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl">
                   <HiOutlineInformationCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
@@ -495,14 +443,14 @@ export default function CashClosurePage() {
             </div>
           </section>
 
-          <aside className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-[2.5rem] border-2 border-[#0057FF]/5 shadow-xl shadow-blue-500/5 p-8 relative overflow-hidden">
+          <aside className="lg:col-span-2 space-y-4 lg:space-y-6">
+            <div className="bg-white rounded-3xl lg:rounded-[2.5rem] border-2 border-[#0057FF]/5 shadow-xl shadow-blue-500/5 p-4 lg:p-8 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#0057FF]/5 rounded-full -mr-16 -mt-16" />
-              <h3 className="text-xs font-black text-[#0057FF] uppercase tracking-[0.2em] mb-10 flex items-center gap-2">
+              <h3 className="text-xs font-black text-[#0057FF] uppercase tracking-[0.2em] mb-6 lg:mb-10 flex items-center gap-2">
                 Balance de Caja
               </h3>
 
-              <div className="space-y-8">
+              <div className="space-y-4 lg:space-y-8">
                 <div>
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Saldo Teórico Bs</span>
                   <div className="flex items-baseline gap-2 mt-1">
@@ -513,7 +461,7 @@ export default function CashClosurePage() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-4 lg:pt-6 border-t border-slate-100">
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Saldo Teórico USD</span>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-black text-slate-900 tracking-tighter">
@@ -535,7 +483,7 @@ export default function CashClosurePage() {
                   ) : null}
                 </div>
 
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-4 lg:pt-6 border-t border-slate-100">
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Físico Bs</span>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-black text-slate-700 tracking-tighter">
@@ -544,10 +492,12 @@ export default function CashClosurePage() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-4 lg:pt-6 border-t border-slate-100">
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Diferencia Bs</span>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className={`text-3xl font-black tracking-tighter ${differenceVes === 0 ? "text-emerald-500" : "text-red-500"}`}>
+                    {/* Neutral when it balances on a phone; the desktop keeps the
+                        green it always had (S4). */}
+                    <span className={`text-3xl font-black tracking-tighter ${differenceVes === 0 ? "text-slate-400 lg:text-emerald-500" : "text-red-500"}`}>
                       {differenceVes >= 0 ? "+" : ""}{differenceVes.toFixed(2)}
                     </span>
                   </div>
@@ -557,7 +507,7 @@ export default function CashClosurePage() {
                     filas el cajero escribe los dolares contados y el panel no se mueve,
                     asi que la diferencia del cierre parece ignorarlos. Solo se muestra:
                     la matematica del cierre no cambia. */}
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-4 lg:pt-6 border-t border-slate-100">
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Físico USD</span>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-black text-slate-700 tracking-tighter">
@@ -566,10 +516,10 @@ export default function CashClosurePage() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-4 lg:pt-6 border-t border-slate-100">
                   <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Diferencia USD</span>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className={`text-3xl font-black tracking-tighter ${differenceUsd === 0 ? "text-emerald-500" : "text-red-500"}`}>
+                    <span className={`text-3xl font-black tracking-tighter ${differenceUsd === 0 ? "text-slate-400 lg:text-emerald-500" : "text-red-500"}`}>
                       {differenceUsd >= 0 ? "+" : ""}{differenceUsd.toFixed(2)}
                     </span>
                   </div>
@@ -577,7 +527,7 @@ export default function CashClosurePage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-6 border border-slate-200 flex items-center justify-between shadow-sm">
+            <div className="bg-white rounded-3xl lg:rounded-[2rem] p-4 lg:p-6 border border-slate-200 flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
                   <HiOutlineLockClosed size={24} />
@@ -602,6 +552,52 @@ export default function CashClosurePage() {
           </aside>
         </div>
       </main>
+
+      {/* The fixed bar must not cover the last card (S6). */}
+      <div aria-hidden="true" className="h-[var(--action-bar-block-size)] lg:hidden" />
+
+      {/* One primary action carrying the total difference, plus the report one
+          tap away. Before this the phone exposed nine controls and the two
+          header buttons duplicated the ones that mattered (S6). */}
+      <ActionBar
+        stacked
+        primary={
+          <button
+            type="button"
+            onClick={handleCloseSession}
+            disabled={!activeSession || isSubmitting}
+            className="flex flex-col items-center justify-center rounded-2xl bg-[#0057FF] px-4 text-white transition-colors active:bg-[#0046CC] disabled:bg-slate-300 disabled:text-slate-500"
+          >
+            <span className="text-sm font-black leading-tight">
+              {isSubmitting ? "Cerrando..." : "Cerrar turno"}
+            </span>
+            <span className="text-[11px] font-bold leading-tight">
+              {isSubmitting ? "Un momento" : differenceSummary}
+            </span>
+          </button>
+        }
+        secondary={[
+          <button
+            key="report"
+            type="button"
+            onClick={() => window.print()}
+            aria-label="Imprimir reporte de cierre"
+            title="Imprimir reporte de cierre"
+            className="flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition-colors active:bg-slate-200"
+          >
+            <HiOutlineDownload size={22} aria-hidden="true" />
+          </button>,
+        ]}
+      />
+
+      <PhysicalCountSheet
+        open={showCountSheet}
+        onOpenChange={setShowCountSheet}
+        counts={physicalCount}
+        onChange={handlePhysicalCountChange}
+        differenceVes={differenceVes}
+        differenceUsd={differenceUsd}
+      />
     </div>
   );
 }

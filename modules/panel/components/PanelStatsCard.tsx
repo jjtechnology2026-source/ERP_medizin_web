@@ -32,7 +32,7 @@ export default function PanelStatsCards({ totalUsers, totalOrders, totalSales, c
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
       <DashboardStatCard
         title="Total Usuarios"
         value={totalUsers}
@@ -66,6 +66,9 @@ export default function PanelStatsCards({ totalUsers, totalOrders, totalSales, c
         value={canceledOrders}
         icon={<HiOutlineXCircle />}
         color="rose"
+        // Five cards in two phone columns leave a hole: the last one takes the
+        // full row instead, and from `lg` up it is one of five as always (S4).
+        className="col-span-2 lg:col-span-1"
         trend={{ value: `${totalOrders > 0 ? ((canceledOrders / totalOrders) * 100).toFixed(1) : "0"}%`, label: "del total", type: "down" }}
       />
     </div>

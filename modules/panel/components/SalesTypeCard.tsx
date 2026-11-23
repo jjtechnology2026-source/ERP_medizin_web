@@ -19,11 +19,12 @@ export const SalesTypeCard = ({ monthOptions, selectedMonthKey, onMonthChange, c
   ];
 
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-50 flex flex-col h-full">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-black text-slate-800">Cantidad de tipos vendidos</h3>
+    <div className="bg-white p-4 md:p-6 lg:p-8 rounded-3xl lg:rounded-[2.5rem] shadow-sm border border-slate-50 flex flex-col h-full">
+      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between lg:mb-6">
+        <h3 className="text-lg lg:text-xl font-black text-slate-800">Cantidad de tipos vendidos</h3>
         <select
-          className="bg-slate-100 border-none rounded-lg text-sm font-bold p-2 outline-none text-slate-600"
+          aria-label="Mes de las ventas"
+          className="min-h-11 lg:min-h-0 w-full rounded-lg border-none bg-slate-100 p-2 text-base font-bold text-slate-600 outline-none sm:w-auto sm:text-sm"
           value={selectedMonthKey}
           onChange={(event) => onMonthChange(event.target.value)}
         >
@@ -39,18 +40,18 @@ export const SalesTypeCard = ({ monthOptions, selectedMonthKey, onMonthChange, c
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-blue-600 text-white">
-              <th className="p-4 text-sm font-bold">Tipo de Venta</th>
-              <th className="p-4 text-sm font-bold text-center">Cantidad</th>
-              <th className="p-4 text-sm font-bold text-center">Tipo de entrega</th>
+              <th className="p-2.5 sm:p-4 text-[11px] sm:text-sm font-bold">Tipo de Venta</th>
+              <th className="p-2.5 sm:p-4 text-[11px] sm:text-sm font-bold text-center">Cantidad</th>
+              <th className="p-2.5 sm:p-4 text-[11px] sm:text-sm font-bold text-center">Tipo de entrega</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {salesData.map((item) => (
               <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                <td className="p-4 text-sm font-medium text-slate-600">{item.type}</td>
-                <td className="p-4 text-sm font-bold text-slate-800 text-center">{item.count}</td>
-                <td className="p-4 text-center">
-                  <span className={`${item.color} text-white text-[10px] uppercase font-black px-3 py-1 rounded-md shadow-sm`}>
+                <td className="p-2.5 sm:p-4 text-sm font-medium text-slate-600">{item.type}</td>
+                <td className="p-2.5 sm:p-4 text-sm font-bold text-slate-800 text-center">{item.count}</td>
+                <td className="p-2.5 sm:p-4 text-center">
+                  <span className={`${item.color} text-white text-[10px] uppercase font-black px-2 sm:px-3 py-1 rounded-md shadow-sm`}>
                     {item.label}
                   </span>
                 </td>
