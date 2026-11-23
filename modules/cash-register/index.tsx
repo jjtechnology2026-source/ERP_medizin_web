@@ -204,6 +204,9 @@ export default function CashRegisterFeature() {
         onOpenChange={setShowSearchSheet}
         title="Buscar producto"
         description="Escanea el código o busca por nombre"
+        // A search surface needs room: as a content-height sheet it opened as a
+        // strip at the foot of the screen and showed one product at a time.
+        panelClassName="max-lg:h-[92dvh] max-lg:max-h-[92dvh]"
       >
         <ProductSearchBar />
       </Sheet>

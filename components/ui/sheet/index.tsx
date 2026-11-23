@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { cn } from "@/modules/core/utils/ui";
 import { HiOutlineX } from "react-icons/hi";
 
 interface SheetProps {
@@ -15,6 +16,13 @@ interface SheetProps {
   footer?: ReactNode;
   /** Scrollable body, between the fixed header and the fixed footer. */
   children?: ReactNode;
+  /**
+   * Extra classes for the panel. The base sheet grows with its content, which is
+   * right for a short confirmation but wrong for a search surface: `Buscar
+   * producto` opened as a strip at the foot of the screen and showed a single
+   * result. Callers that need room pass a phone-only height here.
+   */
+  panelClassName?: string;
 }
 
 /**
@@ -37,6 +45,7 @@ export default function Sheet({
   description,
   footer,
   children,
+  panelClassName,
 }: SheetProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -46,7 +55,7 @@ export default function Sheet({
         {/* Bottom sheet under `sm`; from `sm` a centered box. Centering uses
             `inset-0` + `m-auto` + `h-fit` so no transform is parked on the
             panel and the entrance animation stays unencumbered. */}
-        <Dialog.Content className="sheet-panel fixed inset-x-0 bottom-0 z-[9999] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[32px] bg-white pb-[var(--mobile-tabbar-safe-bottom)] shadow-[0_-12px_48px_-16px_rgba(15,23,42,0.35)] outline-none sm:inset-0 sm:m-auto sm:h-fit sm:w-full sm:max-w-lg sm:rounded-[32px] sm:pb-0 sm:shadow-[0_32px_64px_-15px_rgba(0,0,0,0.25)]">
+        <Dialog.Content className={cn("sheet-panel fixed inset-x-0 bottom-0 z-[9999] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[32px] bg-white pb-[var(--mobile-tabbar-safe-bottom)] shadow-[0_-12px_48px_-16px_rgba(15,23,42,0.35)] outline-none sm:inset-0 sm:m-auto sm:h-fit sm:w-full sm:max-w-lg sm:rounded-[32px] sm:pb-0 sm:shadow-[0_32px_64px_-15px_rgba(0,0,0,0.25)]", panelClassName)}>
           {/* Header and footer never scroll: only the body does, so the title
               and the actions stay reachable on a long form. */}
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 pb-3 pt-4 sm:px-7 sm:pt-6">
@@ -75,7 +84,7 @@ export default function Sheet({
           {children ? (
             // `overscroll-contain` stops the sheet's scroll from chaining into
             // the shell behind it (spec S8).
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-7">
+            <div className="min-h-0 flex-1 max-lg:overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-4 sm:px-7">
               {children}
             </div>
           ) : null}
