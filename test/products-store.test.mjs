@@ -627,3 +627,122 @@ test("searchFeedReset empties the slice", async () => {
   assert.equal(feed.query, "");
   assert.equal(feed.stockFilter, null);
 });
+
+// ─── updateMedicineDetails: catálogo editable completo ───────────────────────
+//
+// `PUT /admin/products/update` mapea con `unwrap_or_default()`: una clave que no
+// viaja en el payload BORRA la columna guardada. Estas pruebas fijan el contrato
+// del payload completo y el merge con la verdad del servidor.
+
+/** Las 13 claves de `ProductUpdateDto` (backend `products/src/adapters/dto.rs`). */
+const PRODUCT_UPDATE_KEYS = [
+  "activeIngredient",
+  "antibiotic",
+  "barCode",
+  "brand",
+  "category",
+  "controlled",
+  "description",
+  "dosage",
+  "image",
+  "name",
+  "subcategory",
+  "tablets",
+  "vat",
+];
+
+test("updateMedicineDetails envía las 13 claves del DTO y conserva lo que no se editó", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  const updates = [];
+  productsService.updateProduct = async (product) => {
+    updates.push(product);
+  };
+
+  const ok = await useProductsStore
+    .getState()
+    .updateMedicineDetails("B1", { brand: "Roemmers" });
+
+  assert.equal(ok, true);
+  assert.equal(updates.length, 1, "una sola escritura de catálogo");
+  const sent = updates[0];
+  const missing = PRODUCT_UPDATE_KEYS.filter((key) => !(key in sent));
+  assert.deepEqual(
+    missing,
+    [],
+    "una clave ausente hace que el backend limpie la columna guardada",
+  );
+  assert.equal(updates[0].brand, "Roemmers", "la edición gana");
+  assert.equal(updates[0].activeIngredient, "Ibuprofeno", "lo no editado conserva el valor guardado");
+  assert.equal(updates[0].category, "General");
+  assert.equal(updates[0].subcategory, "Varios");
+  assert.equal(updates[0].description, "");
+  assert.equal(updates[0].vat, 0);
+  assert.equal(updates[0].barCode, "B1", "el barCode viaja como identidad, no como edición");
+});
+
+test("updateMedicineDetails refresca inventario, catálogo y producto actual", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  productsService.updateProduct = async (product) => product;
+  useProductsStore.setState({
+    inventory: [{ ...SERVER_EXISTING }],
+    catalog: [{ ...SERVER_EXISTING }],
+    currentMedicine: { ...SERVER_EXISTING },
+  });
+
+  const ok = await useProductsStore.getState().updateMedicineDetails("B1", {
+    name: "Ibuprofeno 600",
+    controlled: true,
+    tablets: "30",
+  });
+
+  assert.equal(ok, true);
+  const state = useProductsStore.getState();
+  assert.equal(state.currentMedicine.name, "Ibuprofeno 600");
+  assert.equal(state.currentMedicine.controlled, true);
+  assert.equal(state.currentMedicine.tablets, "30");
+  assert.equal(state.inventory[0].name, "Ibuprofeno 600");
+  assert.equal(state.catalog[0].controlled, true);
+  assert.equal(state.inventory[0].brand, "Genérico", "los campos no editados sobreviven");
+});
+
+test("updateMedicineDetails no escribe ni toca el estado si falla la escritura", async () => {
+  stubServerInventory([SERVER_EXISTING]);
+  let writes = 0;
+  productsService.updateProduct = async () => {
+    writes += 1;
+    throw new Error("backend down");
+  };
+  useProductsStore.setState({
+    inventory: [{ ...SERVER_EXISTING }],
+    catalog: [{ ...SERVER_EXISTING }],
+    currentMedicine: { ...SERVER_EXISTING },
+  });
+
+  const ok = await useProductsStore
+    .getState()
+    .updateMedicineDetails("B1", { name: "Otro nombre" });
+
+  assert.equal(ok, false);
+  assert.equal(writes, 1, "el intento de escritura ocurrió una vez");
+  const state = useProductsStore.getState();
+  assert.equal(state.currentMedicine.name, "Ibuprofeno 400", "sin cambio optimista");
+  assert.equal(state.inventory[0].name, "Ibuprofeno 400");
+  assert.ok(state.lastSaveError, "el error queda disponible para la UI");
+});
+
+test("updateMedicineDetails no escribe si no puede resolver el producto en el servidor", async () => {
+  productsService.getCursorInventory = async () => {
+    throw new Error("inventory unavailable");
+  };
+  let writes = 0;
+  productsService.updateProduct = async () => {
+    writes += 1;
+  };
+
+  const ok = await useProductsStore
+    .getState()
+    .updateMedicineDetails("B1", { name: "Otro nombre" });
+
+  assert.equal(ok, false);
+  assert.equal(writes, 0, "sin verdad del servidor no hay escritura");
+});

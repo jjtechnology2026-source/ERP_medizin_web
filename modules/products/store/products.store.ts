@@ -126,7 +126,10 @@ interface ProductsActions {
   setEditMode: (mode: boolean) => void;
   setCurrentMedicine: (med: Partial<Medication> | null) => void;
   saveMedicine: (medicine: Medication) => Promise<boolean>;
-  updateMedicineName: (barCode: string, name: string) => Promise<boolean>;
+  updateMedicineDetails: (
+    barCode: string,
+    changes: Partial<Medication>,
+  ) => Promise<boolean>;
   addToInventory: (medications: Medication[]) => void;
   deleteMedicine: (barCode: string) => Promise<void>;
   decrementStock: (items: { barCode: string; quantity: number }[]) => void;
@@ -571,22 +574,58 @@ export const useProductsStore = create<ProductsStore>()((set, get) => {
       return true;
     },
 
-    updateMedicineName: async (barCode, name) => {
-      const trimmed = name.trim();
-      if (!trimmed) return false;
-      try {
-        await productsService.updateName(barCode, trimmed);
-      } catch (e) {
-        console.error("[updateMedicineName] API error:", e);
+    updateMedicineDetails: async (barCode, changes) => {
+      const trimmedName =
+        typeof changes.name === "string" ? changes.name.trim() : undefined;
+      if (!barCode || (changes.name !== undefined && !trimmedName)) {
+        set({ lastSaveError: "El nombre del producto no puede quedar vacío." });
         return false;
       }
+      set({ lastSaveError: null });
+
+      // La verdad del producto vive en el servidor: la página en memoria tiene 10
+      // filas y puede no incluirlo. Sin esa base no se escribe, porque el backend
+      // mapea `ProductUpdateDto` con `unwrap_or_default()` y una clave ausente
+      // borra la columna guardada.
+      let serverExisting: Medication | null;
+      try {
+        serverExisting = await get().findInventoryItem(barCode, { strict: true });
+      } catch (error) {
+        console.error("[updateMedicineDetails] findInventoryItem error:", error);
+        set({ lastSaveError: saveErrorMessage(error) });
+        return false;
+      }
+      if (!serverExisting) {
+        set({ lastSaveError: "No se encontró el producto en el servidor." });
+        return false;
+      }
+
+      const updated: Medication = {
+        ...serverExisting,
+        ...changes,
+        barCode,
+        name: trimmedName ?? serverExisting.name ?? "",
+      };
+
+      try {
+        await productsService.updateProduct(updated);
+      } catch (error) {
+        console.error("[updateMedicineDetails] updateProduct error:", error);
+        set({ lastSaveError: saveErrorMessage(error) });
+        return false;
+      }
+
       const { inventory, catalog, currentMedicine } = get();
+      const merge = (m: Medication) => (m.barCode === barCode ? { ...m, ...updated } : m);
       set({
-        currentMedicine: currentMedicine?.barCode === barCode ? { ...currentMedicine, name: trimmed } : currentMedicine,
-        inventory: inventory.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
-        catalog: catalog.map((m) => (m.barCode === barCode ? { ...m, name: trimmed } : m)),
+        currentMedicine:
+          currentMedicine?.barCode === barCode
+            ? { ...currentMedicine, ...updated }
+            : currentMedicine,
+        inventory: inventory.map(merge),
+        catalog: catalog.map(merge),
       });
-      void get().setPage(get().page);
+      void get().refreshCounts(true);
       return true;
     },
 
