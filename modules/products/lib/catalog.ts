@@ -19,6 +19,24 @@ export function resolveSubcategoryOptions(
   return fetched?.subcategories ?? fallback;
 }
 
+/**
+ * Categorías del catálogo y sus subcategorías por defecto.
+ *
+ * Respaldo de la UI cuando `/admin/products/categories` no responde: es la misma
+ * lista que usan el alta y la edición, para que ambas ofrezcan lo mismo.
+ */
+export const CATEGORY_MAP: Record<string, string[]> = {
+  "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
+  "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
+  "Ampollas": ["Otros"],
+  "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
+  "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
+  "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"],
+};
+
+/** Claves de {@link CATEGORY_MAP}, en el orden en que se muestran. */
+export const CATEGORY_KEYS: string[] = Object.keys(CATEGORY_MAP);
+
 /** Una opción del selector de tipo de producto (texto pensado para personal no técnico). */
 export interface ProductTypeOption {
   value: ProductType;
