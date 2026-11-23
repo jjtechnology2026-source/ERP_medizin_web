@@ -7,6 +7,8 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { isValidProfit, sellingPrice as calcSellingPrice, effectiveVat, parseVatInput, profitFromPrice, minimumSellingPrice, DEFAULT_VAT_PCT } from "@/modules/products/lib/pricing";
 import { useApiQuery } from "@/modules/core/hooks/useApi";
 import {
+  CATEGORY_KEYS,
+  CATEGORY_MAP,
   DEFAULT_PRODUCT_TYPE,
   PRODUCT_TYPE_OPTIONS,
   productTypeRules,
@@ -22,17 +24,6 @@ export interface LocalImage {
   data: number[];
   previewUrl: string;
 }
-
-const CATEGORY_MAP: Record<string, string[]> = {
-  "Higiene": ["Cuidado Oral", "Cuidado Capilar", "Jabones", "Desodorantes", "Afeitado", "Otros"],
-  "Medicamentos": ["Analgesicos", "Antibióticos", "Antialérgicos", "Antiinflamatorios", "Cardiovascular", "Gastrointestinal", "Otros"],
-  "Ampollas": ["Otros"],
-  "Insumos": ["Jeringas", "Gasas", "Algodón", "Tapabocas", "Guantes", "Otros"],
-  "Bebé": ["Pañales", "Fórmulas", "Toallitas", "Accesorios", "Cremas", "Otros"],
-  "Otros": ["Varios", "Suplementos", "Confitería", "Cosméticos", "Otros"]
-};
-
-const CATEGORY_KEYS = Object.keys(CATEGORY_MAP);
 
 interface SearchableSelectProps {
   label: string;

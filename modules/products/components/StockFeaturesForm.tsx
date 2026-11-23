@@ -5,7 +5,8 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { useFormatCurrency } from "@/modules/core/hooks/useFormatCurrency";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import type { ViewState, Medication } from "@/modules/products/types/products.types";
-import { productTypeChipClass } from "@/modules/products/lib/catalog";
+import { productTypeChipClass, normalizeProductType, productTypeRules, resolveCategoryOptions, resolveSubcategoryOptions, CATEGORY_KEYS, CATEGORY_MAP } from "@/modules/products/lib/catalog";
+import { useApiQuery } from "@/modules/core/hooks/useApi";
 import { discountFieldFor } from "@/modules/products/lib/inventory-write";
 import { sellingPrice, costFromPrice, isValidProfit, displayedChargePrice, effectiveVat, DEFAULT_VAT_PCT, profitFromPrice, minimumSellingPrice, derivePrice, chargePricePreview } from "@/modules/products/lib/pricing";
 import { toBs2 } from "@/modules/cash-register/lib/money";
@@ -13,12 +14,30 @@ import { toBs2 } from "@/modules/cash-register/lib/money";
 const VAT_OPTIONS = [0, 8, 16, 31] as const;
 type TabType = "PRECIO_STOCK" | "INFO_ADICIONAL";
 
+const FIELD_CLASS =
+  "w-full px-4 py-3 bg-white border border-slate-200/60 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400 disabled:bg-slate-100 disabled:text-slate-400";
+
+const LABEL_CLASS = "text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1";
+
+/** Campos de catálogo editables en la pestaña "Detalles" (todos menos barCode/productType). */
+interface DetailsDraft {
+  brand: string;
+  activeIngredient: string;
+  dosage: string;
+  tablets: string;
+  category: string;
+  subcategory: string;
+  description: string;
+  controlled: boolean;
+  antibiotic: boolean;
+}
+
 export default function StockFeaturesForm({
   setView,
 }: {
   setView: (v: ViewState) => void;
 }) {
-  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine, updateMedicineName } = useProductsStore();
+  const { currentMedicine, editMode, saveMedicine, setCurrentMedicine, updateMedicineDetails } = useProductsStore();
   const { parseInput, format } = useFormatCurrency();
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const rate = getEffectiveRate();
@@ -39,7 +58,18 @@ export default function StockFeaturesForm({
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  const [isSavingName, setIsSavingName] = useState(false);
+  const [details, setDetails] = useState<DetailsDraft>({
+    brand: "",
+    activeIngredient: "",
+    dosage: "",
+    tablets: "",
+    category: "",
+    subcategory: "",
+    description: "",
+    controlled: false,
+    antibiotic: false,
+  });
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
@@ -50,6 +80,17 @@ export default function StockFeaturesForm({
     if (lastBarCodeRef.current === currentMedicine.barCode) return;
     lastBarCodeRef.current = currentMedicine.barCode;
     setNameDraft(currentMedicine.name ?? "");
+    setDetails({
+      brand: currentMedicine.brand ?? "",
+      activeIngredient: currentMedicine.activeIngredient ?? "",
+      dosage: currentMedicine.dosage ?? "",
+      tablets: currentMedicine.tablets ?? "",
+      category: currentMedicine.category ?? "",
+      subcategory: currentMedicine.subcategory ?? "",
+      description: currentMedicine.description ?? "",
+      controlled: Boolean(currentMedicine.controlled),
+      antibiotic: Boolean(currentMedicine.antibiotic),
+    });
     // Ausente/desconocido resuelve al default documentado 0 (no fabricar 16).
     const vat = effectiveVat(currentMedicine.vat);
     // "Costo (sin IVA)" es el costo (base_price); el precio de venta se deriva (costo + Ganancia% + IVA).
@@ -208,26 +249,78 @@ export default function StockFeaturesForm({
     setIsSaving(false);
   };
 
-  const handleSaveName = async () => {
-    const trimmed = nameDraft.trim();
-    if (!currentMedicine?.barCode || !trimmed) return;
-    if (trimmed === currentMedicine.name) return;
-    setIsSavingName(true);
-    setFeedback(null);
-    const ok = await updateMedicineName(currentMedicine.barCode, trimmed);
-    if (ok) {
-      setNameDraft(trimmed);
-      setFeedback({ type: "success", message: "Nombre actualizado correctamente." });
-    } else {
-      setFeedback({ type: "error", message: "Error al actualizar el nombre" });
+  const handleSaveDetails = async () => {
+    const barCode = currentMedicine?.barCode;
+    if (!barCode) return;
+    const trimmedName = nameDraft.trim();
+    if (!trimmedName) {
+      setFeedback({ type: "error", message: "El nombre comercial no puede quedar vacío." });
+      return;
     }
-    setIsSavingName(false);
+    setIsSavingDetails(true);
+    setFeedback(null);
+    // Payload completo, armado desde el producto del servidor en el store: cada
+    // campo se reenvía, incluso los que el tipo de producto no muestra, para que
+    // el backend no borre columnas no editadas.
+    const ok = await updateMedicineDetails(barCode, { name: trimmedName, ...details });
+    if (ok) {
+      setNameDraft(trimmedName);
+      setFeedback({ type: "success", message: "Cambios guardados correctamente." });
+    } else {
+      setFeedback({
+        type: "error",
+        message: useProductsStore.getState().lastSaveError ?? "Error al guardar los cambios",
+      });
+    }
+    setIsSavingDetails(false);
   };
 
   const handleCancel = () => {
     setCurrentMedicine(null);
     setView(editMode ? "LIST" : "SEARCH_CATALOG");
   };
+
+  // El tipo de producto decide qué campos se muestran (`productTypeRules`). Acá es
+  // de solo lectura: cambiarlo requiere el upsert de `/Medications/Create`.
+  const detailsRules = productTypeRules(normalizeProductType(currentMedicine?.productType));
+
+  const { data: categoriesResponse } = useApiQuery<{ categories: string[] }>(
+    ["products", "categories"],
+    "/admin/products/categories",
+    { staleTime: 5 * 60 * 1000 },
+  );
+
+  const { data: subcategoriesResponse } = useApiQuery<{
+    category: string;
+    subcategories: string[];
+  }>(
+    ["products", "subcategories", details.category],
+    "/admin/products/subcategories",
+    {
+      params: { category: details.category },
+      enabled: !!details.category,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+
+  // La categoría guardada puede no estar en la lista vigente: se conserva como
+  // opción para no borrarla al abrir el formulario.
+  const categoryOptions = useMemo(() => {
+    const base = resolveCategoryOptions(categoriesResponse?.categories, CATEGORY_KEYS);
+    return details.category && !base.includes(details.category)
+      ? [details.category, ...base]
+      : base;
+  }, [categoriesResponse, details.category]);
+
+  const subcategoryOptions = useMemo(() => {
+    const base = resolveSubcategoryOptions(
+      subcategoriesResponse,
+      CATEGORY_MAP[details.category] ?? [],
+    );
+    return details.subcategory && !base.includes(details.subcategory)
+      ? [details.subcategory, ...base]
+      : base;
+  }, [subcategoriesResponse, details.category, details.subcategory]);
 
   const tabs: { key: TabType; label: string; icon: any }[] = [
     { key: "PRECIO_STOCK", label: "Precio, IVA y Stock", icon: HiOutlineCash },
@@ -531,64 +624,163 @@ export default function StockFeaturesForm({
 
               {currentMedicine ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nombre comercial</span>
-                      <div className="flex gap-2 mt-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2 space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-name">Nombre comercial</label>
+                      <input
+                        id="detail-name"
+                        type="text"
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        placeholder="Nombre con el que se vende"
+                        className={FIELD_CLASS}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-barcode">Código de barras</label>
+                      <input
+                        id="detail-barcode"
+                        type="text"
+                        value={currentMedicine.barCode ?? ""}
+                        disabled
+                        className={`${FIELD_CLASS} font-mono`}
+                      />
+                      <p className="text-[10px] text-slate-400 font-medium ml-1">
+                        No se puede modificar: identifica el producto en inventario, lotes y ventas.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-brand">Marca / Laboratorio</label>
+                      <input
+                        id="detail-brand"
+                        type="text"
+                        value={details.brand}
+                        onChange={(e) => setDetails((prev) => ({ ...prev, brand: e.target.value }))}
+                        placeholder="ej: Roemmers"
+                        className={FIELD_CLASS}
+                      />
+                    </div>
+
+                    {detailsRules.activeIngredient.visible && (
+                      <div className="space-y-2">
+                        <label className={LABEL_CLASS} htmlFor="detail-active-ingredient">
+                          {detailsRules.activeIngredient.label}
+                        </label>
                         <input
+                          id="detail-active-ingredient"
                           type="text"
-                          value={nameDraft}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          className="flex-1 px-3 py-2 bg-white border border-slate-200/60 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                          value={details.activeIngredient}
+                          onChange={(e) => setDetails((prev) => ({ ...prev, activeIngredient: e.target.value }))}
+                          className={FIELD_CLASS}
                         />
-                        <button
-                          onClick={handleSaveName}
-                          disabled={isSavingName || !nameDraft.trim() || nameDraft.trim() === currentMedicine.name}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                          {isSavingName ? "Guardando..." : "Guardar nombre"}
-                        </button>
                       </div>
+                    )}
+
+                    {detailsRules.tablets.visible && (
+                      <div className="space-y-2">
+                        <label className={LABEL_CLASS} htmlFor="detail-tablets">{detailsRules.tablets.label}</label>
+                        <input
+                          id="detail-tablets"
+                          type="text"
+                          value={details.tablets}
+                          onChange={(e) => setDetails((prev) => ({ ...prev, tablets: e.target.value }))}
+                          placeholder="ej: Caja x 20 comprimidos"
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                    )}
+
+                    {detailsRules.dosage.visible && (
+                      <div className="space-y-2">
+                        <label className={LABEL_CLASS} htmlFor="detail-dosage">Dosis / Concentración</label>
+                        <input
+                          id="detail-dosage"
+                          type="text"
+                          value={details.dosage}
+                          onChange={(e) => setDetails((prev) => ({ ...prev, dosage: e.target.value }))}
+                          placeholder="ej: 400mg"
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-category">Categoría</label>
+                      <select
+                        id="detail-category"
+                        value={details.category}
+                        onChange={(e) =>
+                          setDetails((prev) => ({ ...prev, category: e.target.value, subcategory: "" }))
+                        }
+                        className={FIELD_CLASS}
+                      >
+                        <option value="">Sin categoría</option>
+                        {categoryOptions.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Código de barras</span>
-                      <p className="text-sm font-mono font-bold text-slate-700 mt-1">{currentMedicine.barCode}</p>
+
+                    <div className="space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-subcategory">Subcategoría</label>
+                      <select
+                        id="detail-subcategory"
+                        value={details.subcategory}
+                        onChange={(e) => setDetails((prev) => ({ ...prev, subcategory: e.target.value }))}
+                        className={FIELD_CLASS}
+                      >
+                        <option value="">Sin subcategoría</option>
+                        {subcategoryOptions.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Principio activo</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.activeIngredient || "-"}</p>
+
+                    <div className="md:col-span-2 space-y-2">
+                      <label className={LABEL_CLASS} htmlFor="detail-description">Descripción</label>
+                      <textarea
+                        id="detail-description"
+                        rows={3}
+                        value={details.description}
+                        onChange={(e) => setDetails((prev) => ({ ...prev, description: e.target.value }))}
+                        placeholder="Notas internas del producto"
+                        className={`${FIELD_CLASS} resize-none`}
+                      />
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Marca / Laboratorio</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.brand || "-"}</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Dosis / Concentración</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.dosage || "-"}</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Presentación</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.tablets || "-"}</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Categoría</span>
-                      <p className="text-sm font-bold text-blue-600 mt-1 uppercase">{currentMedicine.category || "-"}</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Subcategoría</span>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{currentMedicine.subcategory || "-"}</p>
-                    </div>
+
+                    {(detailsRules.controlled.visible || detailsRules.antibiotic.visible) && (
+                      <div className="md:col-span-2 flex flex-wrap gap-3">
+                        {detailsRules.controlled.visible && (
+                          <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={details.controlled}
+                              onChange={(e) => setDetails((prev) => ({ ...prev, controlled: e.target.checked }))}
+                              className="size-4 accent-rose-600 cursor-pointer"
+                            />
+                            <span className="text-xs font-black text-slate-600 uppercase tracking-wider">Controlado</span>
+                          </label>
+                        )}
+                        {detailsRules.antibiotic.visible && (
+                          <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={details.antibiotic}
+                              onChange={(e) => setDetails((prev) => ({ ...prev, antibiotic: e.target.checked }))}
+                              className="size-4 accent-amber-600 cursor-pointer"
+                            />
+                            <span className="text-xs font-black text-slate-600 uppercase tracking-wider">Antibiótico</span>
+                          </label>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {currentMedicine.controlled && <span className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase">Controlado</span>}
-                    {currentMedicine.antibiotic && <span className="px-3 py-1.5 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase">Antibiótico</span>}
-                  </div>
-                  {currentMedicine.description && (
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Descripción</span>
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">{currentMedicine.description}</p>
-                    </div>
-                  )}
+
+                  <p className="text-[10px] text-slate-400 font-medium ml-1">
+                    Tipo de producto ({normalizeProductType(currentMedicine.productType)}): se define al crear el producto.
+                  </p>
                 </div>
               ) : (
                 <p className="text-slate-400 text-sm font-semibold py-8 text-center">No hay información del producto</p>
@@ -642,9 +834,14 @@ export default function StockFeaturesForm({
               className="flex-1 py-3.5 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all active:scale-95 cursor-pointer">
               Cancelar
             </button>
-            <button onClick={handleSave} disabled={isSaving || !currentMedicine?.name} type="button"
+            <button
+              onClick={activeTab === "INFO_ADICIONAL" ? handleSaveDetails : handleSave}
+              disabled={isSaving || isSavingDetails || !currentMedicine?.name}
+              type="button"
               className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
-              {isSaving ? "Guardando..." : editMode ? "Actualizar Stock" : "Confirmar"}
+              {activeTab === "INFO_ADICIONAL"
+                ? isSavingDetails ? "Guardando..." : "Guardar cambios"
+                : isSaving ? "Guardando..." : editMode ? "Actualizar Stock" : "Confirmar"}
             </button>
           </div>
         </div>
