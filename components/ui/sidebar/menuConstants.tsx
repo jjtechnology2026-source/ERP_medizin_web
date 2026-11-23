@@ -46,7 +46,10 @@ export const MENU_ITEMS: MenuItem[] = [
     permit: "Caja de ventas",
   },
   {
-    name: "Pedidos",
+    // "Pedidos" collided with the mobile tab of the same name, which points at
+    // /registro-ordenes: the sidebar said Pedidos and the sticky mobile header
+    // repeated it over a page titled Marketplace. The permit is unchanged.
+    name: "Marketplace",
     icon: <HiOutlineShoppingCart size={iconSize} />,
     href: "/marketplace",
     permit: "Ordenes marketplace",
