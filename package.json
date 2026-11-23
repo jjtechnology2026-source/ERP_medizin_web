@@ -20,7 +20,7 @@
     "test:store": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/products-store.test.mjs",
     "test:session-binding": "node --experimental-strip-types --test test/cash-session-binding.test.mjs",
     "test:session-binding-load": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/cashier-workflow-load.test.mjs",
-    "test:catalog": "node --experimental-strip-types --test test/catalog.test.mjs",
+    "test:catalog": "node --experimental-strip-types --test test/catalog.test.mjs test/product-update.test.mjs",
     "test:barcode": "node --experimental-strip-types --test test/barcode-resolve.test.mjs",
     "sync:zxing-wasm": "node scripts/sync-zxing-wasm.mjs",
     "test:scanner": "node --experimental-strip-types --test modules/scanner/lib/barcode-lookup.test.mjs modules/scanner/lib/stream-abandonment.test.mjs modules/scanner/lib/barcode-acceptance.test.mjs modules/scanner/lib/stock-adjustment.test.mjs modules/scanner/lib/stock-adjust-contract.test.mjs",
