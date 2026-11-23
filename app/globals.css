@@ -51,9 +51,13 @@
 :root {
   /* Touchable item of the bottom bar: 44px is the floor (S3), 56px the goal. */
   --mobile-tabbar-item-height: 56px;
+  /* The bar's top border belongs to its height; without it the stacked
+     ActionBar sat one pixel on top of the bar (T2). */
+  --mobile-tabbar-border: 1px;
   --mobile-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
   --mobile-tabbar-total-height: calc(
-    var(--mobile-tabbar-item-height) + var(--mobile-tabbar-safe-bottom)
+    var(--mobile-tabbar-item-height) + var(--mobile-tabbar-border) +
+      var(--mobile-tabbar-safe-bottom)
   );
 }
 
@@ -72,6 +76,57 @@
 @media (min-width: 1024px) {
   .mobile-shell-content {
     padding-bottom: 0px;
+  }
+}
+
+/* ---------- Shared mobile primitives (odd/tasks/mobile-mara-responsive.md, T2) ---------- */
+
+:root {
+  /* What a screen with an `ActionBar` has to reserve at the bottom of its scroll
+     area: the 56px primary row plus paddings, plus the home indicator. */
+  --action-bar-block-size: calc(84px + var(--mobile-tabbar-safe-bottom));
+}
+
+/* `components/ui/sheet` opens with motion only on the way in: Radix unmounts
+   the panel on close and no other overlay in the repo has an exit animation,
+   so adding one would make closes feel slower than they are today. */
+.sheet-overlay[data-state="open"] {
+  animation: sheet-overlay-in 180ms ease-out;
+}
+
+.sheet-panel[data-state="open"] {
+  animation: sheet-panel-up 280ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* From 640px up the panel is the centered dialog, so it fades in instead of
+   rising from the bottom edge. */
+@media (min-width: 640px) {
+  .sheet-panel[data-state="open"] {
+    animation-name: sheet-panel-in;
+  }
+}
+
+@keyframes sheet-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-panel-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sheet-panel-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* The one motion opt-out that matters: when the system asks for reduced
+   motion the sheet appears already in place (spec S1, good practices). */
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay,
+  .sheet-panel {
+    animation: none !important;
   }
 }
 

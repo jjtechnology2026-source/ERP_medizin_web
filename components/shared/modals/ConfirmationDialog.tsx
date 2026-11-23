@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { HiOutlineExclamation, HiOutlineCheckCircle, HiOutlineX } from "react-icons/hi";
+"use client";
+
+import { HiOutlineExclamation, HiOutlineCheckCircle } from "react-icons/hi";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import ModalWrapper from "./ModalWrapper";
+import Sheet from "@/components/ui/sheet";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -21,6 +21,14 @@ interface ConfirmationDialogProps {
   isLoading?: boolean;
 }
 
+/**
+ * The confirmation everyone reuses (logout, deletes, irreversible steps).
+ *
+ * It is a `Sheet`, so on a phone it arrives as a bottom sheet with the primary
+ * action under the thumb, and from 640px up it is the same centered dialog as
+ * before. The props did not change, so every existing caller keeps working and
+ * desktop behaviour is untouched (spec S4).
+ */
 export function ConfirmationDialog({
   isOpen,
   onClose,
@@ -33,17 +41,17 @@ export function ConfirmationDialog({
   isLoading = false,
 }: ConfirmationDialogProps) {
   const iconMap = {
-    danger: <HiOutlineExclamation className="text-red-500" size={32} />,
-    warning: <HiOutlineExclamation className="text-amber-500" size={32} />,
-    success: <HiOutlineCheckCircle className="text-emerald-500" size={32} />,
-    info: <HiOutlineExclamation className="text-blue-500" size={32} />,
+    danger: <HiOutlineExclamation size={22} />,
+    warning: <HiOutlineExclamation size={22} />,
+    success: <HiOutlineCheckCircle size={22} />,
+    info: <HiOutlineExclamation size={22} />,
   };
 
-  const bgMap = {
-    danger: "bg-red-50",
-    warning: "bg-amber-50",
-    success: "bg-emerald-50",
-    info: "bg-blue-50",
+  const badgeMap = {
+    danger: "bg-red-50 text-red-500",
+    warning: "bg-amber-50 text-amber-500",
+    success: "bg-emerald-50 text-emerald-500",
+    info: "bg-blue-50 text-blue-500",
   };
 
   const btnMap = {
@@ -53,56 +61,56 @@ export function ConfirmationDialog({
     info: "bg-blue-600 hover:bg-blue-700 shadow-blue-200",
   };
 
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
-  return createPortal(
-    isOpen ? (
-      <ModalWrapper isOpen={isOpen} onClose={onClose} zIndex={9999}>
-        <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative overflow-hidden border border-slate-100">
-          <div className="p-8 md:p-10">
-            <div className="flex justify-between items-start mb-6">
-              <div className={cn("p-4 rounded-2xl", bgMap[variant])}>{iconMap[variant]}</div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-slate-600">
-                <HiOutlineX size={24} />
-              </button>
-            </div>
-
-            <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">{title}</h3>
-            <p className="text-slate-500 font-medium leading-relaxed mb-8">{description}</p>
-
-            <div className="flex gap-4">
-              <button
-                onClick={onClose}
-                disabled={isLoading}
-                className="flex-1 py-4 rounded-2xl font-black text-slate-400 bg-slate-50 hover:bg-slate-100 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {cancelLabel}
-              </button>
-              <button
-                onClick={onConfirm}
-                disabled={isLoading}
-                className={cn(
-                  "flex-[1.5] py-4 rounded-2xl font-black text-white transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2",
-                  btnMap[variant],
-                )}
-              >
-                {isLoading ? (
-                  <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  confirmLabel
-                )}
-              </button>
-            </div>
-          </div>
+  return (
+    <Sheet
+      open={isOpen}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title={
+        <span className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-xl",
+              badgeMap[variant],
+            )}
+          >
+            {iconMap[variant]}
+          </span>
+          <span>{title}</span>
+        </span>
+      }
+      description={description}
+      footer={
+        // Stacked on a phone (primary last, closest to the thumb), side by side
+        // from `sm` up — the same order the dialog had before.
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isLoading}
+            className="min-h-14 flex-1 rounded-2xl bg-slate-50 font-black text-slate-400 transition-all hover:bg-slate-100 active:scale-[0.98] disabled:opacity-50 sm:min-h-0 sm:py-4"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={cn(
+              "flex min-h-14 items-center justify-center gap-2 rounded-2xl font-black text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 sm:min-h-0 sm:flex-[1.5] sm:py-4",
+              btnMap[variant],
+            )}
+          >
+            {isLoading ? (
+              <div className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              confirmLabel
+            )}
+          </button>
         </div>
-      </ModalWrapper>
-    ) : null,
-    document.body,
+      }
+    />
   );
 }
