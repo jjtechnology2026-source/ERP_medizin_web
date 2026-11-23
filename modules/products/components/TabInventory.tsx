@@ -2,8 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import {
   HiOutlinePencil, HiOutlineTrash, HiOutlineRefresh,
   HiPlus, HiCloudUpload, HiSearch, HiViewGrid, HiExclamationCircle,
-  HiOutlineCash
+  HiOutlineCash, HiOutlineFilter
 } from "react-icons/hi";
+import ActionBar from "@/components/ui/action-bar";
+import InventoryCardList from "@/modules/products/components/InventoryCardList";
+import MobileInventorySheet from "@/modules/products/components/MobileInventorySheet";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { productsService } from "@/modules/products/api/products.service";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
@@ -45,6 +48,8 @@ export default function InventoryList({
   const rate = getEffectiveRate();
   const [localSearch, setLocalSearch] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
+  // Single overflow of the phone composition (spec S6).
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
 
   // La carga inicial la dispara MqttInventoryProvider (envuelve a esta lista).
 
@@ -221,8 +226,11 @@ export default function InventoryList({
   };
 
   return (
-    <div className="w-full max-w-[1600px] flex flex-col space-y-4 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 px-2">
+    <div className="w-full lg:max-w-[1600px] flex flex-col space-y-4 animate-in fade-in duration-500">
+      {/* Desktop header, untouched (S4): the title and the three actions keep
+          their place from `lg` up. On a phone the shell header already names the
+          section and those three actions move into the overflow sheet (S6). */}
+      <div className="hidden lg:flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 px-2">
         <h1 className="text-3xl font-black text-blue-600">Productos en Stock</h1>
         <div className="flex items-center gap-3 flex-wrap">
           <button
@@ -246,7 +254,34 @@ export default function InventoryList({
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 flex flex-col overflow-hidden">
+      {/* Phone toolbar: one search field plus a status line, nothing else on the
+          surface. The three header actions, the two stock tabs and the three
+          existence chips moved into the sheet behind the ActionBar (S6). */}
+      <div className="flex flex-col gap-2 lg:hidden">
+        <div className="relative w-full">
+          <HiSearch
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            inputMode="search"
+            placeholder="Buscar por nombre, código..."
+            aria-label="Buscar producto por nombre o código"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-base font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+        <p className="px-1 text-[11px] font-bold text-slate-400">
+          {inventory.length} {inventory.length === 1 ? "producto" : "productos"}
+          {` · ${stockTab === "LOW" ? "Stock bajo" : "Stock general"}`}
+          {stockFilter === "in" ? " · con stock" : stockFilter === "out" ? " · sin stock" : ""}
+          {lowStockCount > 0 ? ` · ${lowStockCount} con stock bajo` : ""}
+        </p>
+      </div>
+
+      <div className="hidden lg:flex bg-white rounded-[40px] shadow-sm border border-slate-100 flex-col overflow-hidden">
         <div className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-50">
           <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
             <button
@@ -462,6 +497,94 @@ export default function InventoryList({
           </div>
         )}
       </div>
+
+      {/* Phone composition (S7): one card per product with the four fields that
+          decide, instead of the eight-column table — which stays as it is from
+          `lg` up (S4). */}
+      <div className="flex flex-col gap-3 lg:hidden">
+        <InventoryCardList
+          inventory={inventory}
+          searchTerm={localSearch}
+          isLoading={showLoadingState}
+          error={error}
+          onRetry={() => fetchInventory(true)}
+          onEdit={handleEdit}
+          onDelete={(barCode) => void deleteMedicine(barCode)}
+          formatPrice={formatPrice}
+        />
+
+        {inventory.length > 0 && (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] font-bold text-slate-400">
+              {totalPages != null
+                ? `Página ${page} de ${totalPages}`
+                : `Página ${page} · ${inventory.length} en esta página`}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1 || isLoading}
+                className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-black uppercase text-slate-500 transition-colors active:bg-slate-100 disabled:opacity-30"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={!hasMore || isLoading}
+                className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-black uppercase text-slate-500 transition-colors active:bg-slate-100 disabled:opacity-30"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* The fixed bar must not cover the last card (S6). */}
+      <div aria-hidden="true" className="h-[var(--action-bar-block-size)] lg:hidden" />
+
+      {/* One primary action plus one overflow: search and these two are the whole
+          surface of the screen on a phone, instead of the previous ten. */}
+      <ActionBar
+        stacked
+        primary={
+          <button
+            type="button"
+            onClick={() => setView("SEARCH_CATALOG")}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-white transition-colors active:bg-blue-700"
+          >
+            <HiCloudUpload size={20} aria-hidden="true" />
+            <span className="text-sm font-black">Agregar a stock</span>
+          </button>
+        }
+        secondary={[
+          <button
+            key="filters"
+            type="button"
+            onClick={() => setShowFiltersSheet(true)}
+            aria-label="Filtros y acciones"
+            title="Filtros y acciones"
+            className="flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition-colors active:bg-slate-200"
+          >
+            <HiOutlineFilter size={22} aria-hidden="true" />
+          </button>,
+        ]}
+      />
+
+      <MobileInventorySheet
+        open={showFiltersSheet}
+        onOpenChange={setShowFiltersSheet}
+        stockTab={stockTab}
+        onStockTabChange={handleStockTabChange}
+        lowStockCount={lowStockCount}
+        stockFilter={stockFilter}
+        onStockFilterChange={setStockFilter}
+        onAddStock={() => setView("SEARCH_CATALOG")}
+        onCreateProduct={() => setView("CREATE_MANUAL")}
+        onStockTax={() => setView("STOCK_TAX")}
+        onDownloadReport={() => void downloadInventoryReport()}
+        isDownloadingReport={isDownloading}
+      />
     </div>
   );
 }

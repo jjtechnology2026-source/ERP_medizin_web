@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { HiCloudUpload, HiOutlineChevronDown, HiOutlineCamera, HiOutlineDocumentDownload, HiOutlineTable, HiTrash } from "react-icons/hi";
+import ActionBar from "@/components/ui/action-bar";
 import { useCreateMedication } from "../hook/useCreateProduct";
 import { useProductsStore } from "../store/products.store";
 import BulkImportDialog from "../components/BulkImportDialog";
@@ -14,6 +15,12 @@ import {
   resolveSubcategoryOptions,
 } from "@/modules/products/lib/catalog";
 import type { ProductType } from "@/modules/products/types/products.types";
+
+/**
+ * Steps of the phone composition (T4). They are the existing bands of the
+ * desktop form, in the order the agent fills them — not a second taxonomy.
+ */
+type CreateStepKey = "TYPE" | "INFO" | "PRESENTATION" | "PRICE" | "STOCK" | "CONTENT";
 
 // Interfaz para el manejo de imágenes múltiples en local
 export interface LocalImage {
@@ -84,7 +91,7 @@ function SearchableSelect({ label, placeholder, required, value, options, onChan
           <div className="p-3 border-b border-slate-100 bg-slate-50/50">
             <input
               type="text"
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-blue-500/20"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none text-base lg:text-xs focus:ring-2 focus:ring-blue-500/20"
               placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -139,6 +146,11 @@ export default function CreateProductPage({ setView }: any) {
   const pharmacyId = useAuthStore((s: any) => s.profile?.pharmacy_id ?? s.profile?.pharmacyId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Phone flow state: one band at a time. The desktop composition never reads
+  // it, so nothing changes from `lg` up (S4).
+  const formRef = useRef<HTMLFormElement>(null);
+  const [mobileStep, setMobileStep] = useState(0);
+  const [mobileStepError, setMobileStepError] = useState<string | null>(null);
 
   const downloadTemplate = async () => {
     try {
@@ -329,6 +341,96 @@ export default function CreateProductPage({ setView }: any) {
       ? Number(calcSellingPrice(previewCost, previewProfit, previewVat).toFixed(2))
       : 0;
 
+  // ---- Phone flow: the same bands, one step at a time (T4, spec S6) ----
+  const hasPresentationFields =
+    rules.dosage.visible ||
+    rules.tablets.visible ||
+    rules.controlled.visible ||
+    rules.antibiotic.visible;
+
+  const mobileSteps: { key: CreateStepKey; label: string }[] = [
+    { key: "TYPE", label: "Tipo de producto" },
+    { key: "INFO", label: "Identificación" },
+    ...(hasPresentationFields
+      ? [{ key: "PRESENTATION" as const, label: "Presentación" }]
+      : []),
+    { key: "PRICE", label: "Precio e IVA" },
+    ...(rules.stock.visible ? [{ key: "STOCK" as const, label: "Inventario" }] : []),
+    { key: "CONTENT", label: "Contenido y categorías" },
+  ];
+  const currentStepIndex = Math.min(mobileStep, mobileSteps.length - 1);
+  const currentStep = mobileSteps[currentStepIndex];
+  const isLastStep = currentStepIndex === mobileSteps.length - 1;
+  const isStep = (key: CreateStepKey) => currentStep.key === key;
+
+  // The only fields the desktop form enforces natively. The phone flow checks
+  // them as it advances, so a `required` control is never left empty on a step
+  // the browser cannot focus and the submit never fails silently.
+  const requiredFields: { step: CreateStepKey; label: string; missing: boolean }[] = [
+    { step: "INFO", label: "el nombre comercial", missing: !formData.name.trim() },
+    { step: "INFO", label: "la marca", missing: !formData.brand.trim() },
+    ...(rules.barCode.required
+      ? [{ step: "INFO" as const, label: "el código de barras", missing: !formData.barCode.trim() }]
+      : []),
+    ...(rules.activeIngredient.visible && rules.activeIngredient.required
+      ? [
+          {
+            step: "INFO" as const,
+            label: rules.activeIngredient.label,
+            missing: !formData.activeIngredient.trim(),
+          },
+        ]
+      : []),
+    ...(rules.dosage.visible
+      ? [{ step: "PRESENTATION" as const, label: "la dosis", missing: !formData.doseValue.trim() }]
+      : []),
+    ...(rules.tablets.visible
+      ? [
+          {
+            step: "PRESENTATION" as const,
+            label: "la cantidad de presentación",
+            missing: !formData.amount.trim(),
+          },
+        ]
+      : []),
+    { step: "PRICE", label: "el IVA", missing: formData.vat.trim() === "" },
+  ];
+
+  const goToNextMobileStep = () => {
+    const missing = requiredFields.find(
+      (field) => field.step === currentStep.key && field.missing,
+    );
+    if (missing) {
+      setMobileStepError(`Completá ${missing.label} para seguir.`);
+      return;
+    }
+    setMobileStepError(null);
+    setMobileStep(Math.min(currentStepIndex + 1, mobileSteps.length - 1));
+  };
+
+  const goToPreviousMobileStep = () => {
+    setMobileStepError(null);
+    setMobileStep(Math.max(0, currentStepIndex - 1));
+  };
+
+  // Hands the form to the browser only when every required step is complete;
+  // otherwise it jumps to the step that still has a hole in it.
+  const submitFromMobile = () => {
+    const missing = requiredFields.find((field) => field.missing);
+    if (missing) {
+      setMobileStepError(`Completá ${missing.label} para guardar.`);
+      setMobileStep(Math.max(0, mobileSteps.findIndex((step) => step.key === missing.step)));
+      return;
+    }
+    if (finalPriceError) {
+      setMobileStepError(finalPriceError);
+      setMobileStep(Math.max(0, mobileSteps.findIndex((step) => step.key === "PRICE")));
+      return;
+    }
+    setMobileStepError(null);
+    formRef.current?.requestSubmit();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -434,24 +536,61 @@ export default function CreateProductPage({ setView }: any) {
 
   return (
     <div className="w-full max-w-[1600px] flex flex-col space-y-4">
-      <h1 className="text-3xl font-black text-blue-600 px-4">Crear Producto</h1>
+      <h1 className="hidden lg:block text-3xl font-black text-blue-600 px-4">Crear Producto</h1>
 
-      <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-10">
-        <div className="flex gap-6 mb-10 text-[11px] font-black text-blue-600 uppercase tracking-widest">
-          <button onClick={() => setView("LIST")} className="flex items-center gap-1 hover:text-blue-800 transition-colors">
+      {/* On a phone the desktop card is not a card: the flow uses the full width
+          of the shell with its 16px of padding and nothing else (T4). */}
+      <div className="p-0 lg:bg-white lg:rounded-[40px] lg:shadow-sm lg:border lg:border-slate-100 lg:p-10">
+        <div className="flex flex-wrap items-center gap-3 mb-6 lg:gap-6 lg:mb-10 text-[11px] font-black text-blue-600 uppercase tracking-widest">
+          <button onClick={() => setView("LIST")} className="flex min-h-11 lg:min-h-0 items-center gap-1 hover:text-blue-800 transition-colors">
             ← Regresar
           </button>
-          <button onClick={downloadTemplate} className="flex items-center gap-1 hover:underline">
+          <button onClick={downloadTemplate} className="flex min-h-11 lg:min-h-0 items-center gap-1 hover:underline">
             <HiOutlineDocumentDownload size={16} /> Plantilla Excel
           </button>
-          <button onClick={() => setShowBulkImport(true)} className="flex items-center gap-2 bg-blue-50 px-4 py-1.5 rounded-2xl hover:bg-blue-100 transition-colors">
+          <button onClick={() => setShowBulkImport(true)} className="flex min-h-11 lg:min-h-0 items-center gap-2 bg-blue-50 px-4 py-1.5 rounded-2xl hover:bg-blue-100 transition-colors">
             <HiOutlineTable size={16} /> Carga Masiva Excel
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
+        {/* Phone flow header: which step of how many, and what the step is called
+            (T4 asks for a step indicator, not a second form). */}
+        <div className="mb-4 flex flex-col gap-2 lg:hidden">
+          <div className="flex items-end justify-between gap-3">
+            <h2 className="text-xl font-black leading-tight text-blue-600">Crear producto</h2>
+            <p className="shrink-0 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Paso {currentStepIndex + 1} de {mobileSteps.length}
+            </p>
+          </div>
+          <div className="flex gap-1" aria-hidden="true">
+            {mobileSteps.map((step, index) => (
+              <span
+                key={step.key}
+                className={`h-1.5 flex-1 rounded-full ${index <= currentStepIndex ? "bg-blue-600" : "bg-slate-200"}`}
+              />
+            ))}
+          </div>
+          <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+            {currentStep.label}
+          </p>
+          {mobileStepError && (
+            <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-[11px] font-black text-red-600">
+              {mobileStepError}
+            </p>
+          )}
+          {successMsg && (
+            <p className="rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-700">
+              {successMsg}
+            </p>
+          )}
+          {error && (
+            <p className="rounded-xl bg-red-50 px-3 py-2 text-[11px] font-bold text-red-600">{error}</p>
+          )}
+        </div>
+
+        <form ref={formRef} onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
           {/* SELECTOR DE TIPO — va primero: decide qué pide el resto del formulario */}
-          <div className="order-1 lg:col-span-12 space-y-4">
+          <div className={`order-1 lg:col-span-12 space-y-4 lg:block ${isStep("TYPE") ? "" : "hidden"}`}>
             <div>
               <h2 className="text-2xl font-black text-blue-600">Tipo de producto</h2>
               <p className="text-xs text-slate-400 mt-1">
@@ -487,7 +626,7 @@ export default function CreateProductPage({ setView }: any) {
           </div>
 
           {/* COLUMNA IZQUIERDA — multimedia + categorías + descripción (en mobile baja después del precio) */}
-          <div className="order-4 lg:order-2 lg:col-span-5 space-y-8">
+          <div className={`order-4 lg:order-2 lg:col-span-5 space-y-8 lg:block ${isStep("CONTENT") ? "" : "hidden"}`}>
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-black text-blue-600">Contenido Multimedia</h2>
@@ -498,7 +637,7 @@ export default function CreateProductPage({ setView }: any) {
                   <button
                     type="button"
                     onClick={clearAllImages}
-                    className="bg-red-50 text-red-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-red-100"
+                    className="bg-red-50 text-red-600 px-3 py-2 min-h-11 lg:min-h-0 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-red-100"
                   >
                     <HiTrash size={14} /> Limpiar todo
                   </button>
@@ -507,7 +646,7 @@ export default function CreateProductPage({ setView }: any) {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={images.length >= 10}
-                  className="bg-slate-700 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 disabled:opacity-50"
+                  className="bg-slate-700 text-white px-5 py-2 min-h-11 lg:min-h-0 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 disabled:opacity-50"
                 >
                   <HiOutlineCamera size={16} /> Cargar Imágenes
                 </button>
@@ -518,7 +657,7 @@ export default function CreateProductPage({ setView }: any) {
 
             {/* Zona de arrastre / carga */}
             {images.length === 0 ? (
-              <div className="border-4 border-dashed border-slate-50 rounded-[40px] py-24 flex flex-col items-center justify-center bg-slate-50/30">
+              <div className="border-4 border-dashed border-slate-50 rounded-3xl py-10 lg:rounded-[40px] lg:py-24 flex flex-col items-center justify-center bg-slate-50/30">
                 <HiCloudUpload size={40} className="text-blue-500 mb-4 opacity-50" />
                 <button
                   type="button"
@@ -548,7 +687,7 @@ export default function CreateProductPage({ setView }: any) {
                       <button
                         type="button"
                         onClick={() => moveImage(index, "up")}
-                        className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50"
+                        className="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50"
                         disabled={index === 0}
                       >
                         ↑
@@ -556,7 +695,7 @@ export default function CreateProductPage({ setView }: any) {
                       <button
                         type="button"
                         onClick={() => moveImage(index, "down")}
-                        className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50"
+                        className="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50"
                         disabled={index === images.length - 1}
                       >
                         ↓
@@ -564,7 +703,7 @@ export default function CreateProductPage({ setView }: any) {
                       <button
                         type="button"
                         onClick={() => removeImage(imgItem.id)}
-                        className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100"
+                        className="min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100"
                       >
                         <HiTrash size={16} />
                       </button>
@@ -597,7 +736,7 @@ export default function CreateProductPage({ setView }: any) {
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Descripción: *</label>
                 <textarea
-                  className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm min-h-[120px]"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-[24px] outline-none border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-base lg:text-sm min-h-[120px]"
                   placeholder="ej: Escribe la descripción de tu producto..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -606,11 +745,15 @@ export default function CreateProductPage({ setView }: any) {
             </div>
           </div>
 
-          {/* COLUMNA DERECHA — identificación y precio (en mobile va primero) */}
-          <div className="order-2 lg:order-3 lg:col-span-7 space-y-6">
-            <h2 className="text-2xl font-black text-blue-600 mb-8">Información del Producto</h2>
+          {/* COLUMNA DERECHA — identificación y precio (en mobile va primero).
+              On a phone this same band carries three steps: the two field groups
+              and the price block. Both groups are `lg:contents`, so from `lg` up
+              their fields are the direct children of the single grid they were. */}
+          <div className={`order-2 lg:order-3 lg:col-span-7 space-y-6 lg:block ${isStep("INFO") || isStep("PRESENTATION") || isStep("PRICE") ? "" : "hidden"}`}>
+            <h2 className={`text-2xl font-black text-blue-600 mb-8 lg:block ${isStep("INFO") ? "" : "hidden"}`}>Información del Producto</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className={`flex flex-col gap-5 sm:col-span-2 lg:contents ${isStep("INFO") ? "" : "hidden"}`}>
               <InputField
                 label="Código de barras"
                 placeholder="ej: 7591234567890"
@@ -645,6 +788,9 @@ export default function CreateProductPage({ setView }: any) {
                 onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
+              </div>
+
+              <div className={`flex flex-col gap-5 sm:col-span-2 lg:contents ${isStep("PRESENTATION") ? "" : "hidden"}`}>
               {rules.dosage.visible && (
                 <InputField
                   label="Dosis"
@@ -698,7 +844,7 @@ export default function CreateProductPage({ setView }: any) {
                         type="button"
                         key={u}
                         onClick={() => setSelectedUnit(u)}
-                        className={`flex-1 px-2 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+                        className={`flex-1 min-h-11 lg:min-h-0 px-2 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
                           selectedUnit === u ? "bg-blue-600 text-white shadow-md" : "text-slate-400"
                         }`}
                       >
@@ -744,10 +890,10 @@ export default function CreateProductPage({ setView }: any) {
                   </div>
                 </div>
               )}
-
+              </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-6">
+            <div className={`border-t-0 pt-0 border-slate-100 lg:border-t lg:pt-6 lg:block ${isStep("PRICE") ? "" : "hidden"}`}>
               <h3 className="text-lg font-black text-slate-800 mb-4">Precio e IVA</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <InputField
@@ -807,7 +953,7 @@ export default function CreateProductPage({ setView }: any) {
 
           {/* INVENTARIO — a todo lo ancho. Un servicio no lleva stock, así que no se muestra. */}
           {rules.stock.visible && (
-            <div className="order-3 lg:order-4 lg:col-span-12 border-t border-slate-100 pt-6">
+            <div className={`order-3 lg:order-4 lg:col-span-12 border-t-0 pt-0 lg:border-t lg:border-slate-100 lg:pt-6 lg:block ${isStep("STOCK") ? "" : "hidden"}`}>
               <h3 className="text-lg font-black text-slate-800 mb-4">Inventario</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <InputField
@@ -842,8 +988,10 @@ export default function CreateProductPage({ setView }: any) {
             </div>
           )}
 
-          {/* MENSAJES Y ACCIÓN — a todo lo ancho; la barra queda visible al hacer scroll */}
-          <div className="order-5 lg:col-span-12 space-y-4">
+          {/* MENSAJES Y ACCIÓN — a todo lo ancho; la barra queda visible al hacer scroll.
+              On a phone the submit lives in the ActionBar, so this band stays
+              desktop-only (S4 keeps it exactly where it was). */}
+          <div className="hidden lg:block order-5 lg:col-span-12 space-y-4">
             {successMsg && (
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
                 <p className="text-emerald-700 text-xs font-bold">{successMsg}</p>
@@ -870,6 +1018,48 @@ export default function CreateProductPage({ setView }: any) {
           </div>
         </form>
       </div>
+
+      {/* The fixed bar must not cover the last field (S6). */}
+      <div aria-hidden="true" className="h-[var(--action-bar-block-size)] lg:hidden" />
+
+      {/* One primary action and one secondary: advance through the steps on a
+          phone, and submit the same form the desktop layout submits on the last
+          one (S6). */}
+      <ActionBar
+        stacked
+        primary={
+          isLastStep ? (
+            <button
+              type="button"
+              onClick={submitFromMobile}
+              disabled={isLoading}
+              className="flex items-center justify-center rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition-colors active:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500"
+            >
+              {isLoading ? "Guardando..." : "Guardar producto"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goToNextMobileStep}
+              className="flex items-center justify-center rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition-colors active:bg-blue-700"
+            >
+              Siguiente
+            </button>
+          )
+        }
+        secondary={[
+          <button
+            key="back"
+            type="button"
+            onClick={goToPreviousMobileStep}
+            disabled={currentStepIndex === 0}
+            className="flex items-center justify-center rounded-2xl bg-slate-100 px-2 text-sm font-black text-slate-600 transition-colors active:bg-slate-200 disabled:opacity-40"
+          >
+            Atrás
+          </button>,
+        ]}
+      />
+
       <BulkImportDialog
         pharmacyId={pharmacyId}
         isOpen={showBulkImport}
@@ -883,7 +1073,12 @@ export default function CreateProductPage({ setView }: any) {
   );
 }
 
-function InputField({ label, placeholder, required, isSelect, value, onChange, type = "text", step }: any) {
+function InputField({ label, placeholder, required, isSelect, value, onChange, type = "text", step, inputMode }: any) {
+  // `inputmode` decides which keyboard the phone opens: integers for stock,
+  // decimals for money and VAT (S8). `type=number` alone does not say which.
+  const resolvedInputMode =
+    inputMode ?? (type === "number" ? (step === "1" ? "numeric" : "decimal") : undefined);
+
   return (
     <div className="space-y-2">
       <label className="text-[11px] font-black text-slate-400 uppercase ml-1">
@@ -893,7 +1088,9 @@ function InputField({ label, placeholder, required, isSelect, value, onChange, t
         <input
           type={type}
           step={step}
-          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-sm transition-all"
+          inputMode={resolvedInputMode}
+          // 16px on a phone: below that iOS zooms the page on focus (S8).
+          className="min-h-11 w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 text-base lg:text-sm transition-all"
           placeholder={placeholder}
           value={value}
           onChange={onChange}

@@ -31,8 +31,10 @@ export default function InventoryManagement() {
 
   return (
     <MqttInventoryProvider>
-      <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
-        <main className="p-6 flex flex-col items-center">
+      {/* 16px of screen padding on a phone, the desktop 24px from `lg` up
+          (spec S4 keeps the desktop composition intact). */}
+      <div className="min-h-dvh bg-slate-50 font-sans flex flex-col">
+        <main className="p-4 lg:p-6 flex flex-col items-center">
         {view === "LIST" && (
           <>
             <InventoryList
@@ -51,7 +53,7 @@ export default function InventoryManagement() {
             >
               ← Volver al inventario
             </button>
-            <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-8">
+            <div className="bg-white rounded-3xl lg:rounded-[40px] shadow-sm border border-slate-100 p-5 lg:p-8">
               <h2 className="text-2xl font-black text-slate-800 mb-6">Agregar Producto a Stock</h2>
               {isLoading ? (
                 <div className="flex items-center justify-center py-10">
