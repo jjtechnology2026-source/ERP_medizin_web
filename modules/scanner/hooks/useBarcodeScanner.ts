@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReadInputBarcodeFormat, ReadResult } from "zxing-wasm/reader";
+import { mustReleaseStream } from "../lib/stream-abandonment.ts";
 
 /**
  * Cámara trasera + bucle de decodificación para la pantalla `/escaner`
@@ -315,17 +316,31 @@ export function useBarcodeScanner({ onDetect }: UseBarcodeScannerOptions): Barco
       // El stream se libera aunque la promesa resuelva tarde: si el timeout ganó,
       // nadie más va a ver este MediaStream y la luz de la cámara quedaría
       // encendida. En iOS aceptar el permiso después de los 20s es lo normal.
+      //
+      // `settled` es imprescindible: el timeout NO cambia `sessionRef`, así que
+      // comparar sólo la sesión no alcanza. Cuando la carrera ya se resolvió
+      // (gane el stream o gane el timeout), todo lo que llegue después es
+      // huérfano y se apaga acá.
+      let settled = false;
       const streamPromise = withTimeout(
         mediaDevices
           .getUserMedia({ video: { facingMode: "environment" }, audio: false })
           .then((stream) => {
-            if (sessionRef.current !== session) {
+            if (mustReleaseStream({ settled, session, currentSession: sessionRef.current })) {
               stream.getTracks().forEach((track) => track.stop());
             }
             return stream;
           }),
         START_TIMEOUT_MS,
         "La cámara no respondió. Cerrá otras apps que la estén usando e intentá de nuevo.",
+      );
+      void streamPromise.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
       );
       const [readerOutcome, streamOutcome] = await Promise.allSettled([readerPromise, streamPromise]);
 
