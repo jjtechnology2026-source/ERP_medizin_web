@@ -778,7 +778,7 @@ export default function PaymentDialog({
                         <select
                           value={entry.tipo}
                           onChange={(e) => updateManualChange(idx, { tipo: e.target.value as ManualChangeType })}
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
                         >
                           <option value="efectivoVes">Efectivo Bs</option>
                           <option value="efectivoUsd">Efectivo USD</option>
@@ -793,7 +793,7 @@ export default function PaymentDialog({
                           value={entry.amount || ""}
                           onChange={(e) => updateManualChange(idx, { amount: r2(parseFloat(e.target.value) || 0) })}
                           placeholder="0.00"
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
                         />
                       </div>
                       {entry.tipo === "movil" && (
@@ -802,7 +802,7 @@ export default function PaymentDialog({
                             <select
                               value={entry.bank}
                               onChange={(e) => updateManualChange(idx, { bank: e.target.value })}
-                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none"
+                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
                             >
                               <option value="">Banco</option>
                               {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -814,7 +814,7 @@ export default function PaymentDialog({
                               value={entry.reference}
                               onChange={(e) => updateManualChange(idx, { reference: e.target.value })}
                               placeholder="Ref"
-                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none"
+                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
                             />
                           </div>
                         </>
@@ -1034,7 +1034,7 @@ function PaymentField({ label, value, onChange, placeholder, fullAmount, rate }:
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 min-w-0 px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="flex-1 min-w-0 px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm max-lg:text-base font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
         />
         {fullAmount !== undefined && fullAmount > 0 && (
           <button
