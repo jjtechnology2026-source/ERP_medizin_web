@@ -4,6 +4,7 @@ import {
   HiOutlineShoppingCart,
   HiOutlineClipboardList,
   HiOutlineCube,
+  HiOutlineQrcode,
   HiOutlineChatAlt2,
   HiOutlinePresentationChartLine,
   HiOutlineDocumentReport,
@@ -22,6 +23,11 @@ export interface MenuItem {
   isHeader?: boolean;
   isFooter?: boolean;
   permit?: string;
+  /**
+   * Sólo se ofrece en viewport mobile (< 1024px, el breakpoint `lg` del shell).
+   * El sidebar lo filtra con `useIsMobileViewport()`: en desktop no se renderiza.
+   */
+  mobileOnly?: boolean;
 }
 
 const iconSize = 22;
@@ -62,6 +68,15 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: <HiOutlineCube size={iconSize} />,
     href: "/productos",
     permit: "Productos en stock",
+  },
+  {
+    // Sólo en el celular del mostrador (S8): escanear con la cámara del teléfono.
+    // Comparte el `permit` de productos/inventario para no necesitar backend nuevo.
+    name: "Escanear producto",
+    icon: <HiOutlineQrcode size={iconSize} />,
+    href: "/escaner",
+    permit: "Productos en stock",
+    mobileOnly: true,
   },
 
   {

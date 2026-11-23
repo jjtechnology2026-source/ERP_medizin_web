@@ -8,6 +8,7 @@ import { SidebarItem, SidebarHeader } from "./SidebarComponents";
 import { MENU_ITEMS, filterMenuByPermits } from "./menuConstants";
 import { useAuth } from "@/modules/core/hooks/useAuth";
 import { usePermissions } from "@/modules/core/hooks/usePermissions";
+import { useIsMobileViewport } from "@/modules/core/hooks/useIsMobileViewport";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { ConfirmationDialog } from "@/components/shared/modals/ConfirmationDialog";
 
@@ -31,8 +32,14 @@ export default function Sidebar({
 
   const { permits, isAdmin } = usePermissions();
   const profile = useAuthStore((state) => state.profile);
+  // Mobile = viewport < 1024px, igual que el breakpoint `lg` del shell. Los ítems
+  // `mobileOnly` (p. ej. /escaner) no se renderizan en la barra lateral de desktop
+  // (S8 de `odd/tasks/barcode-scan-price.md`); en mobile sí, en el drawer.
+  const isMobileViewport = useIsMobileViewport();
   // Sin perfil (modo test / bypass) no restringimos para no vaciar el menú.
-  const menuItems = filterMenuByPermits(MENU_ITEMS, permits, isAdmin || !profile);
+  const menuItems = filterMenuByPermits(MENU_ITEMS, permits, isAdmin || !profile).filter(
+    (item) => !item.mobileOnly || isMobileViewport,
+  );
 
   const handleExpandToggle = () => {
     if (onExpandToggle) {
