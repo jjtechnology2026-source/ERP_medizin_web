@@ -57,7 +57,7 @@ export default function GlobalOrderNotifications() {
         onClose={clearFeedback}
         zIndex={200}
       >
-        <div className="p-8 flex flex-col items-center gap-6 text-center min-w-[320px]">
+        <div className="min-w-0 flex flex-col items-center gap-6 p-5 text-center lg:min-w-[320px] lg:p-8">
           <motion.div
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}

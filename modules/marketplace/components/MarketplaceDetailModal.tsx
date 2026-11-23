@@ -22,7 +22,7 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
     <ModalWrapper isOpen={!!order} onClose={handleClose} zIndex={100}>
       <div className="w-full max-w-6xl rounded-[3rem] bg-white shadow-2xl overflow-hidden flex flex-col p-4">
         {/* Header (Match Image 3) */}
-        <div className="flex justify-between items-center px-10 py-8">
+        <div className="flex justify-between items-center px-4 py-4 lg:px-10 lg:py-8">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">Detalles de la Orden - Marketplace</h2>
           <button
             onClick={handleClose}
@@ -32,7 +32,7 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
           </button>
         </div>
 
-        <div className="px-10 pb-10 grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-12">
+        <div className="px-4 pb-6 lg:px-10 lg:pb-10 grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-12">
           
           {/* Columna Izquierda: Información */}
           <div className="flex flex-col gap-12">
@@ -76,14 +76,14 @@ export default function MarketplaceDetailModal({ order, onClose }: MarketplaceDe
             </div>
 
             {/* Total Box (Bottom Left as in Image 3) */}
-            <div className="mt-auto bg-[#F1F6FE] rounded-[2rem] p-10 flex justify-between items-center">
+            <div className="mt-auto bg-[#F1F6FE] rounded-[2rem] p-4 lg:p-10 flex justify-between items-center">
               <span className="text-2xl font-black text-slate-800">Total de la Orden:</span>
               <span className="text-4xl font-black text-blue-600 tracking-tighter">{totalOrder.toFixed(2)} USD</span>
             </div>
           </div>
 
           {/* Columna Derecha: Lista de productos (Match Image 3) */}
-          <div className="bg-[#E9E9E9] rounded-[3rem] p-10 flex flex-col min-h-[500px]">
+          <div className="bg-[#E9E9E9] rounded-[3rem] p-4 lg:p-10 flex flex-col min-h-0 lg:min-h-[500px]">
             <h3 className="font-black text-xl text-slate-800 tracking-tight mb-8">Lista de productos:</h3>
             
             <div className="rounded-[1.5rem] overflow-hidden bg-white shadow-sm flex flex-col flex-1">

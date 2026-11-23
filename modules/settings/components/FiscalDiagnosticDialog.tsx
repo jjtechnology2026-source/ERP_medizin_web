@@ -120,7 +120,7 @@ export default function FiscalDiagnosticDialog({ onClose }: FiscalDiagnosticDial
 
         <div className="p-6 space-y-5">
           {loading && (
-            <div className="p-8 flex flex-col items-center gap-4 text-center">
+            <div className="flex flex-col items-center gap-4 p-5 text-center lg:p-8">
               <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-900 border-t-transparent" />
               <p className="text-sm font-bold text-slate-600">Consultando servicio fiscal...</p>
             </div>

@@ -10,6 +10,7 @@ import {
   businessDayStartIso,
   businessDayEndIso,
 } from "@/modules/core/utils/date";
+import StatisticsCardList from "./components/StatisticsCardList";
 
 interface StatProduct {
   id: string;
@@ -312,7 +313,20 @@ export default function StatisticsPage() {
         </p>
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
-          <div className="overflow-x-auto">
+          {/* Phone (S7): the 900px, six-column table would only fit by scrolling
+              sideways, which the shell clips. Below `lg` the same rows render as
+              cards; the table is untouched from `lg` up (S4). */}
+          <div className="p-3 lg:hidden">
+            <StatisticsCardList
+              items={currentItems}
+              isLoading={isLoading}
+              totalRevenue={totalRevenue}
+              showTotal={!isLoading && filteredProducts.length > 0}
+              formatCurrency={formatCurrencyLocal}
+            />
+          </div>
+
+          <div className="hidden overflow-x-auto lg:block">
             <table className="min-w-225 w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-white text-slate-500 uppercase tracking-[0.3em] text-[11px]">

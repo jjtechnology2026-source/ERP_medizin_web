@@ -5,6 +5,8 @@ import { Order } from "../../orders/types/orders";
 import { MarketplaceOrderService } from "../services/OrderService";
 import { MarketplaceOrderSummary } from "../types/mqtt-orders";
 import Tooltip from "./Tooltip";
+import MarketplaceCardList from "./MarketplaceCardList";
+import { isCompletedOrder } from "../lib/order-status";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface MarketplaceTableProps {
@@ -34,9 +36,50 @@ export default function MarketplaceTable({
   const totalPages = Math.ceil(orders.length / itemsPerPage);
   const currentOrders = orders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  // Shared by the desktop table and the phone card list: a Redis-queued order is
+  // complete enough to open as-is, an MQTT one has to be focused by id.
+  const openQueuedOrder = (qOrder: MarketplaceOrderSummary) => {
+    if ((qOrder as any)._source === "redis") {
+      onView({
+        id: qOrder.orderId,
+        client: {
+          name: qOrder.clientName,
+          direccion: qOrder.clientAddress || "",
+          documento: qOrder.clientIdNumber || "",
+        },
+        date: qOrder.createdAt || new Date().toISOString(),
+        saleType: qOrder.saleType || "Marketplace",
+        saleStatus: "Pending",
+        medications: (qOrder.items || []).map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price ?? 0,
+        })),
+        totalreal: qOrder.total,
+      } as any);
+    } else {
+      onFocus?.(qOrder.orderId);
+    }
+  };
+
   return (
     <div className="overflow-hidden border border-slate-200 rounded-[2rem] shadow-sm bg-white">
-      <div className="overflow-x-auto">
+      {/* Phone (S7): seven columns and `px-8` cells never fit 390px, and the
+          shell clips the overflow, so status and the row actions were simply
+          cut off. Below `lg` the same orders render as cards. */}
+      <div className="p-3 lg:hidden">
+        <MarketplaceCardList
+          orders={currentOrders}
+          queuedOrders={queuedOrders}
+          loading={loading}
+          onView={onView}
+          onAccept={onAccept}
+          onChat={onChat}
+          onOpenQueued={openQueuedOrder}
+        />
+      </div>
+
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full text-left relative">
           <thead className="bg-white border-b border-slate-100">
             <tr>
@@ -91,25 +134,7 @@ export default function MarketplaceTable({
                           </Tooltip>
                           <Tooltip content="Ver Detalles">
                             <button 
-                              onClick={() => {
-                                if ((qOrder as any)._source === "redis") {
-                                  onView({
-                                    id: qOrder.orderId,
-                                    client: { name: qOrder.clientName, direccion: qOrder.clientAddress || "", documento: qOrder.clientIdNumber || "" },
-                                    date: qOrder.createdAt || new Date().toISOString(),
-                                    saleType: qOrder.saleType || "Marketplace",
-                                    saleStatus: "Pending",
-                                    medications: (qOrder.items || []).map((item) => ({
-                                      name: item.name,
-                                      quantity: item.quantity,
-                                      price: item.price ?? 0,
-                                    })),
-                                    totalreal: qOrder.total,
-                                  } as any);
-                                } else {
-                                  onFocus?.(qOrder.orderId);
-                                }
-                              }}
+                              onClick={() => openQueuedOrder(qOrder)}
                               className="p-2.5 bg-white border border-blue-500 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                             >
                               <HiOutlineEye size={18} />
@@ -148,9 +173,9 @@ export default function MarketplaceTable({
                       <td className="px-8 py-5 text-xs font-bold text-slate-500 capitalize">{order.saleType || "Delivery"}</td>
                       <td className="px-8 py-5">
                         <span className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider ${
-                          (order.saleStatus === "Completed" || (order as any).sale_status === "Completed" || (order as any).sale_status === "COMPLETADA") ? "bg-emerald-500 text-white" : "bg-[#FFC552] text-white"
+                          isCompletedOrder(order) ? "bg-emerald-500 text-white" : "bg-[#FFC552] text-white"
                         }`}>
-                          {(order.saleStatus === "Completed" || (order as any).sale_status === "Completed" || (order as any).sale_status === "COMPLETADA") ? "Completado" : "Pendiente"}
+                          {isCompletedOrder(order) ? "Completado" : "Pendiente"}
                         </span>
                       </td>
                       <td className="px-8 py-5">
@@ -191,7 +216,7 @@ export default function MarketplaceTable({
       </div>
 
       {/* Pagination Controls */}
-      <div className="p-8 border-t border-slate-100 flex justify-between items-center bg-white">
+      <div className="flex flex-col gap-3 border-t border-slate-100 bg-white p-4 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:p-8">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
           Mostrando {currentOrders.length + (currentPage === 1 ? queuedOrders.length : 0)} de {orders.length + queuedOrders.length} órdenes
         </p>

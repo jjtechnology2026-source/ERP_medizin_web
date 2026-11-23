@@ -488,7 +488,7 @@ export default function FiscalConfigCard() {
       <div className="grid grid-cols-1 lg:grid-cols-[2.2fr_1fr] gap-8 items-start">
         
         {/* Card 1: Configuración Fiscal */}
-        <div className="bg-white p-10 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
+        <div className="bg-white p-4 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Configuración fiscal</h2>
             <p className="text-sm font-bold text-slate-400 max-w-2xl">Organiza la implementación fiscal y las acciones operativas en un solo bloque.</p>
@@ -564,11 +564,14 @@ export default function FiscalConfigCard() {
                     : "Servicio fiscal no conectado"}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
+            {/* Phone (S3/S6): one column of full-width, 44px+ buttons; the text
+                wraps instead of forcing the button wider than the card. From
+                `md` up the original wrapping row is restored unchanged (S4). */}
+            <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-4">
               <button
                 onClick={handleInstallService}
                 disabled={installStatus === "installing"}
-                className="px-10 py-5 bg-[#16a34a] text-white font-black text-[15px] rounded-xl shadow-lg shadow-green-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#16a34a] text-white font-black rounded-xl shadow-lg shadow-green-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {installStatus === "installing"
                   ? serviceInstalled
@@ -585,7 +588,7 @@ export default function FiscalConfigCard() {
               {showManualInstall && (
                 <button
                   onClick={handleDownloadInstaller}
-                  className="px-10 py-5 bg-[#f59e0b] text-white font-black text-[15px] rounded-xl hover:brightness-110 transition-all active:scale-95"
+                  className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#f59e0b] text-white font-black rounded-xl hover:brightness-110 transition-all active:scale-95 md:w-auto md:px-10 md:py-5"
                 >
                   Descargar instalador (una sola vez)
                 </button>
@@ -593,14 +596,14 @@ export default function FiscalConfigCard() {
               <button
                 onClick={handleDetectPort}
                 disabled={portStatus === "saving"}
-                className="px-10 py-5 bg-[#7c3aed] text-white font-black text-[15px] rounded-xl shadow-lg shadow-purple-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#7c3aed] text-white font-black rounded-xl shadow-lg shadow-purple-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {portStatus === "saving" ? "Detectando..." : "Detectar impresora"}
               </button>
               <button
                 onClick={handleSavePort}
                 disabled={portStatus === "saving"}
-                className="px-10 py-5 bg-[#0057FF] text-white font-black text-[15px] rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#0057FF] text-white font-black rounded-xl shadow-lg shadow-blue-100 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {portStatus === "saving"
                   ? "Guardando..."
@@ -612,16 +615,16 @@ export default function FiscalConfigCard() {
               </button>
               <button
                 onClick={() => setShowDiagnostic(true)}
-                className="px-10 py-5 bg-[#E0E3FF] text-[#4F46E5] font-black text-[15px] rounded-xl hover:brightness-105 transition-all active:scale-95"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#E0E3FF] text-[#4F46E5] font-black rounded-xl hover:brightness-105 transition-all active:scale-95 md:w-auto md:px-10 md:py-5"
               >
                 Abrir Diagnóstico Fiscal
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-4">
               <button
                 onClick={handleReportX}
                 disabled={reportXStatus === "printing"}
-                className="px-10 py-5 bg-[#0f766e] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#0f766e] text-white font-black rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {reportXStatus === "printing"
                   ? "Imprimiendo reporte X..."
@@ -635,7 +638,7 @@ export default function FiscalConfigCard() {
                 onClick={() => void requestZReport("print")}
                 disabled={zGuardBusy !== null}
                 title="Solo imprime el reporte Z en la máquina fiscal. No lo registra en el libro de ventas."
-                className="px-10 py-5 bg-[#1f2937] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#1f2937] text-white font-black rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {zGuardBusy === "print" ? "Verificando el día..." : "Generar reporte Z"}
               </button>
@@ -643,7 +646,7 @@ export default function FiscalConfigCard() {
                 onClick={() => void requestZReport("register")}
                 disabled={zGuardBusy !== null}
                 title="Carga las ventas del día en el libro de ventas. No imprime nada."
-                className="px-10 py-5 bg-[#5b21b6] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#5b21b6] text-white font-black rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {zGuardBusy === "register" ? "Verificando el día..." : "Registrar en libro de ventas"}
               </button>
@@ -651,7 +654,7 @@ export default function FiscalConfigCard() {
                 onClick={handlePairPos80}
                 disabled={!isWebUsbSupported() || pos80Status === "pairing"}
                 title={isWebUsbSupported() ? "" : "Requiere Chrome/Edge"}
-                className="px-10 py-5 bg-[#0369a1] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#0369a1] text-white font-black rounded-xl hover:brightness-125 transition-all active:scale-95 disabled:opacity-50 md:w-auto md:px-10 md:py-5"
               >
                 {pos80Status === "pairing"
                   ? "Emparejando POS80..."
@@ -663,13 +666,13 @@ export default function FiscalConfigCard() {
               </button>
               <button
                 onClick={() => setShowZHistory(true)}
-                className="px-10 py-5 bg-[#374151] text-white font-black text-[15px] rounded-xl hover:brightness-125 transition-all active:scale-95"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#374151] text-white font-black rounded-xl hover:brightness-125 transition-all active:scale-95 md:w-auto md:px-10 md:py-5"
               >
                 Historial Z
               </button>
               <button
                 onClick={() => handleAction("Ver Auditoria Fiscal")}
-                className="px-10 py-5 bg-[#7A3314] text-white font-black text-[15px] rounded-xl hover:brightness-110 transition-all active:scale-95"
+                className="w-full whitespace-normal break-words px-4 py-4 text-center text-[15px] leading-snug bg-[#7A3314] text-white font-black rounded-xl hover:brightness-110 transition-all active:scale-95 md:w-auto md:px-10 md:py-5"
               >
                 Ver Auditoria Fiscal
               </button>
@@ -678,19 +681,19 @@ export default function FiscalConfigCard() {
         </div>
 
         {/* Card 2: Estado Actual */}
-        <div className="bg-white p-10 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
+        <div className="bg-white p-4 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-10">
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Estado actual</h2>
             <p className="text-sm font-bold text-slate-400">Resumen rápido de la implementación seleccionada y de las acciones disponibles.</p>
           </div>
 
           <div className="space-y-6">
-            <div className="bg-[#F8FAFC] p-8 rounded-[2.5rem] border border-slate-50">
+            <div className="bg-[#F8FAFC] p-4 md:p-8 rounded-[2.5rem] border border-slate-50">
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Implementación activa</p>
               <p className="text-base font-black text-slate-800">{implementation}</p>
             </div>
 
-            <div className="bg-[#F8FAFC] p-8 rounded-[2.5rem] border border-slate-50">
+            <div className="bg-[#F8FAFC] p-4 md:p-8 rounded-[2.5rem] border border-slate-50">
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Soporte adicional</p>
               <p className="text-base font-black text-emerald-600">Disponible</p>
             </div>
@@ -703,7 +706,7 @@ export default function FiscalConfigCard() {
       </div>
 
       {/* --- SECCIÓN INFERIOR: SOPORTE POR IMPLEMENTACIÓN --- */}
-      <div className="bg-white p-10 md:p-12 rounded-[3rem] shadow-sm border border-slate-100 space-y-10 mt-2">
+      <div className="bg-white p-4 md:p-12 rounded-[3rem] shadow-sm border border-slate-100 space-y-10 mt-2">
         <div className="space-y-2">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight leading-tight">Soporte por implementación</h2>
           <p className="text-base font-bold text-slate-400">Comparativa rápida para saber qué proveedor ofrece funciones adicionales.</p>
@@ -711,7 +714,7 @@ export default function FiscalConfigCard() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {FISCAL_SUPPORT_DATA.map((item) => (
-            <div key={item.id} className="bg-[#F8FAFC] p-10 rounded-[2.5rem] border border-slate-100 flex flex-col gap-5">
+            <div key={item.id} className="bg-[#F8FAFC] p-4 md:p-10 rounded-[2.5rem] border border-slate-100 flex flex-col gap-5">
               <div>
                 <p className="text-lg font-black text-slate-800">{item.name}</p>
                 <p className="text-[12px] font-black text-emerald-600 uppercase tracking-widest mt-1.5">{item.status}</p>
