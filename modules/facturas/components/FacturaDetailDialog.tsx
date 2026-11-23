@@ -65,7 +65,8 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-[#F1F3F5] rounded-xl transition-all duration-200 active:scale-95"
+              aria-label="Cerrar"
+              className="rounded-xl p-2 transition-all duration-200 hover:bg-[#F1F3F5] active:scale-95 max-lg:flex max-lg:min-h-11 max-lg:min-w-11 max-lg:items-center max-lg:justify-center"
             >
               <HiX size={20} className="text-slate-400" />
             </button>
@@ -172,40 +173,96 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
               <p className="text-sm font-bold text-slate-300">Sin líneas disponibles</p>
             </div>
           ) : (
-            <table className="w-full text-left">
-              <thead className="sticky top-0 bg-white z-10">
-                <tr className="border-b border-[#F1F3F5]">
-                  <th className="px-6 pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Cant.</th>
-                  <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Descripción</th>
-                  <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Precio Unit.</th>
-                  <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-16">IVA</th>
-                  <th className="pb-2 pt-4 pr-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F8FAFC]">
+            <>
+              {/* Phone: one card per line, with the description WRAPPING instead
+                  of the five-column table whose fixed widths (`w-12`…`w-28` plus
+                  `px-6`) need ~500px and were silently clipped by the shell,
+                  hiding the Subtotal column (specs S7, S4). Same shape as the
+                  cash-register invoice detail. */}
+              <ul className="flex flex-col gap-2 p-4 lg:hidden">
                 {d.detalles.map((line, idx) => (
-                  <tr key={line.id || idx} className="transition-colors duration-150 hover:bg-[#F8FAFC]">
-                    <td className="px-6 py-3 align-top">
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-[#F1F3F5] text-[11px] font-bold text-slate-600">
-                        {line.cantidad}
+                  <li
+                    key={line.id || idx}
+                    className="rounded-2xl border border-[#E4E7EB] bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 break-words text-xs font-semibold leading-relaxed text-[#0F172A]">
+                        {line.descripcion}
+                      </p>
+                      <span className="shrink-0 font-mono text-xs font-bold text-[#1E3A5F]">
+                        Bs {line.subtotal_ves.toFixed(2)}
                       </span>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <p className="text-xs font-semibold text-[#0F172A] leading-relaxed">{line.descripcion}</p>
-                    </td>
-                    <td className="py-3 pr-4 text-right align-top">
-                      <span className="text-xs font-medium text-slate-500 font-mono">Bs {line.precio_unitario_ves.toFixed(2)}</span>
-                    </td>
-                    <td className="py-3 pr-4 text-right align-top">
-                      <span className="text-[11px] font-semibold text-slate-400">{line.iva_porcentaje}%</span>
-                    </td>
-                    <td className="py-3 pr-6 text-right align-top">
-                      <span className="text-xs font-bold text-[#1E3A5F] font-mono">Bs {line.subtotal_ves.toFixed(2)}</span>
-                    </td>
-                  </tr>
+                    </div>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[#F1F3F5] pt-2 text-[11px]">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Cant.
+                        </dt>
+                        <dd className="font-bold text-slate-600">{line.cantidad}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Precio unit.
+                        </dt>
+                        <dd className="truncate font-mono font-bold text-slate-600">
+                          Bs {line.precio_unitario_ves.toFixed(2)}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          IVA
+                        </dt>
+                        <dd className="font-bold text-slate-400">{line.iva_porcentaje}%</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Subtotal
+                        </dt>
+                        <dd className="truncate font-mono font-bold text-[#1E3A5F]">
+                          Bs {line.subtotal_ves.toFixed(2)}
+                        </dd>
+                      </div>
+                    </dl>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+
+              {/* Desktop table, unchanged (spec S4). */}
+              <table className="hidden w-full text-left lg:table">
+                <thead className="sticky top-0 bg-white z-10">
+                  <tr className="border-b border-[#F1F3F5]">
+                    <th className="px-6 pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Cant.</th>
+                    <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Descripción</th>
+                    <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Precio Unit.</th>
+                    <th className="pb-2 pt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-16">IVA</th>
+                    <th className="pb-2 pt-4 pr-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F8FAFC]">
+                  {d.detalles.map((line, idx) => (
+                    <tr key={line.id || idx} className="transition-colors duration-150 hover:bg-[#F8FAFC]">
+                      <td className="px-6 py-3 align-top">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-[#F1F3F5] text-[11px] font-bold text-slate-600">
+                          {line.cantidad}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <p className="text-xs font-semibold text-[#0F172A] leading-relaxed">{line.descripcion}</p>
+                      </td>
+                      <td className="py-3 pr-4 text-right align-top">
+                        <span className="text-xs font-medium text-slate-500 font-mono">Bs {line.precio_unitario_ves.toFixed(2)}</span>
+                      </td>
+                      <td className="py-3 pr-4 text-right align-top">
+                        <span className="text-[11px] font-semibold text-slate-400">{line.iva_porcentaje}%</span>
+                      </td>
+                      <td className="py-3 pr-6 text-right align-top">
+                        <span className="text-xs font-bold text-[#1E3A5F] font-mono">Bs {line.subtotal_ves.toFixed(2)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
 
@@ -305,7 +362,7 @@ export default function FacturaDetailDialog({ factura, onClose, notasCredito = [
                   href={d.url_pdf}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-[#1E3A5F] text-white rounded-xl text-xs font-bold transition-all duration-200"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-[#1E3A5F] text-white rounded-xl text-xs font-bold transition-all duration-200 max-lg:min-h-11"
                 >
                   <HiDocumentText size={14} />
                   Ver PDF

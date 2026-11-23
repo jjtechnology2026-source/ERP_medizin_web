@@ -29,32 +29,38 @@ export default function ModalWrapper({ isOpen, onClose, children, zIndex = 100 }
   if (!isVisible) return null;
 
   return (
+    /* The overlay itself is the scroll container: a panel taller than the
+       viewport used to be clipped at BOTH edges with no way to reach the rest.
+       `min-h-full` on the centering row grows with the content, so centering
+       never pushes the top of a tall panel out of reach. */
     <div
-      className="fixed inset-0 flex items-center justify-center p-6"
+      className="fixed inset-0 overflow-x-hidden overflow-y-auto overscroll-contain p-6"
       style={{ zIndex }}
     >
       {/* Backdrop: Más lento para una entrada cinemática */}
       <div 
-        className={`absolute inset-0 bg-slate-900/30 backdrop-blur-lg transition-opacity duration-700 ease-in-out ${
+        className={`fixed inset-0 bg-slate-900/30 backdrop-blur-lg transition-opacity duration-700 ease-in-out ${
           isAnimating ? 'opacity-100' : 'opacity-0'
         }`} 
         onClick={onClose}
       />
 
       {/* Contenido: Animación "Spring" */}
-      <div
-        className={`relative bg-white rounded-[40px] shadow-[0_32px_64px_-15px_rgba(0,0,0,0.1)] overflow-hidden transform transition-all duration-500 ${
-          isAnimating 
-            ? 'opacity-100 translate-y-0 scale-100' 
-            : 'opacity-0 translate-y-2 scale-[0.98]'
-        }`}
-        style={{
-          transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-          willChange: 'transform, opacity'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
+      <div className="relative flex min-h-full items-center justify-center">
+        <div
+          className={`relative bg-white rounded-[40px] shadow-[0_32px_64px_-15px_rgba(0,0,0,0.1)] overflow-hidden transform transition-all duration-500 ${
+            isAnimating 
+              ? 'opacity-100 translate-y-0 scale-100' 
+              : 'opacity-0 translate-y-2 scale-[0.98]'
+          }`}
+          style={{
+            transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
+            willChange: 'transform, opacity'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

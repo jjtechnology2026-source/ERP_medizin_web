@@ -39,7 +39,7 @@ export function NotificationDialog({
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose} zIndex={1000}>
       <div
-        className={`bg-white rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${
+        className={`w-full max-w-sm rounded-[2.5rem] bg-white p-6 shadow-2xl sm:p-10 flex flex-col items-center text-center ${
           isOpen ? "scale-100 translate-y-0" : "scale-90 translate-y-4"
         }`}
       >
@@ -55,8 +55,8 @@ export function NotificationDialog({
           )}
         </div>
 
-        <h3 className="text-2xl font-black text-gray-800 mb-2">{title}</h3>
-        <p className="text-gray-500 font-medium leading-relaxed mb-8">
+        <h3 className="mb-2 break-words text-2xl font-black text-gray-800">{title}</h3>
+        <p className="mb-8 font-medium leading-relaxed text-gray-500 break-words">
           {message}
         </p>
 

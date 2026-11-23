@@ -773,12 +773,20 @@ export default function PaymentDialog({
                     Reparte el vuelto. Usa <strong>Completar cambio</strong> para asignarlo automáticamente en efectivo Bs.
                   </p>
                   {manualChanges.map((entry, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-4">
+                    <div
+                      key={idx}
+                      /* Phone: two columns (type + remove / then one full-width row per
+                         value). The old `grid-cols-12` gave the bank select
+                         `col-span-2` (~48px at 390) so its name and chevron were
+                         cut and change could not be assigned (specs S3, S4, S7).
+                         `lg:grid-cols-12` reproduces the desktop row exactly. */
+                      className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-2 lg:grid-cols-12 lg:items-center lg:rounded-none lg:border-0 lg:p-0"
+                    >
+                      <div className="col-span-1 min-w-0 lg:col-span-4">
                         <select
                           value={entry.tipo}
                           onChange={(e) => updateManualChange(idx, { tipo: e.target.value as ManualChangeType })}
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:min-h-11 max-lg:text-base font-bold outline-none"
                         >
                           <option value="efectivoVes">Efectivo Bs</option>
                           <option value="efectivoUsd">Efectivo USD</option>
@@ -786,41 +794,51 @@ export default function PaymentDialog({
                           <option value="credito">Crédito</option>
                         </select>
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-2 min-w-0 lg:col-span-3">
                         <input
                           type="number"
                           step="0.01"
                           value={entry.amount || ""}
                           onChange={(e) => updateManualChange(idx, { amount: r2(parseFloat(e.target.value) || 0) })}
                           placeholder="0.00"
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:min-h-11 max-lg:text-base font-bold outline-none"
                         />
                       </div>
                       {entry.tipo === "movil" && (
                         <>
-                          <div className="col-span-2">
+                          <div className="col-span-2 min-w-0 lg:col-span-2">
                             <select
                               value={entry.bank}
                               onChange={(e) => updateManualChange(idx, { bank: e.target.value })}
-                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
+                              aria-label="Banco"
+                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:min-h-11 max-lg:text-base font-bold outline-none"
                             >
                               <option value="">Banco</option>
                               {VENEZUELAN_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
                             </select>
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-1 min-w-0 lg:col-span-2">
                             <input
                               type="text"
                               value={entry.reference}
                               onChange={(e) => updateManualChange(idx, { reference: e.target.value })}
                               placeholder="Ref"
-                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:text-base font-bold outline-none"
+                              className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs max-lg:min-h-11 max-lg:text-base font-bold outline-none"
                             />
                           </div>
                         </>
                       )}
-                      <div className="col-span-1">
-                        <button onClick={() => removeManualChange(idx)} className="text-red-500 hover:text-red-700 text-lg font-bold">✕</button>
+                      {/* DOM order is unchanged (remove last) so the desktop
+                          12-column auto-placement is byte-identical; only the
+                          phone grid places it beside the type select. */}
+                      <div className="col-span-1 max-lg:col-start-2 max-lg:row-start-1 max-lg:justify-self-end lg:col-span-1">
+                        <button
+                          onClick={() => removeManualChange(idx)}
+                          aria-label="Quitar cambio"
+                          className="text-red-500 hover:text-red-700 text-lg font-bold max-lg:flex max-lg:size-11 max-lg:items-center max-lg:justify-center max-lg:rounded-xl max-lg:border max-lg:border-slate-200 max-lg:bg-white"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
                   ))}
