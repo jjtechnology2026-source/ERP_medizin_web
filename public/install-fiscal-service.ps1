@@ -71,12 +71,11 @@ $ServiceLogFile = Join-Path $LogDir "service_output.log"
 $ExePath = Join-Path $ProjectDir "FiscalService.exe"
 $VersionFile = Join-Path $ProjectDir "version.txt"
 
-$env:HKA_SERIAL_PORT = "COM5"
 $env:HKA_BAUDRATE = "9600"
 $env:HKA_REPORT_Z_DELAY_SECONDS = "25"
 $env:HKA_REPORT_Z_COMMAND = "I0Z"
 $env:HKA_ENABLE_INVOICE_COMMANDS = "true"
-$env:BEMATECH_SERIAL_PORT = "COM7"
+$env:FISCAL_PRINT_RETRY_ENABLED = "true"
 $env:BEMATECH_USE_DLL = "true"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -118,7 +117,7 @@ if ($runningVersion) {
 
 & (Join-Path $ProjectDir "update.ps1")
 
-Write-Log "Starting fiscal service on $env:HKA_SERIAL_PORT (installed $localVersion)"
+Write-Log "Starting fiscal service (installed $localVersion)"
 if (Test-Path $ExePath) {
     & $ExePath *>> $ServiceLogFile
 } else {
@@ -252,8 +251,8 @@ Write-Log "Launcher triggered via medizin-fiscal://install"
 
 Start-Sleep -Seconds 3
 if (-not (Test-Health)) {
-    Write-Log "Service not running after update check, starting it"
-    Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $ProjectDir "start_fiscal_service.ps1") -WindowStyle Hidden
+    Write-Log "Service still down, launching via run_hidden.vbs"
+    Start-Process wscript.exe -ArgumentList (Join-Path $ProjectDir "run_hidden.vbs"), (Join-Path $ProjectDir "start_fiscal_service.ps1")
     Start-Sleep -Seconds 8
 }
 
@@ -267,29 +266,56 @@ if (Test-Health) {
 
     Write-Ok "Scripts creados."
 
-    # 3. Registrar tareas en el Programador de tareas.
+    # 3. Wrapper VBS: lanza el .ps1 SIN ventana de consola.
+    # Task Scheduler lanza powershell.exe con consola nueva; aunque se pase
+    # -WindowStyle Hidden, la consola se crea igual y provoca un destello azul
+    # cada vez que corre la tarea (cada 30 min). wscript.exe no crea consola y
+    # WshShell.Run con ventana 0 (oculta) elimina el destello por completo.
+    Write-Step "Creando wrapper oculto (run_hidden.vbs)..."
+    $vbsScript = @'
+' run_hidden.vbs - Ejecuta un .ps1 sin mostrar ventana de consola.
+' Uso: wscript.exe run_hidden.vbs "C:\ruta\script.ps1" [arg1] [arg2] ...
+Option Explicit
+Dim shell, fso, ps1, cmd, i
+If WScript.Arguments.Count < 1 Then WScript.Quit 1
+ps1 = WScript.Arguments(0)
+Set shell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+If Not fso.FileExists(ps1) Then WScript.Quit 2
+cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & ps1 & """"
+For i = 1 To WScript.Arguments.Count - 1
+    cmd = cmd & " """ & WScript.Arguments(i) & """"
+Next
+shell.Run cmd, 0, False
+WScript.Quit 0
+'@
+    Set-Content -Path (Join-Path $Dest "run_hidden.vbs") -Value $vbsScript -Encoding Default
+    Write-Ok "run_hidden.vbs creado."
+
+    # 4. Registrar tareas en el Programador de tareas.
     # RunLevel Highest: el servicio corre ELEVADO (admin) al iniciar sesion. Es
     # necesario para que la DLL Bematech pueda escribir BemaFI32.ini en System32
     # (la DLL lo lee de ahi). Sin elevacion, un proceso con token limitado no
     # puede escribir en C:\Windows\System32 aunque el usuario sea admin (UAC).
     # Se registra con el usuario actual (Interactive) y nivel mas alto.
     Write-Step "Registrando tareas en el Programador de tareas..."
-    $StartPrincipal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
-    $StartAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Dest 'start_fiscal_service.ps1')`""
+    $VbsPath = Join-Path $Dest "run_hidden.vbs"
+    $StartPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Highest
+    $StartAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$VbsPath`" `"$(Join-Path $Dest 'start_fiscal_service.ps1')`""
     $StartTrigger = New-ScheduledTaskTrigger -AtLogOn
     Register-ScheduledTask -TaskName "Medizin Fiscal Service" -Action $StartAction -Trigger $StartTrigger -Principal $StartPrincipal -Description "Arranca el servicio fiscal al iniciar sesion (elevado para la DLL Bematech)" -Force | Out-Null
 
-    $UpdatePrincipal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
-    $UpdateAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Dest 'update.ps1')`" -Restart"
+    $UpdatePrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Highest
+    $UpdateAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$VbsPath`" `"$(Join-Path $Dest 'update.ps1')`" -Restart"
     $UpdateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 9999)
     Register-ScheduledTask -TaskName "Medizin Fiscal Update" -Action $UpdateAction -Trigger $UpdateTrigger -Principal $UpdatePrincipal -Description "Verifica actualizaciones del servicio fiscal cada 30 min" -Force | Out-Null
-    Write-Ok "Tareas creadas: 'Medizin Fiscal Service' y 'Medizin Fiscal Update' (elevadas, cada 30 min)."
-    Write-Log "Tareas programadas registradas (RunLevel Highest)"
+    Write-Ok "Tareas creadas: 'Medizin Fiscal Service' y 'Medizin Fiscal Update' (elevadas, cada 30 min, sin ventana)."
+    Write-Log "Tareas programadas registradas (RunLevel Highest, via wscript run_hidden.vbs)"
 
-    # 4. Registrar el protocolo medizin-fiscal://.
+    # 5. Registrar el protocolo medizin-fiscal://.
     Write-Step "Registrando protocolo medizin-fiscal:// ..."
     $LauncherPath = Join-Path $Dest "fiscal_launcher.ps1"
-    $ProtocolCmd = "`"powershell.exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
+    $ProtocolCmd = "`"wscript.exe`" `"$VbsPath`" `"$LauncherPath`""
     foreach ($Root in @("HKCU:\Software\Classes", "HKLM:\Software\Classes")) {
         New-Item -Path (Join-Path $Root "medizin-fiscal") -Force | Out-Null
         Set-ItemProperty -Path (Join-Path $Root "medizin-fiscal") -Name "(default)" -Value "URL:Medizin Fiscal Protocol" -Force
@@ -300,9 +326,9 @@ if (Test-Health) {
     Write-Ok "Protocolo medizin-fiscal:// registrado."
     Write-Log "Protocolo registrado (HKCU + HKLM)"
 
-    # 5. Arrancar el servicio.
+    # 6. Arrancar el servicio.
     Write-Step "Arrancando el servicio..."
-    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $Dest "start_fiscal_service.ps1") -WindowStyle Hidden
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$VbsPath`"", "`"$(Join-Path $Dest 'start_fiscal_service.ps1')`""
 
     Write-Step "Verificando servicio en http://127.0.0.1:8000/health"
     $health = $null
