@@ -10,6 +10,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
+import { useChannelStatus } from "@/modules/cash-register/hooks/useChannelStatus";
 import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import { quoteBlockReasonForCart } from "@/modules/cash-register/lib/local-sale-persist";
@@ -83,7 +84,13 @@ export default function PaymentDialog({
     payments,
     setPayment,
   } = useCurrentOrderStore();
-  const { registerSale, saveQuote, saveDeliveryNote, checkFiscalHealth, activeSession, errorMessage, setError, fiscalIssued } = useCashierWorkflowStore();
+  const { registerSale, saveQuote, saveDeliveryNote, activeSession, errorMessage, setError, fiscalIssued } = useCashierWorkflowStore();
+
+  // Canal de ESTA terminal, vigilado mientras el dialogo esta abierto: el
+  // operador ve con que va a emitir antes de cobrar. La decision final la vuelve
+  // a tomar `registerSale` con lectura fresca (Spec S5); esto es anticipacion,
+  // no la fuente de verdad.
+  const { decision: terminalChannel, isStale: channelIsStale } = useChannelStatus();
 
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
@@ -105,12 +112,6 @@ export default function PaymentDialog({
   const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
   const [bancoAccounts, setBancoAccounts] = useState<CashierBankAccount[]>([]);
   const [divisaElectronicaAccounts, setDivisaElectronicaAccounts] = useState<CashierBankAccount[]>([]);
-
-  // Al abrir los metodos de pago se verifica el servicio fiscal: si no esta
-  // vivo, la venta va directo al fallback POS80 sin intentar la fiscal.
-  useEffect(() => {
-    checkFiscalHealth();
-  }, [checkFiscalHealth]);
 
   // Carga las cuentas "banco" de la farmacia para elegir destino en pagomovil/tarjeta.
   useEffect(() => {
@@ -583,8 +584,32 @@ export default function PaymentDialog({
           </div>
         )}
 
-        {quoteBlocked && (
+        {/* Canal de la terminal. Es informativo: la venta vuelve a detectar antes
+            de emitir. Lo que se busca es que el cajero no se entere de que la
+            maquina fiscal no responde recien cuando falla el cobro (S3/S5). */}
+        {(!terminalChannel || channelIsStale) && (
           <div className="px-6 pb-3 flex-shrink-0">
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
+              Verificando el servicio fiscal…
+            </div>
+          </div>
+        )}
+        {terminalChannel && !channelIsStale && terminalChannel.channel === "pos80" && (
+          <div className="px-6 pb-3 flex-shrink-0">
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
+              {terminalChannel.reason}
+            </div>
+          </div>
+        )}
+        {terminalChannel && !channelIsStale && terminalChannel.channel === "fiscal" && !terminalChannel.ready && (
+          <div className="px-6 pb-3 flex-shrink-0">
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+              {terminalChannel.reason}
+            </div>
+          </div>
+        )}
+
+        {quoteBlocked && (          <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
               {quoteBlocked}
             </div>
