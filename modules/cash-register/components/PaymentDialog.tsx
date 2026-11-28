@@ -346,7 +346,8 @@ export default function PaymentDialog({
       // Se resuelve en el mismo gesto del click: WebUSB exige activacion
       // transitoria para pedir la impresora, y se pierde tras los awaits del
       // flujo fiscal.
-      const terminalChannel = await resolveTerminalChannel();
+      // Solo interesa el canal para preparar WebUSB; la maquina la juzga la factura.
+      const terminalChannel = await resolveTerminalChannel({ probeMachine: false });
       if (terminalChannel.channel === "pos80") {
         await prepairPrinter();
       }

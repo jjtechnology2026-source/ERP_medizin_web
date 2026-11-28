@@ -296,22 +296,31 @@ test("servicio ausente + POS80 sin emparejar: no imprime, no envía y lo dice", 
   assert.match(store().errorMessage, /POS80 no está emparejada/i);
 });
 
-test("servicio vivo + máquina fiscal muda: error con motivo y la POS80 no se usa (S3)", async () => {
+test("servicio vivo + máquina muda: el status no decide y sin comprobante no hay POS80 (S3)", async () => {
+  // Antes esta prueba exigía que NO se intentara facturar con el status caído.
+  // Eso era el defecto: `printer/status` se bloquea con el lock del servicio
+  // mientras una factura se imprime, así que un status lento trababa la caja sin
+  // motivo. Ahora el status es anticipación y la factura es la que decide; lo que
+  // esta prueba sostiene es lo que de verdad importa: sin comprobante, no hay venta
+  // y no hay POS80.
   setCart(makeCart("ORD-FISCAL-1"));
   usbState.paired = true; // aunque la POS80 esté lista, no es un canal de salida
   fiscalPrinterClient.getPrinterStatus = async () => {
     throw new Error("la máquina no responde");
   };
+  fiscalPrinterClient.createInvoice = async () => {
+    throw new Error("sin papel");
+  };
 
   const result = await store().registerSale("local");
 
   assert.equal(result, null, "la venta no se registra");
-  assert.equal(invoice.calls.length, 0, "no se intenta facturar con la máquina muda");
+  assert.equal(invoice.calls.length, 0, "createInvoice fue reemplazado por el doble que falla");
   assert.equal(usbState.transfers, 0, "la POS80 no imprimió: no hay fallback");
   assert.equal(usbState.requests, 0, "no se abre el selector WebUSB");
   assert.equal(submits.length, 0, "submitOrder no se llamó");
   assert.match(store().errorMessage, /máquina fiscal/i, "el motivo nombra la máquina fiscal");
-  assert.match(store().errorMessage, /no responde/i, "y conserva el motivo concreto (S6)");
+  assert.match(store().errorMessage, /sin papel/, "y conserva el motivo real de la máquina (S6)");
 });
 
 test("servicio vivo + la facturación falla: se informa ese motivo y no se cae a POS80 (S3)", async () => {
@@ -406,4 +415,40 @@ test("(R8) canal fiscal: la evidencia dice servicio presente", async () => {
   assert.equal(submits.length, 1);
   assert.equal(submits[0].order.canal, "fiscal");
   assert.equal(submits[0].order.motivoCanal, "servicio_presente");
+});
+
+test("puerto ocupado: la máquina no responde el status pero la venta se intenta igual", async () => {
+  // `printer/status` toma el mismo lock que la facturación, bloqueante: mientras
+  // una factura se imprime, el status se queda esperando. Cortarlo por tiempo y
+  // negarse a vender dejaba la caja trabada por una impresión en curso.
+  setCart(makeCart("ORD-BUSY-1"));
+  usbState.paired = true;
+  fiscalPrinterClient.getPrinterStatus = async () => {
+    throw new Error("puerto ocupado");
+  };
+
+  const result = await store().registerSale("local");
+
+  assert.notEqual(result, null, "la venta se registra: el status no es una condición");
+  assert.equal(invoice.calls.length, 1, "se le pidió el comprobante a la máquina");
+  assert.equal(submits.length, 1);
+  assert.equal(usbState.transfers, 0, "no se imprimió por POS80");
+  assert.equal(store().errorMessage, null);
+  assert.equal(submits[0].order.canal, "fiscal");
+});
+
+test("puerto ocupado al facturar: no imprime, no registra y dice el motivo real", async () => {
+  setCart(makeCart("ORD-BUSY-2"));
+  usbState.paired = true;
+  fiscalPrinterClient.createInvoice = async () => {
+    throw new Error("puerto ocupado: hay otra operación fiscal en curso");
+  };
+
+  const result = await store().registerSale("local");
+
+  assert.equal(result, null, "sin comprobante no hay venta");
+  assert.equal(submits.length, 0, "no se manda nada al backend");
+  assert.equal(usbState.transfers, 0, "y NO se cae a la POS80");
+  assert.match(String(store().errorMessage), /puerto ocupado/, "el motivo es el de la máquina");
+  assert.match(String(store().errorMessage), /no se registró/i);
 });

@@ -303,7 +303,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       // Se resuelve una vez por venta y con lectura fresca: nunca se reusa el
       // valor de un chequeo anterior (Spec S5).
       let decisionPromise: Promise<ChannelDecision> | null = null;
-      const decision = () => (decisionPromise ??= resolveTerminalChannel());
+      // `probeMachine: false`: el estado de la impresora es anticipacion, no una
+      // condicion para cobrar. `printer/status` espera el lock del servicio
+      // mientras hay una factura imprimiendose, y cortarlo por tiempo rechazaba
+      // ventas legitimas sin intentarlas. El intento de facturar trae el motivo real.
+      const decision = () =>
+        (decisionPromise ??= resolveTerminalChannel({ probeMachine: false }));
 
       // Evidencia (Regla R8): la orden guarda con que canal salio y por que. No
       // es configuracion, es el unico rastro que permite responder despues

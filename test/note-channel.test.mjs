@@ -148,7 +148,10 @@ test("canal POS80 con la POS80 muda: no hay papel, el motivo concreto y la nota 
 test("canal fiscal con la maquina muda: error con el motivo y CERO impresiones POS80", async () => {
   const decision = await resolveSaleChannel(seams(MAQUINA_MUDA), FAST);
   assert.equal(decision.channel, "fiscal", "un fallo de la maquina no cambia el canal (S3)");
-  assert.equal(decision.ready, false);
+  // `ready` ya no baja por la maquina: `printer/status` se bloquea con el lock
+  // del servicio y negarse a emitir por eso era el defecto. La maquina se
+  // reporta aparte, y es lo que el mensaje tiene que decir.
+  assert.equal(decision.machine, "no_responde");
 
   const pos80 = pos80Spy();
   let creates = 0;

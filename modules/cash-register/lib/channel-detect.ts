@@ -79,6 +79,20 @@ export interface ResolveChannelOptions {
   confirmDelayMs?: number;
   /** Tiempo limite de cada lectura, en ms. */
   timeoutMs?: number;
+  /**
+   * Consultar tambien `printer/status` para saber como esta la maquina.
+   *
+   * En la VENTA va en `false`, y no es un detalle: `printer_status()` del
+   * servicio toma el mismo lock que la facturacion de forma BLOQUEANTE, asi que
+   * mientras una factura se esta imprimiendo el status se queda esperando. Con
+   * un tope corto eso se leia como "la maquina no responde" y la caja se negaba
+   * a vender sin haberlo intentado. El intento de facturar es el unico que sabe
+   * la verdad, y su error trae el motivo real ("puerto ocupado", "sin papel").
+   *
+   * El vigilante y el cartel de la pantalla de pago lo dejan en `true`: ahi la
+   * informacion es anticipacion, no una condicion para cobrar.
+   */
+  probeMachine?: boolean;
 }
 
 export const REASON_SERVICE_PRESENT = "El servicio fiscal está activo en esta terminal.";
@@ -88,6 +102,13 @@ export const REASON_SERVICE_UNRESPONSIVE =
 
 /** Tope de cada lectura, en ms. La venta no espera mas que esto por el canal. */
 const DEFAULT_TIMEOUT_MS = 2000;
+
+/**
+ * Tope del sondeo de la maquina, mas largo a proposito: `printer/status` espera
+ * el lock del servicio mientras hay una factura imprimiendose. Cortarlo a 2 s
+ * convierte una impresion en curso en "la maquina no responde".
+ */
+const MACHINE_PROBE_TIMEOUT_MS = 8000;
 
 /**
  * Ventana de gracia de reinicio, en ms. La tarea de actualizacion del servicio
@@ -324,8 +345,27 @@ export async function resolveSaleChannel(
 
   // Servicio vivo: el canal es fiscal aunque la maquina no responda. En ese
   // caso NO hay comprobante y la venta no se registra: es S3, no un fallback.
+  //
+  // Ojo: `ready` NO depende de la maquina. Un status bloqueado por el lock del
+  // servicio (una factura imprimiendose) no puede impedir intentar la venta;
+  // el intento devuelve el motivo real. Solo el canal POS80 exige `ready`
+  // (sin la impresora emparejada no hay papel posible).
+  if (options.probeMachine === false) {
+    return {
+      channel: "fiscal",
+      ready: true,
+      service: "vivo",
+      machine: "desconocido",
+      reason: REASON_SERVICE_PRESENT,
+    };
+  }
+
   try {
-    await withTimeout(seams.printerStatus(), timeoutMs, "printer/status");
+    await withTimeout(
+      seams.printerStatus(),
+      Math.max(MACHINE_PROBE_TIMEOUT_MS, timeoutMs),
+      "printer/status",
+    );
     return {
       channel: "fiscal",
       ready: true,
@@ -336,7 +376,7 @@ export async function resolveSaleChannel(
   } catch (error) {
     return {
       channel: "fiscal",
-      ready: false,
+      ready: true,
       service: "vivo",
       machine: "no_responde",
       reason: `El servicio fiscal está activo pero la máquina fiscal no respondió: ${messageOf(

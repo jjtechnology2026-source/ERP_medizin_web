@@ -52,6 +52,13 @@ export interface DocumentChannelState {
    * es informativo y no se repite en el error.
    */
   ready?: boolean;
+  /**
+   * `ChannelDecision.machine`. Se declara aca (y no se importa de
+   * `channel-detect`) para que este modulo siga sin depender del cliente fiscal.
+   * Es lo que le dice al operador POR QUE no va a poder emitir: "la maquina no
+   * respondio" no es lo mismo que "el servicio no esta".
+   */
+  machine?: "ok" | "no_responde" | "desconocido";
 }
 
 /**
@@ -70,7 +77,11 @@ export function documentChannelBlockReason(
   channel?: DocumentChannelState,
 ): string | null {
   if (channel === undefined || channel.channel === "pos80") return null;
-  const detail = channel.ready === true ? undefined : channel.reason?.trim();
+  // El detalle viaja cuando el canal no puede emitir O cuando la maquina no
+  // responde: en los dos casos el operador necesita el motivo real (S6), y el
+  // motivo de un canal `ready` puede ser solo "el servicio esta activo".
+  const conMotivo = channel.ready !== true || channel.machine === "no_responde";
+  const detail = conMotivo ? channel.reason?.trim() : undefined;
   return `El servicio fiscal está activo en esta terminal: ${documentLabel} tiene que salir por la máquina fiscal${
     detail ? ` (${detail})` : ""
   }. No se imprime por la POS80.`;

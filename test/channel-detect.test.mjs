@@ -69,7 +69,7 @@ test("servicio vivo + maquina ok: canal fiscal listo", async () => {
   assert.match(decision.reason, /servicio fiscal está activo/i);
 });
 
-test("servicio vivo + maquina que no responde: fiscal NO listo, nunca POS80 (S3)", async () => {
+test("servicio vivo + maquina que no responde: canal fiscal, nunca POS80 (S3)", async () => {
   const [pos80Paired, pos80] = counted(true);
   const decision = await resolveSaleChannel(
     seams({
@@ -81,12 +81,32 @@ test("servicio vivo + maquina que no responde: fiscal NO listo, nunca POS80 (S3)
     FAST,
   );
   assert.equal(decision.channel, "fiscal", "un fallo de la maquina no cambia el canal");
-  assert.equal(decision.ready, false);
   assert.equal(decision.service, "vivo");
   assert.equal(decision.machine, "no_responde");
   assert.match(decision.reason, /máquina fiscal/i, "el motivo nombra la maquina");
   assert.match(decision.reason, /no respondió/i, "y conserva el motivo concreto (S6)");
   assert.equal(pos80.calls, 0, "la POS80 no se consulta siquiera");
+  // `ready` NO baja por la maquina: `printer/status` se bloquea con el lock del
+  // servicio mientras una factura se imprime, y negarse a vender por eso es el
+  // defecto. La factura es la que decide y su error trae el motivo real.
+  assert.equal(decision.ready, true, "la maquina no puede impedir intentar la venta");
+});
+
+test("la venta no sondea la maquina: solo pregunta el canal", async () => {
+  let statusCalls = 0;
+  const decision = await resolveSaleChannel(
+    seams({
+      printerStatus: async () => {
+        statusCalls += 1;
+        return { status: "ok" };
+      },
+    }),
+    { ...FAST, probeMachine: false },
+  );
+  assert.equal(decision.channel, "fiscal");
+  assert.equal(decision.ready, true);
+  assert.equal(decision.machine, "desconocido");
+  assert.equal(statusCalls, 0, "la venta no espera el lock del servicio");
 });
 
 test("servicio ausente + POS80 emparejada: canal pos80 listo", async () => {
