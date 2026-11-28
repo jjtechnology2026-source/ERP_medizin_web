@@ -715,3 +715,17 @@ alteran comportamiento de venta.
   (`local-sale-persist.ts`) y el camino POS80 todavía no; (c) cotizaciones y notas de entrega
   (`COT-`/`NDE-`) se clasifican como fiscales y su reimpresión queda bloqueada: es fail-closed, pero
   si el negocio quiere reimprimirlas por POS80 hay que agregar su señal a `saleDocumentKind`.
+- **L19** — Arreglos desplegados y verificados con **sockets reales** (no dobles), contra el código ya
+  en producción. Deploy `SUCCESS` en `858c364`; `erp.medizins.com` y `medizins.com/health` en 200.
+  Matriz medida con `resolveTerminalChannel()` real y `AbortSignal.timeout`:
+  socket que acepta y no contesta → `channel:"fiscal"`, `ready:false`, `service:"sin_respuesta"`
+  (antes: `pos80`/`ausente`/`ready:true` — el bloqueante);
+  HTTP 500 → `fiscal`/`sin_respuesta` (antes `pos80`);
+  `{"status":"arrancando"}` → `fiscal`/`sin_respuesta` (antes `pos80`);
+  puerto cerrado sin lectura previa → `pos80`/`ausente` en **198 ms** (S2 preservada).
+- **L20** — Deuda nueva detectada al medir: la confirmación de ausencia son **dos** lecturas, así que
+  un servicio **trabado** tarda 2 × timeout (~3 s con `timeoutMs` de 1,5 s) antes de rechazar la
+  venta, aunque el reintento solo tiene sentido para una negativa de conexión. El arreglo es una rama
+  en `probeService`: si la primera lectura se clasifica como `sin_respuesta`, devolver sin segundo
+  intento (baja el rechazo a ~1,5 s). No se aplicó todavía para no encadenar otro despliegue por
+  latencia en un camino de error: el comportamiento es correcto, solo tarda de más.
