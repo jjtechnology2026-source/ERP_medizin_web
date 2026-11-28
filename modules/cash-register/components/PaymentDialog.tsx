@@ -12,6 +12,7 @@ import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import { useChannelStatus } from "@/modules/cash-register/hooks/useChannelStatus";
+import { detectBillingModeDrift } from "@/modules/cash-register/lib/billing-mode-drift";
 import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import { quoteBlockReasonForCart } from "@/modules/cash-register/lib/local-sale-persist";
@@ -399,6 +400,23 @@ export default function PaymentDialog({
 
       if (result.facturacion?.success) {
         console.log("✅ Factura fiscal:", result.facturacion.numeroControl);
+      }
+
+      // La sesión puede traer una foto vieja del modo. Si el backend emitió
+      // `SIMPLE-`, la farmacia está en modo simple aunque el login dijera otra
+      // cosa: se adopta en el acto para no imprimir un comprobante fiscal que el
+      // backend no va a registrar en las ventas siguientes.
+      if (detectBillingModeDrift(modoFacturacion, result.facturacion?.numeroControl)) {
+        const actual = useAuthStore.getState().profile;
+        if (actual) {
+          useAuthStore.setState({
+            profile: { ...actual, modoFacturacion: "simple", usesDigitalBilling: false },
+          });
+        }
+        console.warn(
+          "[PaymentDialog] El backend emitió un comprobante no fiscal (SIMPLE-): " +
+            "esta farmacia está en modo simple. La sesión se actualizó.",
+        );
       }
 
       const soldMeds = order?.medications ?? [];

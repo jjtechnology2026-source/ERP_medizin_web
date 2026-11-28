@@ -33,6 +33,7 @@ import {
 } from "./fixtures/cashier-service-mock.mjs";
 import fiscalPrinterClient from "../modules/cash-register/api/fiscal-printer-client.ts";
 import { __resetChannelMemory } from "../modules/cash-register/lib/channel-detect.ts";
+import { detectBillingModeDrift } from "../modules/cash-register/lib/billing-mode-drift.ts";
 import { useAuthStore } from "../modules/auth/store/useAuthStore.ts";
 import { useCurrentOrderStore } from "../modules/cash-register/store/current-order.store.ts";
 import { useCurrencyStore } from "../modules/core/store/currency.store.ts";
@@ -681,4 +682,16 @@ test("modo simple: si el envío falla, se informa el motivo real y no se imprime
     "no afirma que la venta no existe cuando no puede saberlo",
   );
   assert.doesNotMatch(String(store().errorMessage), /POS80|emparejada/i);
+});
+
+test("modo simple: la sesión adopta el modo cuando el backend emite SIMPLE-", async () => {
+  // El login guarda una foto del modo y el refresh del JWT la reutiliza: una
+  // sesión abierta puede quedar en el modo viejo. El control emitido es la
+  // evidencia fresca; si es SIMPLE-, la farmacia es simple.
+  assert.equal(detectBillingModeDrift("digital", "SIMPLE-1"), "simple");
+  assert.equal(detectBillingModeDrift("fiscal", "SIMPLE-27"), "simple");
+  assert.equal(detectBillingModeDrift(undefined, "simple-3"), "simple");
+  assert.equal(detectBillingModeDrift("simple", "SIMPLE-1"), null, "ya estaba bien");
+  assert.equal(detectBillingModeDrift("fiscal", "00032015"), null, "un COO no cambia nada");
+  assert.equal(detectBillingModeDrift("digital", null), null);
 });
