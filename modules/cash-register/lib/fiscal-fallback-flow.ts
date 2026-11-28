@@ -720,6 +720,14 @@ export interface NoteFallbackDisplay {
   /** true SOLO si el papel salio y la nota quedo registrada (Regla R6). */
   ok: boolean;
   message: string;
+  /**
+   * Flag EJECUTABLE, no una frase: el documento ya existe por un lado (papel en
+   * la mano del cliente o nota en el backend) aunque falte el otro. Volver al
+   * formulario y emitir de nuevo genera un `numero_control` y un `tracking_id`
+   * nuevos, o sea una SEGUNDA nota de credito y una doble devolucion. Con esto
+   * en true el dialogo no puede ofrecer "Emitir NC".
+   */
+  mustNotReemit: boolean;
 }
 
 /**
@@ -733,14 +741,26 @@ export interface NoteFallbackDisplay {
 export function describeNoteFallbackOutcome(
   outcome: NoteFallbackOutcome,
 ): NoteFallbackDisplay {
+  // El flag sale de los DOS HECHOS, nunca del texto del mensaje. `printed` y
+  // `persisted` discrepan exactamente en los dos casos en los que el documento
+  // ya existe por un lado y falta el otro: o el papel salio y el backend no la
+  // registro, o el backend la registro y el papel no salio. Reintentar duplica.
+  // Si los dos son true la nota ya se emitio (el dialogo muestra el resultado);
+  // si los dos son false no hay nada que duplicar y reintentar es legitimo
+  // (POS80 muda y backend que no registro, o canal fiscal bloqueado).
+  const mustNotReemit = outcome.printed !== outcome.persisted;
+
   // Canal fiscal: la nota no salio por ningun canal propio. El motivo concreto
   // (servicio activo, maquina muda) es lo unico que hay para mostrar.
-  if (outcome.blockedReason) return { ok: false, message: outcome.blockedReason };
+  if (outcome.blockedReason) {
+    return { ok: false, message: outcome.blockedReason, mustNotReemit };
+  }
 
   if (!outcome.printed) {
     const motivo = outcome.printError || "el comprobante no salió por la POS80";
     return {
       ok: false,
+      mustNotReemit,
       message: outcome.persisted
         ? `La nota de crédito quedó registrada, pero el comprobante no salió por la POS80: ${motivo}. No vuelvas a emitir la nota para no duplicarla; pedí el comprobante desde soporte.`
         : `No se pudo imprimir la nota de crédito: ${motivo}. La nota no quedó emitida.`,
@@ -750,13 +770,18 @@ export function describeNoteFallbackOutcome(
   if (!outcome.persisted) {
     return {
       ok: false,
+      mustNotReemit,
       message: `El comprobante salió por la POS80 pero la nota no quedó registrada: ${
         outcome.persistError ?? "el backend no confirmó el registro"
       }. No vuelvas a emitir la nota: verificá el listado y regularizá el registro desde soporte.`,
     };
   }
 
-  return { ok: true, message: `Nota de Crédito emitida: ${outcome.numero_control}` };
+  return {
+    ok: true,
+    mustNotReemit,
+    message: `Nota de Crédito emitida: ${outcome.numero_control}`,
+  };
 }
 
 export async function runNoteFallback<TPayload extends object>(

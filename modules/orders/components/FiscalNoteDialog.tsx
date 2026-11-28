@@ -39,6 +39,11 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
   const [errorMsg, setErrorMsg] = useState("");
   const [resultMsg, setResultMsg] = useState("");
   const [fiscalFallback, setFiscalFallback] = useState(false);
+  // Estado terminal: la nota YA existe por un lado (papel o registro) y falta el
+  // otro. Volver al formulario habilitaria "Emitir NC" otra vez y duplicaria la
+  // nota de credito (control y tracking_id nuevos = doble devolucion).
+  const [mustNotReemit, setMustNotReemit] = useState(false);
+  const [noteControl, setNoteControl] = useState("");
 
   const defaultItems: FiscalNoteItem[] = useMemo(
     () =>
@@ -203,6 +208,11 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
       // muestra el motivo concreto.
       const display = describeNoteFallbackOutcome(outcome);
       if (!display.ok) {
+        // El flag sale de los dos hechos (papel y registro), no del texto: con
+        // la nota ya existente el formulario no se vuelve a ofrecer y la unica
+        // salida es Cerrar (regularizacion por soporte).
+        setMustNotReemit(display.mustNotReemit);
+        setNoteControl(display.mustNotReemit ? outcome.numero_control : "");
         setStep("error");
         setErrorMsg(display.message);
         return;
@@ -350,7 +360,7 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
               </button>
               <button
                 onClick={() => handleEmit()}
-                disabled={!motivo.trim() || !usesDigitalBilling}
+                disabled={!motivo.trim() || !usesDigitalBilling || mustNotReemit}
                 className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg disabled:opacity-50"
               >
                 Emitir NC
@@ -373,12 +383,35 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
               <HiOutlineXCircle size={48} />
             </div>
             <p className="text-sm text-slate-500 max-w-md">{errorMsg}</p>
-            <button
-              onClick={() => setStep("form")}
-              className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
-            >
-              Volver
-            </button>
+
+            {/* Estado terminal: el control identifica la nota que ya existe. */}
+            {mustNotReemit && (
+              <div className="w-full max-w-md bg-slate-50 rounded-2xl p-4 border border-slate-100 text-left">
+                <span className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">
+                  Comprobante de la nota
+                </span>
+                <span className="text-sm font-bold text-slate-800 font-mono">
+                  {noteControl || "sin número de control"}
+                </span>
+              </div>
+            )}
+
+            {mustNotReemit ? (
+              // Sin "Volver": el formulario dejaria emitir la nota otra vez.
+              <button
+                onClick={onClose}
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
+              >
+                Cerrar
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep("form")}
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm"
+              >
+                Volver
+              </button>
+            )}
           </div>
         )}
 

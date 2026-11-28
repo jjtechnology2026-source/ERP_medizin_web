@@ -10,6 +10,8 @@ import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import { buildSaleReprintTicket } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
+import { reprintBlockReason } from "@/modules/cash-register/lib/reprint-channel";
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -85,6 +87,18 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
     if (!visibleOrder) return;
     setIsReprinting(true);
     try {
+      // La reimpresion es un documento derivado: el canal se DETECTA con
+      // lectura fresca antes de imprimir y no se cruza de canal (Specs S3/S5,
+      // Regla R7). Reimprimir una venta FISCAL por la POS80 fabricaria un
+      // documento no fiscal de una venta fiscal; una venta no fiscal (la que ya
+      // emitio la POS80) se reimprime igual que siempre, en cualquier canal.
+      const detected = await resolveTerminalChannel();
+      const blocked = reprintBlockReason(visibleOrder, detected);
+      if (blocked) {
+        // No se imprime nada: el motivo dice a que canal hay que ir.
+        alert(blocked);
+        return;
+      }
       // WebUSB exige gesto del usuario para el pairing: enganchamos la POS80
       // en el mismo click, antes de renderizar/imprimir.
       await prepairPrinter();

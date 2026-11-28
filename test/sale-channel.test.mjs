@@ -27,6 +27,7 @@ import {
   cashierAccountantService,
 } from "./fixtures/cashier-service-mock.mjs";
 import fiscalPrinterClient from "../modules/cash-register/api/fiscal-printer-client.ts";
+import { __resetChannelMemory } from "../modules/cash-register/lib/channel-detect.ts";
 import { useAuthStore } from "../modules/auth/store/useAuthStore.ts";
 import { useCurrentOrderStore } from "../modules/cash-register/store/current-order.store.ts";
 import { useCurrencyStore } from "../modules/core/store/currency.store.ts";
@@ -169,6 +170,10 @@ const healthAbsent = async () => {
 };
 
 beforeEach(() => {
+  // La gracia de reinicio es memoria de modulo: sin esto, una lectura buena de
+  // un caso deja la gracia abierta y el siguiente caso lee "ausente" como
+  // "reiniciando" (ver channel-detect.test.mjs).
+  __resetChannelMemory();
   invoice.calls = [];
   submits.length = 0;
   events.length = 0;

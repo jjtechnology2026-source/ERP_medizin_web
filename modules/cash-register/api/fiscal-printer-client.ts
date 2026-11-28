@@ -1,5 +1,10 @@
 const BASE_URL = "http://127.0.0.1:8000";
 
+/** Opciones de una lectura de estado: `signal` aborta y cierra el socket. */
+export interface FiscalRequestOptions {
+  signal?: AbortSignal;
+}
+
 export type FiscalBrand = "hka80" | "bematech";
 
 export interface FiscalSerialPort {
@@ -122,11 +127,21 @@ export interface FiscalReportXResponse {
 }
 
 const api = {
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  /**
+   * `options.signal` aborta la peticion y con ella el socket: sin eso, una
+   * lectura que se da por vencida deja la conexion abierta.
+   */
+  async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options?: FiscalRequestOptions,
+  ): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
+      signal: options?.signal,
     });
     if (!res.ok) {
       const detail = await res.json().catch(() => ({ detail: res.statusText }));
@@ -135,8 +150,11 @@ const api = {
     return res.json();
   },
 
-  async getHealth() {
-    return api.request<any>("GET", `${brandPrefix()}/health`);
+  // `GET /health` y `GET /printer/status` son lecturas de estado: el que
+  // pregunta les pone tope. El resto (facturar, Z) necesita su propio tiempo:
+  // un tope de 2 s ahi rompe la emision del comprobante.
+  async getHealth(options?: FiscalRequestOptions) {
+    return api.request<any>("GET", `${brandPrefix()}/health`, undefined, options);
   },
 
   async setSerialPort(serialPort: string): Promise<{ status: string; serial_port: string }> {
@@ -157,8 +175,8 @@ const api = {
     return api.request("POST", `${brandPrefix()}/config/detect`);
   },
 
-  async getPrinterStatus() {
-    return api.request<any>("GET", `${brandPrefix()}/printer/status`);
+  async getPrinterStatus(options?: FiscalRequestOptions) {
+    return api.request<any>("GET", `${brandPrefix()}/printer/status`, undefined, options);
   },
 
   async createInvoice(payload: FiscalInvoicePayload): Promise<FiscalInvoiceResponse> {

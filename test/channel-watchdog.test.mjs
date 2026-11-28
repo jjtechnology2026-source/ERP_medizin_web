@@ -25,7 +25,7 @@ import {
   createChannelWatchdog,
   channelWatchdog,
 } from "../modules/cash-register/lib/channel-watchdog.ts";
-import { resolveSaleChannel } from "../modules/cash-register/lib/channel-detect.ts";
+import { resolveSaleChannel, __resetChannelMemory } from "../modules/cash-register/lib/channel-detect.ts";
 
 /**
  * Deja correr las promesas pendientes sin esperar ningun intervalo real: solo
@@ -257,6 +257,10 @@ test("la ausencia sostenida sí publica el cambio a POS80", async () => {
   await flush();
   assert.equal(watchdog.getSnapshot().decision.channel, "fiscal");
 
+  // El servicio ya no esta en la terminal (desinstalado), no se esta
+  // reiniciando: sin memoria reciente de una lectura buena, la negativa de
+  // conexion ES ausencia. La gracia de 15 s se prueba en `channel-detect`.
+  __resetChannelMemory();
   serviceDown = true;
   await scheduler.advance(INTERVAL);
 
@@ -363,6 +367,58 @@ test("start() con la pestaña oculta espera al evento de visibilidad", async () 
   assert.equal(ctx.calls(), 1);
 
   ctx.watchdog.stop();
+});
+
+test("StrictMode start→stop→start con un sondeo en vuelo deja un timer y un oyente", async () => {
+  // StrictMode monta, desmonta y vuelve a montar: el sondeo del primer montaje
+  // sigue en vuelo cuando llega el segundo `start()`.
+  let release = () => {};
+  const inFlight = new Promise((resolve) => {
+    release = resolve;
+  });
+  const scheduler = fakeScheduler();
+  const visibility = fakeVisibility();
+  let calls = 0;
+
+  const watchdog = createChannelWatchdog({
+    resolve: async () => {
+      calls += 1;
+      await inFlight;
+      return FISCAL;
+    },
+    now: scheduler.now,
+    setTimeout: scheduler.setTimeout,
+    clearTimeout: scheduler.clearTimeout,
+    isHidden: visibility.isHidden,
+    onVisibilityChange: visibility.onVisibilityChange,
+    intervalMs: INTERVAL,
+    staleAfterMs: STALE_AFTER,
+  });
+
+  watchdog.start();
+  await flush();
+  assert.equal(calls, 1, "el primer montaje sondea");
+  assert.equal(visibility.listeners(), 1);
+
+  watchdog.stop();
+  assert.equal(visibility.listeners(), 0, "el desmontaje suelta su oyente");
+  watchdog.start();
+  await flush();
+
+  assert.equal(visibility.listeners(), 1, "el segundo montaje deja un solo oyente");
+  assert.equal(calls, 1, "no se dispara un segundo sondeo con uno en vuelo");
+  assert.equal(scheduler.pending(), 0, "tampoco deja un timer de mas");
+
+  release();
+  await flush();
+
+  assert.equal(scheduler.pending(), 1, "un solo timer vivo");
+  assert.equal(visibility.listeners(), 1, "y un solo oyente");
+  assert.equal(calls, 1, "el sondeo en vuelo no se duplica");
+
+  watchdog.stop();
+  assert.equal(scheduler.pending(), 0);
+  assert.equal(visibility.listeners(), 0);
 });
 
 test("el vigilante de la terminal expone la forma de useSyncExternalStore", () => {

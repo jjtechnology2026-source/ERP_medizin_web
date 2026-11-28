@@ -311,8 +311,15 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       // Codigos cortos a proposito: el texto largo vive en `reason`, para la UI.
       const stampChannel = (chosen: ChannelDecision) => {
         order.canal = chosen.channel;
+        // Tres estados y no dos: un servicio que CONTESTA mal (timeout, 500) no
+        // es lo mismo que uno que no esta instalado, y confundirlos es lo que
+        // hacia que una venta sin comprobante saliera por POS80 en silencio.
         order.motivoCanal =
-          chosen.service === "vivo" ? "servicio_presente" : "servicio_ausente";
+          chosen.service === "vivo"
+            ? "servicio_presente"
+            : chosen.service === "sin_respuesta"
+              ? "servicio_sin_respuesta"
+              : "servicio_ausente";
       };
 
       /** Canal POS80: el ticket ES el documento. Sin papel no hay venta. */

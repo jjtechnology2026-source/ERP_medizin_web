@@ -17,15 +17,27 @@
 // no alcanza. La tarea de actualizacion del servicio lo reinicia cada 30 minutos
 // (`public/install-fiscal-service.ps1:311`), y esa ventana no puede imprimir un
 // ticket POS80 que la maquina fiscal nunca va a registrar.
+//
+// Y sobre todo: solo una NEGATIVA DE CONEXION demuestra ausencia. Un timeout, un
+// 500 o un `status` distinto de `ok` prueban que el proceso existe y esta
+// atendiendo, aunque no pueda emitir. Ese tercer estado (`sin_respuesta`) es
+// error con motivo (S3, S6), jamas un ticket por POS80.
 
 import fiscalPrinterClient from "../api/fiscal-printer-client.ts";
 import { isPrinterPaired } from "./pos80-usb.ts";
 
 export type SaleChannel = "fiscal" | "pos80";
 
-export type ServiceState = "vivo" | "ausente";
+/**
+ * `vivo` = contesta `/health` operativo. `sin_respuesta` = existe (contesto algo
+ * distinto de `ok`, o fallo sin negar la conexion, o se esta reiniciando) pero
+ * no puede emitir. `ausente` = nadie atiende el puerto: la unica evidencia de
+ * que el servicio no esta instalado.
+ */
+export type ServiceState = "vivo" | "sin_respuesta" | "ausente";
 
-export type MachineState = "ok" | "no_responde";
+/** `desconocido` = no se consulto la maquina porque el servicio no respondia. */
+export type MachineState = "ok" | "no_responde" | "desconocido";
 
 export interface ChannelDecision {
   /** Canal con el que se emite el comprobante de esta venta. */
@@ -71,6 +83,32 @@ export interface ResolveChannelOptions {
 
 export const REASON_SERVICE_PRESENT = "El servicio fiscal está activo en esta terminal.";
 export const REASON_SERVICE_ABSENT = "El servicio fiscal no está instalado o no responde.";
+export const REASON_SERVICE_UNRESPONSIVE =
+  "El servicio fiscal está presente pero no está operativo";
+
+/** Tope de cada lectura, en ms. La venta no espera mas que esto por el canal. */
+const DEFAULT_TIMEOUT_MS = 2000;
+
+/**
+ * Ventana de gracia de reinicio, en ms. La tarea de actualizacion del servicio
+ * lo reinicia (`Stop-Process` + espera de 2 s, `public/install-fiscal-service.ps1`):
+ * esa ventana de negativa de conexion NO es ausencia, es un reinicio.
+ */
+const RESTART_GRACE_MS = 15_000;
+
+/**
+ * Instante de la ultima lectura exitosa de `/health` en esta pestana.
+ *
+ * Vive en el modulo a proposito: cada venta resuelve el canal con una lectura
+ * fresca (Spec S5) y, sin esta memoria, un reinicio del servicio se leeria como
+ * "no esta instalado" y la venta saldria por POS80 sin comprobante fiscal.
+ */
+let lastHealthyAt: number | null = null;
+
+/** Solo para tests: cada caso arranca sin memoria de la terminal. */
+export function __resetChannelMemory(): void {
+  lastHealthyAt = null;
+}
 
 /**
  * Seams reales de esta terminal: el servicio fiscal por HTTP local y la POS80
@@ -79,17 +117,82 @@ export const REASON_SERVICE_ABSENT = "El servicio fiscal no está instalado o no
  * Esta lista vive aca y en ningun otro archivo: el store y el dialogo de pago
  * consumen `resolveTerminalChannel()` en vez de repetir las dependencias, que es
  * lo que terminaria en dos detecciones distintas para la misma terminal.
+ *
+ * Cada lectura lleva su tope: `fetch` sin `signal` deja el socket abierto, y con
+ * el tope de ~6 conexiones por origen del navegador el canal quedaria atascado.
  */
-const terminalSeams: ChannelSeams = {
-  health: () => fiscalPrinterClient.getHealth(),
-  printerStatus: () => fiscalPrinterClient.getPrinterStatus(),
-  pos80Paired: () => isPrinterPaired(),
-};
+function terminalSeams(timeoutMs: number): ChannelSeams {
+  return {
+    health: () =>
+      fiscalPrinterClient.getHealth({ signal: timeoutSignal(timeoutMs) }),
+    printerStatus: () =>
+      fiscalPrinterClient.getPrinterStatus({ signal: timeoutSignal(timeoutMs) }),
+    pos80Paired: () => isPrinterPaired(),
+  };
+}
+
+/**
+ * `AbortSignal.timeout` no existe en todos los entornos donde este modulo se
+ * evalua (SSR, Node viejo): sin el, la lectura queda con el tope de
+ * `withTimeout`, que no aborta.
+ */
+function timeoutSignal(ms: number): AbortSignal | undefined {
+  if (typeof AbortSignal === "undefined") return undefined;
+  const factory = AbortSignal as typeof AbortSignal & {
+    timeout?: (ms: number) => AbortSignal;
+  };
+  return typeof factory.timeout === "function" ? factory.timeout(ms) : undefined;
+}
 
 function messageOf(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   const shaped = error as { message?: string } | null;
   return shaped?.message || fallback;
+}
+
+/**
+ * Solo una NEGATIVA DE CONEXION demuestra ausencia: nadie atendio en el puerto.
+ * Todo lo demas (un 500, un estado distinto de `ok`, un timeout, un abort)
+ * demuestra que el proceso existe, aunque no pueda emitir.
+ */
+const CONNECTION_REFUSED =
+  /failed to fetch|fetch failed|econnrefused|err_connection_refused|networkerror|network error|connection refused/i;
+
+function errorTrail(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current === "string") {
+      parts.push(current);
+      break;
+    }
+    const shaped = current as {
+      name?: unknown;
+      message?: unknown;
+      code?: unknown;
+      cause?: unknown;
+    };
+    if (shaped.name) parts.push(String(shaped.name));
+    if (shaped.message) parts.push(String(shaped.message));
+    if (typeof shaped.code === "string") parts.push(shaped.code);
+    current = shaped.cause;
+  }
+  return parts.join(" | ");
+}
+
+function isConnectionRefusal(error: unknown): boolean {
+  return CONNECTION_REFUSED.test(errorTrail(error));
+}
+
+/**
+ * Ventana de reinicio abierta, en ms desde la ultima lectura buena. `null` si no
+ * hubo lectura buena o si ya paso la gracia: ahi la negativa si es ausencia.
+ */
+function restartGraceMs(healthyAt: number | null): number | null {
+  if (healthyAt === null) return null;
+  const elapsed = Date.now() - healthyAt;
+  if (elapsed < 0 || elapsed >= RESTART_GRACE_MS) return null;
+  return elapsed;
 }
 
 async function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
@@ -108,30 +211,64 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+interface ServiceProbe {
+  state: ServiceState;
+  /** Motivo concreto del fallo (Spec S6); vacio cuando el servicio esta vivo. */
+  error?: string;
+}
+
 /**
- * Sondea el servicio con confirmacion. Devuelve el estado y, si respondio, la
- * unica senal que hace falta para el canal: vivo.
+ * Sondea el servicio con confirmacion y clasifica lo leido: vivo, presente pero
+ * no operativo, o ausente. La distincion es el corazon de S3: confundir
+ * "trabado" con "ausente" elige POS80 y la venta se emite sin comprobante.
  */
 async function probeService(
   seams: ChannelSeams,
   attempts: number,
   delayMs: number,
   timeoutMs: number,
-): Promise<{ state: ServiceState; error?: string }> {
+): Promise<ServiceProbe> {
+  // Memoria al inicio del sondeo: si el servicio respondia hace instantes y ahora
+  // rechaza la conexion, se esta reiniciando.
+  const healthyBefore = lastHealthyAt;
   let lastError = "";
+  // Una sola lectura que no sea negativa de conexion prueba que el proceso existe.
+  let sawPresence = false;
+
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const health = await withTimeout(seams.health(), timeoutMs, "health");
       // `status: "ok"` es el contrato actual del servicio; un objeto sin status
       // se acepta como vivo porque el solo hecho de responder ya prueba proceso.
-      const status = (health as { status?: string } | null)?.status;
-      if (status === undefined || status === "ok") return { state: "vivo" };
-      lastError = `estado del servicio: ${status}`;
+      const status = (health as { status?: unknown } | null)?.status;
+      if (status === undefined || status === "ok") {
+        lastHealthyAt = Date.now();
+        return { state: "vivo" };
+      }
+      // Contesto, con un estado que no es operativo: el servicio EXISTE.
+      sawPresence = true;
+      lastError = `estado del servicio: ${String(status)}`;
     } catch (error) {
       lastError = messageOf(error, "el servicio fiscal no respondió");
+      if (!isConnectionRefusal(error)) sawPresence = true;
     }
     if (attempt < attempts) await sleep(delayMs);
   }
+
+  // Cualquier lectura que no sea negativa de conexion descarta la ausencia.
+  if (sawPresence) return { state: "sin_respuesta", error: lastError };
+
+  // Ausencia solo si la negativa de conexion no cae en la ventana de reinicio.
+  const grace = restartGraceMs(healthyBefore);
+  if (grace !== null) {
+    return {
+      state: "sin_respuesta",
+      error: `el servicio se está reiniciando (última respuesta hace ${(
+        grace / 1000
+      ).toFixed(1)} s): ${lastError}`,
+    };
+  }
+
   return { state: "ausente", error: lastError };
 }
 
@@ -145,9 +282,23 @@ export async function resolveSaleChannel(
 ): Promise<ChannelDecision> {
   const attempts = Math.max(1, options.absenceAttempts ?? 2);
   const delayMs = Math.max(0, options.confirmDelayMs ?? 150);
-  const timeoutMs = Math.max(1, options.timeoutMs ?? 2000);
+  const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   const service = await probeService(seams, attempts, delayMs, timeoutMs);
+
+  // Servicio PRESENTE pero no operativo: existe, solo no puede emitir. Es error
+  // con motivo (S3, S6), nunca POS80 y nunca consulta de la POS80.
+  if (service.state === "sin_respuesta") {
+    return {
+      channel: "fiscal",
+      ready: false,
+      service: "sin_respuesta",
+      machine: "desconocido",
+      reason: `${REASON_SERVICE_UNRESPONSIVE}: ${
+        service.error || "sin respuesta del servicio"
+      }. No se emitió comprobante.`,
+    };
+  }
 
   // Servicio ausente (sostenido): el unico caso en que el canal es POS80.
   if (service.state === "ausente") {
@@ -207,5 +358,6 @@ export async function resolveSaleChannel(
 export function resolveTerminalChannel(
   options: ResolveChannelOptions = {},
 ): Promise<ChannelDecision> {
-  return resolveSaleChannel(terminalSeams, options);
+  const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  return resolveSaleChannel(terminalSeams(timeoutMs), options);
 }

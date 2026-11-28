@@ -17,7 +17,7 @@
  *
  * Run: node --experimental-strip-types --test test/note-channel.test.mjs
  */
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -27,8 +27,16 @@ import {
   runNoteFallback,
   runXReportFallback,
 } from "../modules/cash-register/lib/fiscal-fallback-flow.ts";
-import { resolveSaleChannel } from "../modules/cash-register/lib/channel-detect.ts";
+import {
+  resolveSaleChannel,
+  __resetChannelMemory,
+} from "../modules/cash-register/lib/channel-detect.ts";
 import { renderNoFiscalTicket } from "../modules/cash-register/lib/pos80-print.ts";
+
+beforeEach(() => {
+  // Memoria de modulo: la gracia de reinicio no puede cruzar casos.
+  __resetChannelMemory();
+});
 
 // Sin esperas entre lecturas de confirmacion: los tests no pausan el proceso.
 const FAST = { absenceAttempts: 1, confirmDelayMs: 0 };
@@ -320,4 +328,124 @@ test("NC de la caja: papel impreso sin registro NO se anuncia emitida (R6, direc
   assert.match(display.message, /no quedó registrada/i);
   assert.match(display.message, /el backend rechazó la nota/i, "conserva el motivo del backend");
   assert.match(display.message, /no vuelvas a emitir/i, "no invita a duplicar el comprobante");
+});
+
+// --- Flag ejecutable: la pantalla no puede ofrecer reemitir ------------------
+//
+// `mustNotReemit` es un HECHO del resultado, no una frase del mensaje: sale de
+// `printed` y `persisted`. Si el documento ya existe por un lado (papel o
+// registro) y falta el otro, volver al formulario y emitir otra vez genera un
+// control y un tracking_id nuevos, o sea una segunda nota de credito y una
+// doble devolucion. El dialogo usa este flag para no ofrecer "Emitir NC".
+
+/** Efecto observable de la nota en el backend: cuantas veces se registro. */
+function noteCreateSpy(result = { success: true }) {
+  const calls = [];
+  const createNote = async (payload) => {
+    calls.push(payload);
+    if (result.error) throw new Error(result.error);
+    return { success: true };
+  };
+  return { createNote, calls };
+}
+
+test("mustNotReemit: papel no impreso pero nota registrada -> true (el backend ya tiene la nota)", async () => {
+  const decision = await resolveSaleChannel(seams(SIN_SERVICIO), FAST);
+  const pos80 = pos80Spy({ printed: false, via: "usb", error: "La impresora POS80 no esta conectada" });
+  const backend = noteCreateSpy();
+
+  const outcome = await runNoteFallback(
+    noteInputs({ channel: decision, print: pos80.print, createNote: backend.createNote }),
+  );
+  const display = describeNoteFallbackOutcome(outcome);
+
+  assert.equal(pos80.tickets.length, 1, "se intento imprimir por el unico canal que existe");
+  assert.equal(outcome.printed, false);
+  assert.equal(outcome.persisted, true, "la nota si quedo registrada en el backend");
+  assert.equal(backend.calls.length, 1);
+  assert.equal(display.ok, false, "sin papel no se anuncia emitida");
+  assert.equal(
+    display.mustNotReemit,
+    true,
+    "el documento existe en el backend: reemitir seria una segunda nota y una doble devolucion",
+  );
+});
+
+test("mustNotReemit: ni papel ni registro -> falsy (reintentar es legitimo)", async () => {
+  const decision = await resolveSaleChannel(seams(SIN_SERVICIO), FAST);
+  const pos80 = pos80Spy({ printed: false, via: "usb", error: "La impresora POS80 no esta conectada" });
+  const backend = noteCreateSpy({ error: "el backend rechazó la nota" });
+
+  const outcome = await runNoteFallback(
+    noteInputs({ channel: decision, print: pos80.print, createNote: backend.createNote }),
+  );
+  const display = describeNoteFallbackOutcome(outcome);
+
+  assert.equal(outcome.printed, false);
+  assert.equal(outcome.persisted, false, "no hay documento en ningun lado");
+  assert.equal(display.ok, false);
+  assert.ok(
+    !display.mustNotReemit,
+    "nada se emitio: el operador puede reintentar sin duplicar nada",
+  );
+});
+
+test("mustNotReemit: papel y registro -> la nota queda emitida y el flag es falsy", async () => {
+  const decision = await resolveSaleChannel(seams(SIN_SERVICIO), FAST);
+  const pos80 = pos80Spy();
+  const backend = noteCreateSpy();
+
+  const outcome = await runNoteFallback(
+    noteInputs({ channel: decision, print: pos80.print, createNote: backend.createNote }),
+  );
+  const display = describeNoteFallbackOutcome(outcome);
+
+  assert.equal(pos80.tickets.length, 1);
+  assert.equal(outcome.printed, true);
+  assert.equal(outcome.persisted, true);
+  assert.equal(display.ok, true);
+  assert.ok(
+    !display.mustNotReemit,
+    "la nota ya se emitio: el dialogo muestra el resultado, no un bloqueo de reemision",
+  );
+});
+
+test("mustNotReemit: papel impreso sin registro -> true (el papel ya existe y reemitir duplicaria)", async () => {
+  const decision = await resolveSaleChannel(seams(SIN_SERVICIO), FAST);
+  const pos80 = pos80Spy();
+  const backend = noteCreateSpy({ error: "el backend rechazó la nota" });
+
+  const outcome = await runNoteFallback(
+    noteInputs({ channel: decision, print: pos80.print, createNote: backend.createNote }),
+  );
+  const display = describeNoteFallbackOutcome(outcome);
+
+  assert.equal(outcome.printed, true, "el papel ya salio");
+  assert.equal(outcome.persisted, false, "pero el sistema no la registro");
+  assert.equal(display.ok, false);
+  assert.equal(
+    display.mustNotReemit,
+    true,
+    "el comprobante esta en la mano del cliente: un segundo intento duplicaria la devolucion",
+  );
+});
+
+test("mustNotReemit: canal fiscal bloqueado -> falsy (no se emitio nada, aunque sea en otro canal)", async () => {
+  const decision = await resolveSaleChannel(seams(MAQUINA_MUDA), FAST);
+  assert.equal(decision.channel, "fiscal");
+  const pos80 = pos80Spy();
+  const backend = noteCreateSpy();
+
+  const outcome = await runNoteFallback(
+    noteInputs({ channel: decision, print: pos80.print, createNote: backend.createNote }),
+  );
+  const display = describeNoteFallbackOutcome(outcome);
+
+  assert.equal(pos80.tickets.length, 0);
+  assert.equal(backend.calls.length, 0);
+  assert.equal(display.ok, false);
+  assert.ok(
+    !display.mustNotReemit,
+    "ni papel ni registro: el bloqueo es de canal, no de una nota existente",
+  );
 });

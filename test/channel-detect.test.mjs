@@ -10,22 +10,35 @@
  * siendo fiscal y `ready` es false: NUNCA POS80 (S3). Si esto cambia, el
  * fallback vuelve por la puerta de atras.
  *
+ * "El servicio existe" no es lo mismo que "el servicio responde": un timeout, un
+ * 500 o un `status` distinto de `ok` prueban que el proceso esta ahi (el canal
+ * sigue siendo fiscal y `ready` es false). Solo la NEGATIVA DE CONEXION es
+ * evidencia de ausencia, y se confirma con dos lecturas.
+ *
  * Todo corre con seams inyectados: sin red, sin WebUSB y sin servicio fiscal.
  *
  * Run: npm run test:channel
  */
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   resolveSaleChannel,
   resolveTerminalChannel,
+  __resetChannelMemory,
 } from "../modules/cash-register/lib/channel-detect.ts";
 
 // Sin esperas entre lecturas de confirmacion: los tests no pausan el proceso.
 const FAST = { absenceAttempts: 1, confirmDelayMs: 0 };
 // Un hipo aislado no declara ausencia: hacen falta dos lecturas fallidas.
 const CON_CONFIRMACION = { absenceAttempts: 2, confirmDelayMs: 0 };
+
+/**
+ * La gracia de reinicio (15 s) es memoria real del modulo: sin este reset un
+ * caso que ve el servicio vivo contaminaria al siguiente y la ausencia de este
+ * ultimo se leeria como "se esta reiniciando".
+ */
+beforeEach(() => __resetChannelMemory());
 
 /** Seams por defecto: servicio vivo, maquina ok, POS80 sin emparejar. */
 function seams(overrides = {}) {
@@ -145,6 +158,103 @@ test("health y pos80Paired lanzan: no explota y queda no listo", async () => {
   assert.equal(decision.ready, false);
   assert.equal(decision.service, "ausente");
   assert.match(decision.reason, /WebUSB no disponible/i, "informa el motivo del fallo");
+});
+
+/**
+ * Las tres caras del mismo defecto: el servicio EXISTE (esta instalado y su
+ * proceso atiende) pero no puede emitir. Bajo ninguna circunstancia eso puede
+ * elegir POS80: seria el fallback que S3 prohibe, y encima sin comprobante.
+ */
+const CORTO = { absenceAttempts: 2, confirmDelayMs: 0, timeoutMs: 50 };
+
+test("health que nunca responde: el servicio existe, canal fiscal y no listo (S3)", async () => {
+  const [pos80Paired, pos80] = counted(true);
+  const decision = await resolveSaleChannel(
+    seams({ health: () => new Promise(() => {}), pos80Paired }),
+    CORTO,
+  );
+  assert.equal(decision.channel, "fiscal", "un timeout no es ausencia: la venta no sale por POS80");
+  assert.equal(decision.ready, false, "y no se puede emitir: es error, no fallback");
+  assert.notEqual(decision.service, "ausente", "el servicio esta: solo no responde");
+  assert.equal(decision.service, "sin_respuesta");
+  assert.match(decision.reason, /sin respuesta/i, "el motivo dice que no respondio (S6)");
+  assert.equal(pos80.calls, 0, "con el servicio presente la POS80 no se consulta siquiera");
+});
+
+test("health que contesta 500: el servicio existe, canal fiscal y no listo (S3)", async () => {
+  const [pos80Paired, pos80] = counted(true);
+  const decision = await resolveSaleChannel(
+    seams({
+      health: async () => {
+        throw new Error("Fiscal printer error: 500");
+      },
+      pos80Paired,
+    }),
+    CORTO,
+  );
+  assert.equal(decision.channel, "fiscal", "un 500 prueba que el proceso atiende");
+  assert.equal(decision.ready, false);
+  assert.equal(decision.service, "sin_respuesta");
+  assert.match(decision.reason, /500/, "conserva el motivo concreto (S6)");
+  assert.equal(pos80.calls, 0);
+});
+
+test("health que contesta { status: 'arrancando' }: canal fiscal, no listo (S3)", async () => {
+  const [pos80Paired, pos80] = counted(true);
+  const decision = await resolveSaleChannel(
+    seams({ health: async () => ({ status: "arrancando" }), pos80Paired }),
+    CORTO,
+  );
+  assert.equal(decision.channel, "fiscal", "el servicio contesto: no esta ausente");
+  assert.equal(decision.ready, false);
+  assert.equal(decision.service, "sin_respuesta");
+  assert.match(decision.reason, /arrancando/, "dice en que estado esta (S6)");
+  assert.equal(pos80.calls, 0);
+});
+
+test("negativa de conexion confirmada y sin lectura previa: canal POS80 (S2)", async () => {
+  // Una lectura buena antes, y el reset: sin memoria no hay reinicio que valga.
+  const alive = await resolveSaleChannel(seams(), FAST);
+  assert.equal(alive.service, "vivo");
+  __resetChannelMemory();
+
+  let reads = 0;
+  const decision = await resolveSaleChannel(
+    seams({
+      health: async () => {
+        reads += 1;
+        throw new TypeError("Failed to fetch");
+      },
+      pos80Paired: async () => true,
+    }),
+    CORTO,
+  );
+  assert.equal(reads, 2, "la ausencia se confirma con dos lecturas");
+  assert.equal(decision.channel, "pos80");
+  assert.equal(decision.service, "ausente");
+  assert.equal(decision.ready, true);
+});
+
+test("negativa de conexion justo despues de una lectura buena: es reinicio, no ausencia", async () => {
+  const alive = await resolveSaleChannel(seams(), FAST);
+  assert.equal(alive.channel, "fiscal");
+  assert.equal(alive.service, "vivo");
+
+  const [pos80Paired, pos80] = counted(true);
+  const decision = await resolveSaleChannel(
+    seams({
+      health: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      pos80Paired,
+    }),
+    CORTO,
+  );
+  assert.equal(decision.channel, "fiscal", "un reinicio no manda la venta a POS80");
+  assert.equal(decision.ready, false);
+  assert.equal(decision.service, "sin_respuesta");
+  assert.match(decision.reason, /reinici/i, "dice que el servicio se esta reiniciando (S6)");
+  assert.equal(pos80.calls, 0);
 });
 
 test("resolveTerminalChannel existe para el store y el dialogo de pago (sin red al importar)", () => {
