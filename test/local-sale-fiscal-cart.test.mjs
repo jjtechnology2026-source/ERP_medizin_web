@@ -43,6 +43,8 @@ const submitControls = [];
 
 const original = {
   createInvoice: fiscalPrinterClient.createInvoice,
+  getHealth: fiscalPrinterClient.getHealth,
+  getPrinterStatus: fiscalPrinterClient.getPrinterStatus,
   submitOrder: cashierAccountantService.submitOrder,
   submitQuote: cashierAccountantService.submitQuote,
   submitDeliveryNote: cashierAccountantService.submitDeliveryNote,
@@ -123,6 +125,11 @@ beforeEach(() => {
     lastQuoteNumber: null,
   });
 
+  // Deteccion de canal: el servicio fiscal responde para que el canal sea
+  // fiscal, sin salir a la red (127.0.0.1:8000 no contesta en los tests).
+  fiscalPrinterClient.getHealth = async () => ({ status: "ok" });
+  fiscalPrinterClient.getPrinterStatus = async () => ({ status: "ok" });
+
   fiscalPrinterClient.createInvoice = async (payload) => {
     invoice.calls.push(payload);
     const total = (payload?.items ?? []).reduce(
@@ -164,6 +171,8 @@ beforeEach(() => {
 
 test.after(() => {
   fiscalPrinterClient.createInvoice = original.createInvoice;
+  fiscalPrinterClient.getHealth = original.getHealth;
+  fiscalPrinterClient.getPrinterStatus = original.getPrinterStatus;
   cashierAccountantService.submitOrder = original.submitOrder;
   cashierAccountantService.submitQuote = original.submitQuote;
   cashierAccountantService.submitDeliveryNote = original.submitDeliveryNote;

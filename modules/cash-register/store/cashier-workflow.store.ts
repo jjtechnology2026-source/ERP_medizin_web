@@ -12,11 +12,19 @@ import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-fl
 import { persistLocalSale, quoteBlockReasonForCart, issuedFiscalForCart, cartSignature, matchesControlNumber, type IssuedFiscalDocument } from "@/modules/cash-register/lib/local-sale-persist";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
 import {
+  resolveTerminalChannel,
+  type ChannelDecision,
+} from "@/modules/cash-register/lib/channel-detect";
+import {
   resolveAuthorizedCajaId,
   describeSessionResolutionError,
   describeSessionBindingMismatch,
   decideSessionAutoOpen,
 } from "@/modules/cash-register/lib/cash-session-binding";
+
+// La deteccion de canal vive en `lib/channel-detect.ts` (`resolveTerminalChannel`):
+// el store y el dialogo de pago usan el mismo seam real, sin duplicar la lista
+// de dependencias del servicio fiscal ni de la POS80.
 
 interface CashierWorkflowStore extends CashierWorkflowState {
   pharmacyId: string | undefined;
@@ -287,10 +295,23 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
 
     set({ isSubmitting: true, errorMessage: null });
     try {
-      // Fallback "No Fiscal": imprime en la POS80 y persiste la venta. Es el
-      // unico camino cuando la fiscal no puede emitir el comprobante.
-      const runFallback = async () => {
-        const outcome = await runOrderFallback({
+      // El canal de la terminal se DETECTA, no se configura: si el servicio
+      // fiscal responde, el comprobante es fiscal; si no esta, sale por la
+      // POS80. Ver `lib/channel-detect.ts` y
+      // odd/tasks/canal-comprobante-por-caja.md (Specs S1-S3).
+      //
+      // Se resuelve una vez por venta y con lectura fresca: nunca se reusa el
+      // valor de un chequeo anterior (Spec S5).
+      let decisionPromise: Promise<ChannelDecision> | null = null;
+      const decision = () => (decisionPromise ??= resolveTerminalChannel());
+
+      /** Canal POS80: el ticket ES el documento. Sin papel no hay venta. */
+      const runPos80Sale = async (chosen: ChannelDecision) => {
+        if (!chosen.ready) {
+          set({ isSubmitting: false, errorMessage: chosen.reason });
+          return null;
+        }
+        const pos80 = await runOrderFallback({
           header,
           order,
           initialResult: null,
@@ -300,9 +321,18 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           submitOrder: cashierAccountantService.submitOrder,
           print: printNoFiscalTicket,
         });
-        set({ isSubmitting: false, infoMessage: "Venta procesada" });
+        if (!pos80.printed) {
+          // La orden NO se envio: `runOrderFallback` no registra sin papel, y
+          // aca se informa el motivo concreto en vez de dar la venta por hecha.
+          set({
+            isSubmitting: false,
+            errorMessage: `No se pudo imprimir el comprobante en la POS80: ${pos80.printError}. La venta no se registró.`,
+          });
+          return null;
+        }
+        set({ isSubmitting: false, infoMessage: "Venta registrada con comprobante POS80" });
         await get().load();
-        return outcome;
+        return pos80;
       };
 
       if (saleType === "local") {
@@ -312,11 +342,18 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         const cart = currentCart();
         const alreadyIssued = issuedFiscalForCart(get().fiscalIssued[String(order.id)], cart);
 
-        // /health verificado como caido al abrir el pago: la fiscal no puede
-        // emitir, directo a No Fiscal sin intentar (sin falsos positivos).
-        // Con un comprobante ya emitido para este carrito no se puede caer a No
-        // Fiscal: ese papel fiscal existe y hay que registrar ESA venta.
-        if (get().fiscalAvailable === false && !alreadyIssued) return await runFallback();
+        // Con un comprobante ya emitido no se elige canal: ese papel fiscal
+        // existe y hay que registrar ESA venta (Regla R6). Consultar el canal
+        // aca podria mandar a POS80 una venta que ya tiene COO.
+        if (!alreadyIssued) {
+          const chosen = await decision();
+          if (chosen.channel === "pos80") return await runPos80Sale(chosen);
+          if (!chosen.ready) {
+            // Servicio vivo y maquina muda: error, NUNCA POS80 (Spec S3).
+            set({ isSubmitting: false, errorMessage: chosen.reason });
+            return null;
+          }
+        }
 
         let controlNumber: string;
         let fiscalSerial: string | null;
@@ -332,11 +369,25 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           } catch (error: any) {
             const mensaje = error.response?.data?.detail || error.response?.data?.message || error.message || "Error al procesar la venta";
             console.error("❌ [registerSale] Error fiscal local:", mensaje);
-            // La fiscal fallo (rechazo/void, o servicio caido a mitad de venta): No Fiscal.
-            return await runFallback();
+            // Servicio vivo y la maquina no emitio: error con el motivo a la
+            // vista. NO se prueba la POS80 (Spec S3): cambiar de canal por un
+            // fallo de la impresora es exactamente el fallback que se elimino.
+            set({
+              isSubmitting: false,
+              errorMessage: `La máquina fiscal no emitió el comprobante: ${mensaje}. La venta no se registró.`,
+            });
+            return null;
           }
-          // 200 sin numero de control: la fiscal no emitio COO -> No Fiscal.
-          if (!fiscalResult?.fiscal_number) return await runFallback();
+          // 200 sin numero de control: la fiscal no emitio COO. Tampoco es un
+          // caso para POS80: el servicio esta vivo, la maquina no documento.
+          if (!fiscalResult?.fiscal_number) {
+            set({
+              isSubmitting: false,
+              errorMessage:
+                "La máquina fiscal respondió sin número de control (no emitió el comprobante). La venta no se registró.",
+            });
+            return null;
+          }
 
           const recon = reconcileFiscalTotal(fiscalResult.total, fiscalPayload.items);
           if (recon) {
@@ -420,23 +471,44 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         return result;
       }
 
-      // Fallback "No Fiscal": los montos no se tocan; solo se sintetizan los
-      // campos fiscales. Se persiste por el endpoint existente y solo se
-      // reintenta cuando la llamada original fallo por transporte.
-      const outcome = await runOrderFallback({
-        header,
-        order,
-        initialResult: result,
-        transportFailed,
-        saleType,
-        sessionId: activeSession.id,
-        submitOrder: cashierAccountantService.submitOrder,
-        print: printNoFiscalTicket,
-      });
+      // Venta digital: la orden la factura el backend. El canal igual manda
+      // (Spec S3): con el servicio fiscal vivo, una emision fallida es error,
+      // no un ticket POS80 que pretenda ser el documento.
+      const chosen = await decision();
+      if (chosen.channel === "pos80") {
+        if (!chosen.ready) {
+          set({ isSubmitting: false, errorMessage: chosen.reason });
+          return null;
+        }
+        const pos80 = await runOrderFallback({
+          header,
+          order,
+          initialResult: result,
+          transportFailed,
+          saleType,
+          sessionId: activeSession.id,
+          submitOrder: cashierAccountantService.submitOrder,
+          print: printNoFiscalTicket,
+        });
+        if (!pos80.printed) {
+          set({
+            isSubmitting: false,
+            errorMessage: `No se pudo imprimir el comprobante en la POS80: ${pos80.printError}. La venta no se registró.`,
+          });
+          return null;
+        }
+        set({ isSubmitting: false, infoMessage: "Venta registrada con comprobante POS80" });
+        await get().load();
+        return pos80;
+      }
 
-      set({ isSubmitting: false, infoMessage: "Venta procesada" });
-      await get().load();
-      return outcome;
+      set({
+        isSubmitting: false,
+        errorMessage: `La emisión fiscal no devolvió comprobante${
+          transportFailed ? " (no hubo respuesta del servidor)" : ""
+        }. La orden pudo haberse registrado: verificá el listado de órdenes antes de reintentar.`,
+      });
+      return null;
     } catch (error: any) {
       const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);

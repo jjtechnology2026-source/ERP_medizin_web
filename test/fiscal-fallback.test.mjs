@@ -316,18 +316,25 @@ test("runOrderFallback: no reintenta si el fallo no fue de transporte y conserva
   assert.equal(outcome.fiscalFallback, true);
 });
 
-test("runOrderFallback: expone printError cuando la POS80 no imprime", async () => {
+test("runOrderFallback: sin papel NO se envía la orden y no hay ordenId (S4)", async () => {
+  const submitCalls = [];
   const outcome = await runOrderFallback({
     header: { name: "F", rif: "J-1" },
     order: { medications: [{ quantity: 1, price: 2 }] },
     initialResult: { ordenId: "o-init" },
-    transportFailed: false,
+    transportFailed: true,
     saleType: "digital",
     sessionId: "s1",
-    submitOrder: async () => ({ ordenId: "nope" }),
+    submitOrder: async (order) => {
+      submitCalls.push(order);
+      return { ordenId: "nope" };
+    },
     print: async () => ({ printed: false, via: "usb", error: "sin gesto de usuario" }),
   });
   assert.equal(outcome.printError, "sin gesto de usuario");
+  assert.equal(outcome.printed, false, "la impresion no salio");
+  assert.equal(submitCalls.length, 0, "sin papel no hay venta: no se envia la orden");
+  assert.equal(outcome.ordenId, "", "no se reporta una orden que no existe");
 });
 
 // --- Reimpresion de factura (POS80) ---

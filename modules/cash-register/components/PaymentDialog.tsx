@@ -10,6 +10,7 @@ import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
 import { prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
+import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
 import { generateQuotePdf, type QuoteDocument } from "@/modules/cash-register/lib/quote-pdf";
 import { quoteBlockReasonForCart } from "@/modules/cash-register/lib/local-sale-persist";
 import type {
@@ -337,9 +338,17 @@ export default function PaymentDialog({
 
     setIsProcessing(true);
     try {
-      // En el mismo gesto del click: WebUSB exige activacion transitoria para
-      // pedir la impresora, y se pierde tras los awaits del flujo fiscal.
-      await prepairPrinter();
+      // El canal se DETECTA, no se configura: WebUSB solo se toca si esta
+      // terminal emite por la POS80. Con el servicio fiscal vivo el comprobante
+      // sale por la maquina fiscal y no hay nada que preparar por USB.
+      //
+      // Se resuelve en el mismo gesto del click: WebUSB exige activacion
+      // transitoria para pedir la impresora, y se pierde tras los awaits del
+      // flujo fiscal.
+      const terminalChannel = await resolveTerminalChannel();
+      if (terminalChannel.channel === "pos80") {
+        await prepairPrinter();
+      }
       const order = useCurrentOrderStore.getState().getCurrentOrder();
       const clientData = order?.client;
       const isFound = (clientData as any)?.found === "true";

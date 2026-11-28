@@ -182,6 +182,8 @@ export interface OrderFallbackOutcome {
   facturacion: unknown;
   ordenId: string;
   fiscalFallback: true;
+  /** El comprobante salio en papel. Sin esto no hay venta (Spec S4). */
+  printed: boolean;
   printError?: string;
 }
 
@@ -200,6 +202,21 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
       date: fmtDate(invoice.fecha),
     }),
   );
+
+  // Sin papel no hay venta: la orden NO se envia. Antes se enviaba igual y el
+  // resultado del print solo se devolvia como dato informativo, asi que un
+  // fallo de la POS80 dejaba la venta en el backend y la pantalla decia
+  // "Venta procesada" (ver Spec S4). El carrito queda intacto para reintentar.
+  if (!printOutcome.printed) {
+    return {
+      facturacion: null,
+      ordenId: "",
+      fiscalFallback: true,
+      printed: false,
+      printError:
+        printOutcome.error || "No se pudo imprimir el comprobante en la POS80",
+    };
+  }
 
   // Solo se reintenta persistir cuando la llamada original fallo por
   // transporte; un success=false del backend ya dejo su propio ordenId.
@@ -224,9 +241,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     facturacion: fallbackOrder.facturacion,
     ordenId,
     fiscalFallback: true,
-    printError: printOutcome.printed
-      ? undefined
-      : printOutcome.error || "No se pudo imprimir el comprobante en la POS80",
+    printed: true,
   };
 }
 
