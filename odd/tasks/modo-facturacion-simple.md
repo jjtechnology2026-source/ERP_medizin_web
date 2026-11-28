@@ -18,6 +18,25 @@ anterior.
 - **S4** — El modo se elige al crear la farmacia, no venta por venta.
   > "tú puedes escoger cuando se crea la farmacia"
 
+## Tasks
+
+| ID | Qué | Repo | Estado |
+| --- | --- | --- | --- |
+| **T1** | `ModelPharmacy.modo_facturacion` (`digital`\|`fiscal`\|`simple`) + `modoFacturacion` en `PresentAgent`, derivado de `active_modules` cuando falta (compatibilidad). | Backend | En curso |
+| **T2** | Tercera rama en `pipeline.rs`: `simple` no llama a TFHKA ni a la máquina fiscal; secuencia `SIMPLE-<n>` por farmacia (idiom de `cotizacion_secuencia`). | Backend | Pendiente |
+| **T3** | `es_movimiento_fiscal: false` y `tipo_comprobante: "no_fiscal"` en la factura/transacción del modo `simple`. | Backend | Pendiente |
+| **T4** | Selector de modo en `CrearFarmaciaModal` y `EditarFarmaciaModal` (precedente `MODULOS`). | Admin general | Pendiente |
+| **T5** | `modoFacturacion` en el perfil del ERP (`auth.services.ts`) y tercer camino en `registerSale`. | ERP | Pendiente |
+| **T6** | Reportes: el libro fiscal y el Z excluyen `tipo_comprobante = "no_fiscal"` y lo desglosan. | Backend + ERP | Pendiente |
+
+### Topología confirmada (28/11/2026)
+
+- `pharmacies` y `factura` son **SCHEMALESS** (`INFO FOR DB`): los campos nuevos **no** necesitan migración.
+- El modo, si falta el campo, se deriva de `pharmacy.active_modules.contains(DigitalBilling)` — es lo que hoy alimenta `usesDigitalBilling` (`agent/src/infrastructure/repositories.rs:453-457` → `adapters/present.rs:27`). Así **ninguna farmacia cambia de comportamiento**.
+- El alta vive en `Backend-administrativo`: `POST /admin/Pharmacy/createpharmacy` con `web::Json<ModelPharmacy>`, y el formulario en `general-administrative-medizin./features/farmacias/components/CrearFarmaciaModal.tsx`.
+- `es_movimiento_fiscal: true` está hardcodeado en `accountant/src/infrastructure/repositories/new.rs:1376` (`build_transaccion_fiscal`).
+- Secuencia por farmacia: precedente `cotizacion_secuencia:{farmacia}` → `COT-{farmacia}-{n}` (`orders_actions/src/infrastructure/repositories.rs:2502,2531`).
+
 ## Lo que ya existe (medido el 28/11/2026)
 
 La cadena contable **ya corre completa** y no depende del modo: lo verifiqué con una venta real
