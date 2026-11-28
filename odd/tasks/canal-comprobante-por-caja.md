@@ -44,14 +44,14 @@ Implementación de esta revisión (detección). F3/F4 quedan abiertas.
 
 | ID | Qué | Specs | Estado |
 | --- | --- | --- | --- |
-| **T1** | `modules/cash-register/lib/channel-detect.ts`: resolver el canal con confirmación (dos lecturas para declarar ausencia), motivo explícito y seams inyectables para test. | S1, S2, S5, S6 | En curso |
-| **T2** | `isPrinterPaired()` en `pos80-usb.ts`: saber si la POS80 está emparejada **sin** abrir el selector. | S2 | En curso |
-| **T3** | `runOrderFallback`: si el papel no salió, **no** se registra la orden (hoy se registra igual). | S4 | En curso |
-| **T4** | Ruta de venta `local` por canal: fiscal con máquina muda → error con motivo y sin POS80; POS80 solo con servicio ausente. | S1-S3, S6 | En curso |
-| **T5** | `PaymentDialog`: preparar la POS80 solo en canal `pos80` (el gesto de WebUSB se pide antes de los awaits). | S2 | En curso |
-| **T6** | Tests: `test/channel-detect.test.mjs` nuevo + reescritura de los que pinnean el fallback. | S1-S6 | En curso |
+| **T1** | `modules/cash-register/lib/channel-detect.ts`: resolver el canal con confirmación (dos lecturas para declarar ausencia), motivo explícito y seams inyectables para test. | S1, S2, S5, S6 | Hecho (`144c837`) |
+| **T2** | `isPrinterPaired()` en `pos80-usb.ts`: saber si la POS80 está emparejada **sin** abrir el selector. | S2 | Hecho (`144c837`) |
+| **T3** | `runOrderFallback`: si el papel no salió, **no** se registra la orden (hoy se registra igual). | S4 | Hecho (`020b0a4`) |
+| **T4** | Ruta de venta `local` por canal: fiscal con máquina muda → error con motivo y sin POS80; POS80 solo con servicio ausente. | S1-S3, S6 | Hecho (`020b0a4`) |
+| **T5** | `PaymentDialog`: preparar la POS80 solo en canal `pos80` (el gesto de WebUSB se pide antes de los awaits). | S2 | Hecho (`020b0a4`) |
+| **T6** | Tests: `test/channel-detect.test.mjs` nuevo + reescritura de los que pinnean el fallback. | S1-S6 | Hecho (`144c837`, `020b0a4`) |
 | **T7** | Evidencia `canal` + `motivo_canal` + `terminal_id` en la orden. | R8 | Pendiente: requiere `Backend-administrativo` |
-| **T8** | Camino `digital` (`usesDigitalBilling`) sujeto al canal. | S3, decisión 5 | Pendiente: la orden ya existe en el backend, no se puede des-registrar desde el POS |
+| **T8** | Camino `digital` (`usesDigitalBilling`) sujeto al canal. | S3 | Hecho (`020b0a4`) — el canal manda; con el servicio vivo y emisión fallida es error con aviso de verificar el listado, porque la orden pudo existir ya en el backend |
 | **T9** | Vigilante continuo de `/health` para la UI + estado `actualizando` del servicio. | S5 | Pendiente: requiere `service_fiscal` |
 
 ## Estado medido hoy
@@ -537,6 +537,19 @@ de tocar la venta.
   que no coinciden (ver el otro documento).
 - No reemplaza la captura de fallos del servicio fiscal: la complementa.
 
+## Slice boundaries
+
+La guía de revisión pide cortes de ~400 líneas cambiadas; esta rama los excede porque el
+documento de planificación es un solo artefacto (589 líneas por sí solo). Cortes reales:
+
+1. `b2d1c3d` — el documento de planificación (artefacto único, no se puede partir sin
+dejar de leerse como una unidad).
+2. `144c837` — detección de canal + emparejamiento POS80 + tests.
+3. `020b0a4` — la venta obedece al canal, con el papel como condición del registro.
+
+El corte que importa para revisar es el 3: cambia el camino del dinero. Los otros dos no
+alteran comportamiento de venta.
+
 ## Log
 
 - **L1** — Pedido original: *"verifica que quiero hacer un camino está en este sistema sabes
@@ -587,3 +600,21 @@ de tocar la venta.
   ("borrar el fallback de la pos 80" y "me tiene que mandar un mensaje: falló porque la máquina
   fiscal no quiso imprimir"): **servicio vivo + máquina que falla = error, nunca POS80**. Si la
   intención fuera la contraria, el diseño vuelve a tener fallback y la S3 cae.
+- **L6** — Implementación del 18/11/2026 (T1-T6). Detección en
+  `modules/cash-register/lib/channel-detect.ts`: `GET /health` decide el canal, `GET
+  /printer/status` decide si la venta puede emitir; la ausencia exige dos lecturas fallidas
+  porque la tarea de actualización reinicia el servicio cada 30 minutos. `runOrderFallback` pasó a
+  devolver `printed` y **no registra sin papel**. `registerSale` rutea por canal y el camino
+  fiscal ya no cae a POS80. `PaymentDialog` prepara WebUSB solo en canal `pos80`, dentro del gesto
+  del click. Evidencia: `test:channel` 7/7, `test:fiscal-fallback` 33/33, `test:local-sale-cart`
+  7/7, `test:local-sale` 14/14, `test:fiscal` 69/69, `tsc --noEmit` limpio, y lint sin regresión
+  (31 problemas antes y después, todos preexistentes). Commits `144c837` y `020b0a4`.
+- **L7** — Deuda declarada, no silenciada: T7 (evidencia `canal`/`reason`/`terminal_id` en la
+  orden) requiere `Backend-administrativo`; T9 (vigilante continuo y estado `actualizando` del
+  servicio) requiere `service_fiscal`. Sin T7 el reporte de "cuántas ventas salieron por POS80 y
+  por qué" no existe todavía: hoy solo queda en el log del navegador.
+- **L8** — Riesgo residual anotado por el worker: el canal se lee dos veces (diálogo y venta). Si
+  el servicio cae entre las dos lecturas, el diálogo pudo preparar la POS80 y la venta falla con
+  error (no hay fallback); si pasa lo inverso, la impresión POS80 puede necesitar un gesto de
+  WebUSB que ya no está. Es el precio de detectar fresco en vez de reusar estado, y se mitiga con
+  T9 (vigilante) en la UI para que el operador lo vea antes de cobrar.
