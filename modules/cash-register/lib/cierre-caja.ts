@@ -249,6 +249,8 @@ export interface FiscalResumenInput {
   ivaPorcentaje?: number;
   ivaMontoVes?: number;
   totalVes?: number;
+  /** `"no_fiscal"` = venta del modo `simple`: no entra al libro fiscal. */
+  tipoComprobante?: "fiscal" | "no_fiscal" | null;
 }
 
 export interface FiscalResumen {
@@ -256,6 +258,12 @@ export interface FiscalResumen {
   exemptTotal: number;
   vatByRate: Record<number, number>;
   grandTotal: number;
+  /**
+   * Ventas del turno SIN comprobante fiscal. Van aparte porque no son
+   * comprobantes: contarlas en los totales de arriba inflaría el libro fiscal
+   * con documentos que no existen.
+   */
+  nonFiscal: { count: number; total: number };
 }
 
 /**
@@ -271,9 +279,16 @@ export function buildFiscalResumen(invoices: FiscalResumenInput[]): FiscalResume
   let taxableBase = 0;
   let exemptTotal = 0;
   let grandTotal = 0;
+  let nonFiscalCount = 0;
+  let nonFiscalTotal = 0;
   const vatByRate: Record<number, number> = {};
 
   for (const inv of invoices) {
+    if (inv.tipoComprobante === "no_fiscal") {
+      nonFiscalCount += 1;
+      nonFiscalTotal += Number(inv.totalVes) || 0;
+      continue;
+    }
     const base = Number(inv.baseImponibleVes) || 0;
     const exempt = Number(inv.totalExentoVes) || 0;
     const rate = Number(inv.ivaPorcentaje) || 0;
@@ -293,5 +308,6 @@ export function buildFiscalResumen(invoices: FiscalResumenInput[]): FiscalResume
     exemptTotal: toBs2(exemptTotal),
     vatByRate,
     grandTotal: toBs2(grandTotal),
+    nonFiscal: { count: nonFiscalCount, total: toBs2(nonFiscalTotal) },
   };
 }

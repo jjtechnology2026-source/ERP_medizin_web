@@ -49,6 +49,11 @@ export interface CashierInvoice {
   pdfUrl: string;
   pharmacyId: string;
   lines: CashierInvoiceLine[];
+  /**
+   * Clase fiscal del comprobante que emitió el backend. Ausente en las filas
+   * viejas, que son fiscales; `"no_fiscal"` es el modo `simple`.
+   */
+  tipoComprobante?: "fiscal" | "no_fiscal" | null;
 }
 
 export interface CashierInvoiceLine {

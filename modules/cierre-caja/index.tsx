@@ -322,6 +322,16 @@ export default function CashClosurePage() {
                   <span className="text-sm font-bold text-slate-700">Total:</span>
                   <span className="text-base font-black text-blue-600">Bs {r2(fiscalResumen.grandTotal).toFixed(2)}</span>
                 </div>
+                {fiscalResumen.nonFiscal.count > 0 && (
+                  <div className="flex justify-between items-center p-3 bg-amber-50 border border-amber-200 rounded-xl md:col-span-2">
+                    <span className="text-sm font-bold text-amber-800">
+                      Ventas sin comprobante fiscal ({fiscalResumen.nonFiscal.count}):
+                    </span>
+                    <span className="text-sm font-black text-amber-900">
+                      Bs {r2(fiscalResumen.nonFiscal.total).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             </section>
 

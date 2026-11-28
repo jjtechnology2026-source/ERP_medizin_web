@@ -237,3 +237,27 @@ test("desglose: un metodo sin movimiento pero con conteo si aporta fila (sobrant
   assert.equal(res.rows[0].key, "biopago");
   assert.equal(res.rows[0].difference, 20);
 });
+
+test("resumen fiscal: una venta sin comprobante no entra al libro y se informa aparte", async () => {
+  const { buildFiscalResumen } = await import(
+    "../modules/cash-register/lib/cierre-caja.ts"
+  );
+  const factura = (totalVes, tipoComprobante) => ({
+    baseImponibleVes: totalVes,
+    totalExentoVes: 0,
+    ivaPorcentaje: 0,
+    ivaMontoVes: 0,
+    totalVes,
+    tipoComprobante,
+  });
+
+  // Sin el campo (todo el histórico) se comporta como siempre.
+  const soloFiscal = buildFiscalResumen([factura(116, undefined)]);
+  assert.equal(soloFiscal.grandTotal, 116);
+  assert.deepEqual(soloFiscal.nonFiscal, { count: 0, total: 0 });
+
+  // Modo simple: 58 no fiscales no inflan el libro, pero no desaparecen.
+  const mixto = buildFiscalResumen([factura(116, "fiscal"), factura(58, "no_fiscal")]);
+  assert.equal(mixto.grandTotal, 116, "el libro fiscal solo cuenta comprobantes fiscales");
+  assert.deepEqual(mixto.nonFiscal, { count: 1, total: 58 });
+});
