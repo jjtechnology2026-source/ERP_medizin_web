@@ -362,7 +362,14 @@ export default function FacturasTable({ facturas, isLoading, onRefresh, filtros,
         factura={selectedFactura}
         onClose={() => setSelectedFactura(null)}
         onSuccess={handleRefresh}
-        mode={usesDigitalBilling ? "tfhka" : "legacy"}
+        // Una factura NO fiscal (modo `simple`) no se puede acreditar por TFHKA:
+        // ese proveedor emitiría un comprobante sobre un documento que no existe y,
+        // sin credencial, el operador se queda sin poder devolver.
+        mode={
+          usesDigitalBilling && selectedFactura.tipo_comprobante !== "no_fiscal"
+            ? "tfhka"
+            : "legacy"
+        }
       />
     )}
     </>

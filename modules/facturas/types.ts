@@ -11,6 +11,11 @@ export interface FacturaListItem {
   total_usd: number;
   tasa_cambio: number;
   url_pdf: string | null;
+  /**
+   * Clase fiscal del comprobante que emitió el backend. Ausente en las filas
+   * viejas, que son fiscales; `"no_fiscal"` identifica el modo `simple`.
+   */
+  tipo_comprobante?: "fiscal" | "no_fiscal" | null;
 }
 
 export interface FacturaDetail {

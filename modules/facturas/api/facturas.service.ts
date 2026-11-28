@@ -140,6 +140,12 @@ function parseFacturaListItem(raw: any): FacturaListItem {
     total_usd: Number(raw.total_usd ?? 0),
     tasa_cambio: Number(raw.tasa_cambio ?? 1),
     url_pdf: raw.url_pdf ?? null,
+    tipo_comprobante:
+      raw.tipo_comprobante === "no_fiscal"
+        ? "no_fiscal"
+        : raw.tipo_comprobante === "fiscal"
+          ? "fiscal"
+          : null,
   };
 }
 
