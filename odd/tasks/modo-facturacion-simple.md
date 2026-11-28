@@ -231,23 +231,36 @@ Encontró cuatro defectos latentes antes de la primera venta real.
   modo en cuanto el backend emite un control `SIMPLE-` (`modules/cash-register/lib/billing-mode-drift.ts`).
   Corrige **solo hacia `simple`**: es la única dirección con consecuencia. Commit `66e8811`.
 
-### Pendiente (con la ubicación exacta)
+### Cerrados (28/11, backend `6ae2a13a` + ERP `21dac8b`)
 
-1. **NC de una venta `no_fiscal` se registra como documento fiscal** — `accountant/.../notas_credito_impl.rs:535-541`
-   y `notas_debito_impl.rs` escriben `es_movimiento_fiscal: true` fijo. Medido: factura fiscal 116 +
-   simple 58 + NC 58 → libro con neto fiscal 58 sobre una sola factura de 116. Arreglo: la NC hereda la
-   clase fiscal del documento afectado (buscarlo por `numero_control` en `factura` y usar la regla única
-   `es_comprobante_fiscal`). En el ERP, `FacturaNotaCreditoDialog.tsx:350,371` manda `SIMPLE-1` como
-   documento afectado a TFHKA/máquina: con credencial ausente el operador **no puede devolver**.
-2. **Anular una venta `simple` no la anula** — `orders_actions/.../repositories.rs:3448,3461,3468`
-   resuelven por `orders.numero_control_interno`, vacío en `simple`: responde "venta inexistente", la
-   `factura` y la `transaccion` no se marcan anuladas (siguen en arqueo y Z) mientras el stock sí se
-   revierte. Y NC total + anulación devuelve el stock **dos veces**.
-3. **`modo_facturacion` inválido se acepta con 200** — `phamacy_action/.../mappers.rs:150` hace
-   `json!(v)` sin validar: `"SIMPLE"`, `"simple "` o `""` se guardan y la lectura los ignora.
+1. **La NC hereda la clase fiscal del documento afectado.** `afectado_es_fiscal()` lee
+   `factura.tipo_comprobante` del documento acreditado (una lectura, antes de escribir) y la
+   transacción de la nota se escribe con `es_movimiento_fiscal: false` cuando es `no_fiscal`.
+   Ausente o ilegible = fiscal: ninguna fila existente cambia. En el ERP, el listado lleva
+   `tipo_comprobante` y la NC de una factura no fiscal va por el camino local, no por TFHKA.
+2. **Anular una venta `simple` ahora la encuentra.** `OrdenAnulable` lleva
+   `facturacion_control` (el número que emitió el backend, `orders.facturacion.numero_control`)
+   y `candidatos_numero_control` lo incluye: la resolución por control también busca ahí, así
+   que la factura y la transacción se marcan anuladas. Las ventas fiscales resuelven igual que antes.
+3. **`modo_facturacion` inválido devuelve 400.** El DTO de escritura valida al deserializar
+   (normaliza espacios y mayúsculas); `"SIMPLEE"` o `""` ya no se guardan con 200.
 
-El verificador dejó las sondas listas en `/tmp/vsimple.*` (arqueo mixto, libro con NC sobre
-`no_fiscal`, `from_persisted` con valores basura, anulación por control). No se commitearon.
+Evidencia: `accountant` 228, `orders_actions` 374, `phamacy_action` 82, `agent` 15, `shape` 83 —
+0 fallos; `cargo check --workspace` limpio; ERP `nota-credito` 28, `sale-channel` 21, `fiscal` 69 y
+`build` limpio. Deploy backend `SUCCESS` en `dbec848d` (contiene `6ae2a13a`).
+
+### Deuda que sigue abierta (con la ubicación exacta)
+
+- `ventas_no_fiscales_movimiento` se calcula y no se expone en el cierre (`sesion_impl.rs`).
+- `numero_control` dejó de ser único global: quedan lecturas globales por control
+  (`HAS_FACTURA_FOR_NUMERO_CONTROL_SQL`, `anuladas_scan.rs:790`); hoy solo se usan para ventas fiscales.
+- `FALLO` sigue contando como fiscal: falta `tipo_comprobante: "fallo"`.
+- Una venta `simple` que quede sin factura es invisible para el barrido de facturas faltantes
+  (`SCAN_MISSING_INVOICES_SQL` exige `numero_control_interno`): no se recupera.
+- Cambiar el modo no deja auditoría, aunque el plan lo pedía.
+- El doble descuento de stock (NC total + anulación) sigue dependiendo de resolver la orden de la
+  venta por `numero_control_interno`; con `facturacion_control` en `OrdenAnulable` quedó el dato,
+  falta usarlo en `RESOLVER_ORDEN_DE_LA_VENTA_SQL`.
 
 ### Incidente de entorno
 
