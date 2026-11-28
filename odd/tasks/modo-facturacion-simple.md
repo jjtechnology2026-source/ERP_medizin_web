@@ -249,12 +249,26 @@ Evidencia: `accountant` 228, `orders_actions` 374, `phamacy_action` 82, `agent` 
 0 fallos; `cargo check --workspace` limpio; ERP `nota-credito` 28, `sale-channel` 21, `fiscal` 69 y
 `build` limpio. Deploy backend `SUCCESS` en `dbec848d` (contiene `6ae2a13a`).
 
+### Deuda cerrada (backend `707a1cba`)
+
+- **`FALLO-<n>` contaba como comprobante fiscal.** Cuando la emisión fallaba, el backend escribía
+  la fila con control `FALLO-` y **sin clase**, y "sin clase" significa fiscal: esas ventas entraban
+  al libro, al total del Z y al rango de documentos. Ahora `fallo` es una clase propia, la escribe el
+  camino de fallback, y la regla única `es_comprobante_fiscal` solo acepta `fiscal` (o ausente, que es
+  el caso de las ~1100 filas anteriores al campo: nada cambia retroactivamente).
+- **Doble devolución de stock.** La orden detrás de una factura se resolvía por
+  `orders.numero_control_interno`, vacío en `simple`: NC total + anulación revertían el inventario dos
+  veces. El resolutor ahora también busca por `orders.facturacion.numero_control`.
+- Tres tests que fijaban la regla vieja (`fallo` rechazado como clase) se reformularon a la nueva,
+  explicando el cambio; se sigue rechazando un valor inventado.
+
+Evidencia: `accountant` 228, `orders_actions` 374, `shape` 86, `cargo check --workspace` limpio.
+
 ### Deuda que sigue abierta (con la ubicación exacta)
 
 - `ventas_no_fiscales_movimiento` se calcula y no se expone en el cierre (`sesion_impl.rs`).
 - `numero_control` dejó de ser único global: quedan lecturas globales por control
   (`HAS_FACTURA_FOR_NUMERO_CONTROL_SQL`, `anuladas_scan.rs:790`); hoy solo se usan para ventas fiscales.
-- `FALLO` sigue contando como fiscal: falta `tipo_comprobante: "fallo"`.
 - Una venta `simple` que quede sin factura es invisible para el barrido de facturas faltantes
   (`SCAN_MISSING_INVOICES_SQL` exige `numero_control_interno`): no se recupera.
 - Cambiar el modo no deja auditoría, aunque el plan lo pedía.
