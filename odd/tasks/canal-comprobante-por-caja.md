@@ -729,3 +729,24 @@ alteran comportamiento de venta.
   en `probeService`: si la primera lectura se clasifica como `sin_respuesta`, devolver sin segundo
   intento (baja el rechazo a ~1,5 s). No se aplicó todavía para no encadenar otro despliegue por
   latencia en un camino de error: el comportamiento es correcto, solo tarda de más.
+- **L21** — Pregunta del usuario: "si al generar la factura da error porque el puerto está ocupado, no
+  imprime, ¿no?". Respuesta y hallazgo, medido: **(a)** si `createInvoice` falla, la venta no se
+  registra, no se imprime por POS80 y el mensaje lleva el motivo real de la máquina — es lo que
+  corresponde. **(b)** Pero **mi sonda lo impedía antes de intentarlo**: `printer_status()` del
+  servicio toma **el mismo `threading.Lock` que la facturación, de forma bloqueante**
+  (`service_fiscal/app/fiscal_service.py:93-95` vs `:86`), así que mientras una factura se imprime el
+  status se queda esperando; mi abort de 2 s lo leía como "la máquina no responde" → `ready:false` →
+  la caja se negaba a vender sin haberlo intentado. Con dos cajas en una PC o un ticket lento, eso
+  era una traba segura. El servicio **ya expone `/busy`** con `is_busy()` (no bloqueante,
+  `app/main.py:482-486`): ese es el endpoint correcto para saber si está ocupada, no el que se
+  bloquea. Arreglo: `probeMachine` en `resolveSaleChannel`; la **venta no sondea la máquina**
+  (`probeMachine:false`), pregunta `/health` y va derecho a `createInvoice`, que es lo único que sabe
+  la verdad y cuyo error trae el motivo real ("puerto ocupado", "sin papel"). El cartel y el vigilante
+  mantienen el sondeo como anticipación, con tope propio de 8 s para no marcar en rojo una impresión
+  en curso. Medido con sockets reales (health OK, status colgado): **venta 48-49 ms, `ready:true`**;
+  antes la venta se rechazaba. Evidencia: **478 tests, 0 fallos**; suites afectadas `channel` 13,
+  `sale-channel` 12, `note-channel` 18. Commits `29c4e10` y `7cae734`, deploy `SUCCESS`,
+  `erp.medizins.com` 200.
+- **L22** — Sigue sin usarse `/busy` en la UI: el cartel podría decir "la máquina está ocupada, esperá
+  un segundo" en vez de inferirlo por tiempo. Es una mejora de mensaje, no un defecto: el canal y la
+  venta ya no dependen de ese dato.
