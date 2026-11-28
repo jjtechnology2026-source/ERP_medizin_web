@@ -264,13 +264,24 @@ Evidencia: `accountant` 228, `orders_actions` 374, `phamacy_action` 82, `agent` 
 
 Evidencia: `accountant` 228, `orders_actions` 374, `shape` 86, `cargo check --workspace` limpio.
 
+### Deuda cerrada (segunda tanda: backend `e6b9a993`, ERP `0c1bb32`)
+
+- **El cierre muestra las ventas sin comprobante.** `SesionCaja` lleva
+  `total_ventas_sin_comprobante_ves/usd` (desglose, no suma: ya están dentro de `total_ventas_*`),
+  y el cierre del ERP las separa del libro fiscal con su cantidad y su monto — y **dejó de
+  sumarlas** a los totales fiscales, que era el mismo defecto que tenía el Z.
+- **El barrido recupera una venta `simple` sin factura.** `SCAN_MISSING_INVOICES_SQL` miraba solo
+  `numero_control_interno` (vacío en `simple`): esas ventas eran invisibles para siempre. Ahora
+  considera también `facturacion.numero_control` con prefijo `SIMPLE-` y devuelve el control que
+  identifica la fila, así el probe de idempotencia sigue funcionando.
+
+Evidencia: `accountant` 228, `orders_actions` 374, `shape` 86, workspace limpio; ERP
+`cierre-caja` 16, `sale-channel` 21, `fiscal` 69, `nota-credito` 28 y `build` limpio.
+
 ### Deuda que sigue abierta (con la ubicación exacta)
 
-- `ventas_no_fiscales_movimiento` se calcula y no se expone en el cierre (`sesion_impl.rs`).
 - `numero_control` dejó de ser único global: quedan lecturas globales por control
   (`HAS_FACTURA_FOR_NUMERO_CONTROL_SQL`, `anuladas_scan.rs:790`); hoy solo se usan para ventas fiscales.
-- Una venta `simple` que quede sin factura es invisible para el barrido de facturas faltantes
-  (`SCAN_MISSING_INVOICES_SQL` exige `numero_control_interno`): no se recupera.
 - Cambiar el modo no deja auditoría, aunque el plan lo pedía.
 - El doble descuento de stock (NC total + anulación) sigue dependiendo de resolver la orden de la
   venta por `numero_control_interno`; con `facturacion_control` en `OrdenAnulable` quedó el dato,
