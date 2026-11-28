@@ -675,3 +675,16 @@ alteran comportamiento de venta.
   que pinan el camelCase, la ausencia del campo y el rechazo de snake_case), ERP `test:sale-channel`
   10/10 con dos casos nuevos de evidencia. **No se desplegó ni se promovió nada**: se publicaron las
   ramas.
+- **L15** — Desplegado en producción el 28/11/2026 (decisión del usuario, dos veces explícita). Las
+  ramas que Railway despliega, verificadas contra la API antes de tocar nada:
+  `ERP_medizin_web` → **master** (servicio `ERP_medizin_web`), `Backend_administrativo` → **dev**
+  (servicio `Backend_administrativo`, dominio `medizins.com`). Se mergeó `feat/canal-detectado-sin-fallback`
+  a `master` con fast-forward (`ae414ee..467b2af`): el árbol desplegado es exactamente el validado.
+  El backend se rebasó sobre `origin/dev` (`2e093e24`, PR #173 de otra persona) y se publicó
+  `2fce2d72` — no se barrió trabajo ajeno, se apoyó encima. Verificación post-deploy: ERP
+  `erp.medizins.com` y el dominio de Railway responden **200**, backend `/health` **200**. Deploy
+  ERP `ce77d14a` **SUCCESS**; el anterior (`c5080116`) queda disponible como rollback en Railway.
+- **L16** — Riesgo de despliegue asumido y su reversión: si una caja con el servicio fiscal
+  instalado no puede emitir, **no vende**. Es lo pedido, y el rollback es inmediato y no destructivo
+  (Railway redeploy del deployment `c5080116` para el ERP, `168cebc7` para el backend). Ninguno de
+  los dos cambios toca datos: el backend solo agrega dos campos opcionales en una tabla SCHEMALESS.
