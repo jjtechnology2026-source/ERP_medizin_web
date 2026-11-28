@@ -49,6 +49,22 @@ emitiendo" de "esta farmacia no emite"**. Medido en producción el 28/11: Corpor
 
 ## Diseño propuesto
 
+### El modo se elige en el administrador general
+
+La farmacia se crea en `general-administrative-medizin` (administrador general), **no** en el ERP.
+Por eso la opción de las tres modalidades tiene que aparecer en ese formulario, al crear la
+farmacia, y después en su pantalla de edición. Son tres repos, no uno:
+
+| Repo | Qué cambia |
+| --- | --- |
+| `general-administrative-medizin` | el formulario de alta de farmacia: las tres opciones, y la edición con auditoría |
+| `Backend-administrativo` | `pharmacies.modo_facturacion`, la tercera rama del pipeline y los campos de la factura |
+| `ERP_medizin_web` | el tercer camino del POS (sin canal, sin impresora) y los reportes |
+
+Y una regla de orden: **el backend primero**. Si el formulario del administrador ofrece `simple`
+antes de que el pipeline sepa emitirlo, una farmacia puede quedar en un modo que el backend
+todavía no entiende.
+
 ### 1. El modo es un campo de la farmacia
 
 ```
@@ -105,9 +121,11 @@ bug de emisión, la otra es una decisión del negocio.
 
 ## Fases
 
-- **F1 · Campo y modo (sin cambiar comportamiento).** `modo_facturacion` en `pharmacies`,
-  auditoría del cambio, y que el pipeline lo lea y lo registre **sin** usarlo todavía. Las
-  farmacias existentes quedan en su modo actual; nadie pasa a `simple` por default.
+- **F1 · Campo y modo (sin cambiar comportamiento).** `modo_facturacion` en `pharmacies` (backend,
+  con su migración y su default por farmacia existente), auditoría del cambio, y que el pipeline lo
+  lea y lo registre **sin** usarlo todavía. **El formulario del administrador general** gana las tres
+  opciones, deshabilitando `simple` hasta que F2 esté desplegado. Las farmacias existentes quedan en
+  su modo actual; nadie pasa a `simple` por default.
 - **F2 · La tercera rama.** Emisión `simple` con `SIMPLE-<secuencial>`, `tipo_comprobante` y
   `es_movimiento_fiscal: false`, con la cadena contable completa. Test contra una orden real:
   factura + transacción + movimiento + stock, y **cero** llamadas a TFHKA y a la máquina fiscal.
@@ -133,3 +151,29 @@ bug de emisión, la otra es una decisión del negocio.
   POS80) resuelto y verificado.
 - No convierte `FALLO` en un modo válido. `FALLO` es un error, siempre.
 - No toca el contrato del POS con el servicio fiscal.
+
+## Lo que la verificación del 28/11 dejó como disparador
+
+Antes de planificar el modo `simple` medimos por qué una farmacia digital estaba fallando. Vale
+como contexto, porque es exactamente el problema que `simple` no debe tapar:
+
+- **Causa raíz:** la farmacia `pharmacies:01KRFNKFZ7YVRGZQFN02WYJ2WX` no tiene **ninguna**
+  credencial en `secure_credentials` (ni `tipo: facturacion` ni de otro tipo). Sin credencial,
+  `tfhka_uc.execute` devuelve `Err` en cada venta → `FALLO-####`. **8 de 8** facturas del día.
+- **Por qué no se notó:** el camino de fallo escribía `facturacion.success: true` y `error: None`
+  hardcodeados (`pipeline.rs`), así que la orden declaraba éxito con un número que no es un
+  comprobante. El motivo real solo quedaba en una línea de `tracing::error!`.
+- **El contador `FALLO` es global**, compartido por todas las farmacias (`contador_fiscal:FALLO`),
+  no por farmacia: los números se intercalan y no sirven para conciliar.
+- Comparación que confirma el diagnóstico: la otra farmacia con `FALLO` hoy tiene 28 facturas y
+  solo 2 fallidas, porque sus ventas pasan por la **máquina fiscal** (`numero_control_interno`) y
+  se saltean TFHKA. La que falla 8 de 8 es la que **solo** factura por backend.
+
+Arreglo de código ya aplicado en el backend (rama `feat/facturacion-fallo-honesto`): el fallo se
+persiste como `success: false` con el motivo real (acotado a 500 caracteres), conservando
+`FALLO-<n>` para identificar la fila y sin tocar `sale_status`. El ERP ya lo interpreta bien:
+muestra `Estado: Error: <motivo>` en el detalle de la orden.
+
+**Lo que este cambio no arregla**, y hay que decirlo: las filas históricas con `FALLO-` y
+`success: true` siguen mintiendo, y la credencial de esa farmacia sigue faltando. Ninguna de las
+dos cosas se resuelve con código.
