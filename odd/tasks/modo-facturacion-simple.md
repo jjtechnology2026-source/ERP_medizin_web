@@ -218,3 +218,39 @@ Las tres piezas están desplegadas. **Ninguna farmacia está en `simple`**: el m
 - Una devolución no fiscal se informa como gasto operativo: la caja cuadra, el desglose no fiscal queda bruto.
 - El bloque `non_fiscal_sales` va en VES, igual que los demás bloques del Z: una venta `simple` en USD entra al arqueo (líquido USD) pero no al bloque.
 - Las filas históricas con `FALLO-` y `success: true` siguen mintiendo: no hay migración.
+
+## Segunda verificación independiente (28/11, tras desplegar)
+
+Encontró cuatro defectos latentes antes de la primera venta real.
+
+### Cerrado
+
+- **La sesión quedaba con el modo viejo.** El login guarda una foto y el refresh del JWT la
+  reutiliza: una farmacia pasada a `simple` seguía imprimiendo comprobante fiscal en su máquina
+  mientras el backend escribía `SIMPLE-<n>` — papel fiscal sin registro. Ahora el POS corrige el
+  modo en cuanto el backend emite un control `SIMPLE-` (`modules/cash-register/lib/billing-mode-drift.ts`).
+  Corrige **solo hacia `simple`**: es la única dirección con consecuencia. Commit `66e8811`.
+
+### Pendiente (con la ubicación exacta)
+
+1. **NC de una venta `no_fiscal` se registra como documento fiscal** — `accountant/.../notas_credito_impl.rs:535-541`
+   y `notas_debito_impl.rs` escriben `es_movimiento_fiscal: true` fijo. Medido: factura fiscal 116 +
+   simple 58 + NC 58 → libro con neto fiscal 58 sobre una sola factura de 116. Arreglo: la NC hereda la
+   clase fiscal del documento afectado (buscarlo por `numero_control` en `factura` y usar la regla única
+   `es_comprobante_fiscal`). En el ERP, `FacturaNotaCreditoDialog.tsx:350,371` manda `SIMPLE-1` como
+   documento afectado a TFHKA/máquina: con credencial ausente el operador **no puede devolver**.
+2. **Anular una venta `simple` no la anula** — `orders_actions/.../repositories.rs:3448,3461,3468`
+   resuelven por `orders.numero_control_interno`, vacío en `simple`: responde "venta inexistente", la
+   `factura` y la `transaccion` no se marcan anuladas (siguen en arqueo y Z) mientras el stock sí se
+   revierte. Y NC total + anulación devuelve el stock **dos veces**.
+3. **`modo_facturacion` inválido se acepta con 200** — `phamacy_action/.../mappers.rs:150` hace
+   `json!(v)` sin validar: `"SIMPLE"`, `"simple "` o `""` se guardan y la lectura los ignora.
+
+El verificador dejó las sondas listas en `/tmp/vsimple.*` (arqueo mixto, libro con NC sobre
+`no_fiscal`, `from_persisted` con valores basura, anulación por control). No se commitearon.
+
+### Incidente de entorno
+
+`node_modules` del ERP desapareció durante la verificación (por eso el verificador no pudo correr los
+tests de JS) y se reinstaló con `pnpm install --frozen-lockfile`. Ese fue el motivo de que
+`npx tsc` fallara de golpe.
