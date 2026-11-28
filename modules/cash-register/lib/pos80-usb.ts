@@ -55,6 +55,25 @@ async function findPaired(): Promise<USBDevice | null> {
   return (devices as USBDevice[]).find(isPrinter) ?? null;
 }
 
+/**
+ * true si la POS80 ya esta emparejada en este navegador, **sin abrir el
+ * selector**. Es la consulta que usa la deteccion de canal: preguntar no puede
+ * costar un dialogo ni un gesto del usuario.
+ *
+ * Falso tambien significa "no se puede saber todavia": sin WebUSB (otro
+ * navegador) o con el driver WinUSB faltante, `getDevices()` viene vacio y no
+ * distingue "no emparejada" de "no hay driver". La UI de puesta a punto es la
+ * que separa esos dos casos.
+ */
+export async function isPrinterPaired(): Promise<boolean> {
+  if (!isWebUsbSupported()) return false;
+  try {
+    return (await findPaired()) !== null;
+  } catch {
+    return false;
+  }
+}
+
 async function openDevice(dev: USBDevice): Promise<void> {
   try {
     try {

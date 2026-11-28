@@ -12,6 +12,7 @@
     "test:fiscal": "node --experimental-strip-types --test test/fiscal-concordance.test.mjs test/fiscal-fallback.test.mjs test/z-report.test.mjs test/z-report-split.test.mjs test/z-report-day-guard.test.mjs",
     "test:z-guard": "node --experimental-strip-types --test test/z-report-day-guard.test.mjs",
     "test:fiscal-fallback": "node --experimental-strip-types --test test/fiscal-fallback.test.mjs",
+    "test:channel": "node --experimental-strip-types --test test/channel-detect.test.mjs",
     "test:cierre-caja": "node --experimental-strip-types --test test/cierre-caja.test.mjs",
     "test:nota-credito": "node --experimental-strip-types --test test/nota-credito-flow.test.mjs",
     "test:pricing": "node --experimental-strip-types --test test/pricing.test.mjs",
