@@ -56,7 +56,7 @@ Implementación de esta revisión (detección). F3/F4 quedan abiertas.
 | **T10** | Papel POS80 impreso + backend que rechaza: se informa y no se anuncia venta registrada. | S4, R6 | Hecho (`894d015`) |
 | **T11** | Documentos derivados por canal: NC, reimpresión, X y Z dejan de cruzar a POS80 con el servicio vivo. | S3, R7 | Hecho (commit siguiente) |
 | **T12** | Vigilante del `/health` del lado del POS, para que el operador vea el canal antes de cobrar. | S5 | Hecho (commit siguiente) |
-| **T13** | Evidencia de canal por orden en `Backend-administrativo`. | R8 | En curso |
+| **T13** | Evidencia de canal por orden en `Backend-administrativo`. | R8 | Hecho: `Backend-administrativo` `edf54bb7` + ERP `11cd935` |
 
 ## Estado medido hoy
 
@@ -663,3 +663,15 @@ alteran comportamiento de venta.
   POS80 conserva el diseño "imprime primero, reintenta persistir": no se pasó a fail-closed porque no
   es una venta y no se pidió. (d) `fiscalNotesService.createNotaCredito` (camino digital) sigue sin
   try/catch.
+- **L14** — T13 cerrado (18/11/2026). `ModelOrder` (`src/shape/src/models/pruebas.rs:77`, repo
+  `Backend-administrativo`) suma `canal` y `motivo_canal` opcionales, en camelCase. La tabla
+  `orders` es **SCHEMALESS** — no hay `DEFINE TABLE orders` en `scripts/migrations/` y
+  `numero_control_interno` se escribe igual desde siempre — y `insert_order` hace
+  `INSERT INTO orders $batch` con el `Vec<ModelOrder>` completo, así que no hace falta migración ni
+  mapeo campo por campo. El POS manda `canal` + `motivoCanal` (`servicio_presente` /
+  `servicio_ausente` / `comprobante_ya_emitido`). Rama del backend: `feat/canal-comprobante-evidencia`
+  (creada desde `origin/dev`, no desde la rama `fix/supplier-scope-grupo` que tiene trabajo ajeno en
+  curso). Evidencia: `cargo check --workspace` limpio, `cargo test -p shape` 75/75 (3 tests nuevos
+  que pinan el camelCase, la ausencia del campo y el rechazo de snake_case), ERP `test:sale-channel`
+  10/10 con dos casos nuevos de evidencia. **No se desplegó ni se promovió nada**: se publicaron las
+  ramas.
