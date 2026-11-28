@@ -92,8 +92,12 @@ export default function PaymentDialog({
   // no la fuente de verdad.
   const { decision: terminalChannel, isStale: channelIsStale } = useChannelStatus();
 
+
   const { isDollar, getEffectiveRate } = useCurrencyStore();
   const { profile } = useAuthStore();
+  // Facturacion digital: el comprobante lo emite el backend, no una impresora.
+  // El canal de papel no aplica y no puede anunciarse como un problema.
+  const usesDigitalBilling = Boolean((profile as any)?.usesDigitalBilling);
   const currentClient = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]?.client);
   const currentOrder = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]);
 
@@ -346,10 +350,13 @@ export default function PaymentDialog({
       // Se resuelve en el mismo gesto del click: WebUSB exige activacion
       // transitoria para pedir la impresora, y se pierde tras los awaits del
       // flujo fiscal.
-      // Solo interesa el canal para preparar WebUSB; la maquina la juzga la factura.
-      const terminalChannel = await resolveTerminalChannel({ probeMachine: false });
-      if (terminalChannel.channel === "pos80") {
-        await prepairPrinter();
+      // Solo interesa el canal para preparar WebUSB; la maquina la juzga la
+      // factura. En facturacion digital no se toca WebUSB: no hay papel local.
+      if (!usesDigitalBilling) {
+        const terminalChannel = await resolveTerminalChannel({ probeMachine: false });
+        if (terminalChannel.channel === "pos80") {
+          await prepairPrinter();
+        }
       }
       const order = useCurrentOrderStore.getState().getCurrentOrder();
       const clientData = order?.client;
@@ -585,24 +592,24 @@ export default function PaymentDialog({
           </div>
         )}
 
-        {/* Canal de la terminal. Es informativo: la venta vuelve a detectar antes
-            de emitir. Lo que se busca es que el cajero no se entere de que la
-            maquina fiscal no responde recien cuando falla el cobro (S3/S5). */}
-        {(!terminalChannel || channelIsStale) && (
+        {/* Canal de la terminal. Es informativo, y solo aplica a las cajas que
+            emiten papel: con facturacion digital el comprobante lo emite el
+            backend y anunciar "la POS80 no está emparejada" seria un error. */}
+        {!usesDigitalBilling && (!terminalChannel || channelIsStale) && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
               Verificando el servicio fiscal…
             </div>
           </div>
         )}
-        {terminalChannel && !channelIsStale && terminalChannel.channel === "pos80" && (
+        {!usesDigitalBilling && terminalChannel && !channelIsStale && terminalChannel.channel === "pos80" && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
               {terminalChannel.reason}
             </div>
           </div>
         )}
-        {terminalChannel && !channelIsStale && terminalChannel.channel === "fiscal" && !terminalChannel.ready && (
+        {!usesDigitalBilling && terminalChannel && !channelIsStale && terminalChannel.channel === "fiscal" && !terminalChannel.ready && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
               {terminalChannel.reason}

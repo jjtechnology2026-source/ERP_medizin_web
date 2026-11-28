@@ -452,3 +452,55 @@ test("puerto ocupado al facturar: no imprime, no registra y dice el motivo real"
   assert.match(String(store().errorMessage), /puerto ocupado/, "el motivo es el de la máquina");
   assert.match(String(store().errorMessage), /no se registró/i);
 });
+
+test("facturación digital: sin servicio fiscal y sin POS80, la venta se registra igual", async () => {
+  // El comprobante lo emite el backend. No hay papel local que exigir, así que
+  // pedir la POS80 emparejada bloqueaba cajas que no tienen impresora.
+  useAuthStore.setState({
+    profile: { ...useAuthStore.getState().profile, usesDigitalBilling: true },
+  });
+  fiscalPrinterClient.getHealth = healthAbsent;
+  usbState.paired = false;
+  // El backend emite el comprobante: success con número de control real.
+  cashierAccountantService.submitOrder = async (order, saleType, sessionId) => {
+    events.push("submit");
+    submits.push({ order, saleType, sessionId });
+    return {
+      ordenId: "orden-1",
+      facturacion: {
+        success: true,
+        numeroControl: "00001234",
+        urlPdf: "https://x/f.pdf",
+        error: null,
+      },
+    };
+  };
+  setCart(makeCart("ORD-DIG-1"));
+
+  const result = await store().registerSale("digital");
+
+  assert.notEqual(result, null, "la venta digital se registra sin impresora alguna");
+  assert.equal(submits.length, 1);
+  assert.equal(usbState.transfers, 0, "no se intenta imprimir por POS80");
+  assert.doesNotMatch(String(store().errorMessage), /POS80|emparejada/i);
+});
+
+test("facturación digital con la emisión caída: informa el motivo y no pide emparejar nada", async () => {
+  useAuthStore.setState({
+    profile: { ...useAuthStore.getState().profile, usesDigitalBilling: true },
+  });
+  // Servicio fiscal AUSENTE y POS80 sin emparejar: es la caja real del reporte.
+  fiscalPrinterClient.getHealth = healthAbsent;
+  cashierAccountantService.submitOrder = async () => ({
+    ordenId: "orden-1",
+    facturacion: { success: false, numeroControl: null, urlPdf: null, error: "sin timbrado" },
+  });
+  usbState.paired = false;
+  setCart(makeCart("ORD-DIG-2"));
+
+  const result = await store().registerSale("digital");
+
+  assert.equal(result, null, "sin comprobante no hay venta");
+  assert.equal(usbState.transfers, 0, "y no se fabrica papel por POS80 (R7)");
+  assert.doesNotMatch(String(store().errorMessage), /emparejada/i, "no se pide un emparejamiento inútil");
+});

@@ -513,47 +513,14 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         return result;
       }
 
-      // Venta digital: la orden la factura el backend. El canal igual manda
-      // (Spec S3): con el servicio fiscal vivo, una emision fallida es error,
-      // no un ticket POS80 que pretenda ser el documento.
-      const chosen = await decision();
-      if (chosen.channel === "pos80") {
-        if (!chosen.ready) {
-          set({ isSubmitting: false, errorMessage: chosen.reason });
-          return null;
-        }
-        stampChannel(chosen);
-        const pos80 = await runOrderFallback({
-          header,
-          order,
-          initialResult: result,
-          transportFailed,
-          saleType,
-          sessionId: activeSession.id,
-          submitOrder: cashierAccountantService.submitOrder,
-          print: printNoFiscalTicket,
-        });
-        if (!pos80.printed) {
-          set({
-            isSubmitting: false,
-            errorMessage: `No se pudo imprimir el comprobante en la POS80: ${pos80.printError}. La venta no se registró.`,
-          });
-          return null;
-        }
-        if (!pos80.persisted) {
-          set({
-            isSubmitting: false,
-            errorMessage: `El comprobante salió en la POS80 pero la venta no se pudo registrar: ${
-              pos80.persistError ?? "error desconocido"
-            }. No vuelvas a imprimir: verificá el listado de órdenes y registrala desde ahí.`,
-          });
-          return null;
-        }
-        set({ isSubmitting: false, infoMessage: "Venta registrada con comprobante POS80" });
-        await get().load();
-        return pos80;
-      }
-
+      // Venta digital: el documento lo emite el BACKEND (`insertorder`), no una
+      // impresora. Por eso aca no se consulta el canal ni se pide papel: exigir
+      // la POS80 emparejada bloqueaba ventas digitales en farmacias que no
+      // tienen impresora, que es justo el caso donde no hace falta ninguna.
+      //
+      // Tampoco hay fallback: imprimir por POS80 un comprobante no fiscal de una
+      // venta que el backend facturo es el mismo defecto que la reimpresion
+      // (R7). Si la emision falla, se informa con lo que paso.
       set({
         isSubmitting: false,
         errorMessage: `La emisión fiscal no devolvió comprobante${
