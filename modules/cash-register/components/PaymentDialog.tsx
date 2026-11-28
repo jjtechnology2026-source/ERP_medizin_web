@@ -6,6 +6,7 @@ import { useCurrentOrderStore } from "@/modules/cash-register/store/current-orde
 import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-workflow.store";
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { resolveModoFacturacion } from "@/modules/auth/api/auth.services";
 import { useProductsStore } from "@/modules/products/store/products.store";
 import { customerService } from "@/modules/customers/api/customer.service";
 import api from "@/modules/core/api/client";
@@ -98,6 +99,11 @@ export default function PaymentDialog({
   // Facturacion digital: el comprobante lo emite el backend, no una impresora.
   // El canal de papel no aplica y no puede anunciarse como un problema.
   const usesDigitalBilling = Boolean((profile as any)?.usesDigitalBilling);
+  // Modo `simple` (`odd/tasks/modo-facturacion-simple.md`, S3): la farmacia no
+  // emite comprobante fiscal ni papel, asi que tampoco hay canal que resolver ni
+  // cartel de canal que mostrar. El modo manda sobre la deteccion de la terminal.
+  const modoFacturacion = resolveModoFacturacion(profile);
+  const emitsLocalReceipt = !usesDigitalBilling && modoFacturacion !== "simple";
   const currentClient = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]?.client);
   const currentOrder = useCurrentOrderStore((s) => s.orders[s.currentOrderIndex]);
 
@@ -351,8 +357,9 @@ export default function PaymentDialog({
       // transitoria para pedir la impresora, y se pierde tras los awaits del
       // flujo fiscal.
       // Solo interesa el canal para preparar WebUSB; la maquina la juzga la
-      // factura. En facturacion digital no se toca WebUSB: no hay papel local.
-      if (!usesDigitalBilling) {
+      // factura. En facturacion digital y en modo simple no se toca WebUSB: no
+      // hay papel local.
+      if (emitsLocalReceipt) {
         const terminalChannel = await resolveTerminalChannel({ probeMachine: false });
         if (terminalChannel.channel === "pos80") {
           await prepairPrinter();
@@ -594,22 +601,23 @@ export default function PaymentDialog({
 
         {/* Canal de la terminal. Es informativo, y solo aplica a las cajas que
             emiten papel: con facturacion digital el comprobante lo emite el
-            backend y anunciar "la POS80 no está emparejada" seria un error. */}
-        {!usesDigitalBilling && (!terminalChannel || channelIsStale) && (
+            backend, y en modo simple no hay comprobante fiscal, asi que anunciar
+            "la POS80 no está emparejada" seria un error. */}
+        {emitsLocalReceipt && (!terminalChannel || channelIsStale) && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
               Verificando el servicio fiscal…
             </div>
           </div>
         )}
-        {!usesDigitalBilling && terminalChannel && !channelIsStale && terminalChannel.channel === "pos80" && (
+        {emitsLocalReceipt && terminalChannel && !channelIsStale && terminalChannel.channel === "pos80" && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm font-medium">
               {terminalChannel.reason}
             </div>
           </div>
         )}
-        {!usesDigitalBilling && terminalChannel && !channelIsStale && terminalChannel.channel === "fiscal" && !terminalChannel.ready && (
+        {emitsLocalReceipt && terminalChannel && !channelIsStale && terminalChannel.channel === "fiscal" && !terminalChannel.ready && (
           <div className="px-6 pb-3 flex-shrink-0">
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
               {terminalChannel.reason}

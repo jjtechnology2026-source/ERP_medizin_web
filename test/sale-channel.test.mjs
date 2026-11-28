@@ -13,6 +13,11 @@
  *    motivo y la POS80 no se toca: cambiar de canal por un fallo de la impresora
  *    es el fallback que esta rama elimino.
  *
+ * Y desde `modo-facturacion-simple.md` (S3, T5) hay un TERCER camino que no
+ * obedece al canal: una farmacia en modo `simple` no emite por la maquina fiscal
+ * ni por la POS80 ni por facturacion digital. La venta se envia y el comprobante
+ * contable lo escribe el backend; sin papel, la deteccion de canal no corre.
+ *
  * Corre con el store REAL y el fixture del servicio de caja; solo se doblan las
  * tres dependencias externas: servicio fiscal (HTTP local), backend
  * (`submitOrder`) y el transporte WebUSB de la POS80.
@@ -32,6 +37,7 @@ import { useAuthStore } from "../modules/auth/store/useAuthStore.ts";
 import { useCurrentOrderStore } from "../modules/cash-register/store/current-order.store.ts";
 import { useCurrencyStore } from "../modules/core/store/currency.store.ts";
 import { useCashierWorkflowStore } from "../modules/cash-register/store/cashier-workflow.store.ts";
+import { mapUserData } from "../modules/auth/api/auth.services.ts";
 
 const SESSION = {
   id: "ses-1",
@@ -164,6 +170,12 @@ function setCart(cart) {
 
 const store = () => useCashierWorkflowStore.getState();
 
+/**
+ * Lecturas de `/health` durante el caso. Es la prueba de que el modo `simple` no
+ * resuelve canal: sin sondeo no hay canal que pueda mandar la venta a POS80.
+ */
+let healthCalls = 0;
+
 /** `GET /health` sin servicio: la terminal esta sola. */
 const healthAbsent = async () => {
   throw new Error("connection refused");
@@ -183,6 +195,7 @@ beforeEach(() => {
   usbState.printError = "sin papel";
   usbState.transfers = 0;
   usbState.requests = 0;
+  healthCalls = 0;
 
   resetCashierServiceMock({
     assignedCajaId: "caja-1",
@@ -215,8 +228,12 @@ beforeEach(() => {
   });
 
   // Servicio fiscal VIVO por defecto: el canal es fiscal. Los casos de POS80
-  // reemplazan `getHealth` por uno que no responde.
-  fiscalPrinterClient.getHealth = async () => ({ status: "ok" });
+  // reemplazan `getHealth` por uno que no responde. Cada lectura se cuenta: en
+  // modo `simple` tiene que quedar en cero.
+  fiscalPrinterClient.getHealth = async () => {
+    healthCalls += 1;
+    return { status: "ok" };
+  };
   fiscalPrinterClient.getPrinterStatus = async () => ({ status: "ok" });
 
   fiscalPrinterClient.createInvoice = async (payload) => {
@@ -548,4 +565,120 @@ test("digital con rechazo fiscal real: la venta queda registrada y se informa el
   assert.match(String(store().errorMessage), /quedó registrada/i);
   assert.match(String(store().errorMessage), /sin timbrado/, "el motivo es el del backend");
   assert.equal(usbState.transfers, 0, "no se fabrica papel por POS80");
+});
+
+// --- Modo de facturacion `simple` (odd/tasks/modo-facturacion-simple.md, T5) --
+//
+// S2: `simple` NO es "no registrar": la orden, la factura, las transacciones y el
+// inventario se hacen igual. S3: no pasa por la maquina fiscal, ni por la POS80,
+// ni por facturacion digital. El comprobante contable lo escribe el backend, asi
+// que en el POS no hay canal que resolver ni papel que sacar.
+
+/** Perfil de una farmacia que emite sin comprobante fiscal. */
+function setSimpleProfile() {
+  useAuthStore.setState({
+    profile: {
+      ...useAuthStore.getState().profile,
+      usesDigitalBilling: false,
+      modoFacturacion: "simple",
+    },
+  });
+}
+
+test("modo de facturación: el perfil lo lleva y, sin el campo, se deriva de usesDigitalBilling", () => {
+  // El backend ya manda `modoFacturacion` en `login_agent`: se respeta tal cual.
+  const simple = mapUserData({
+    agentData: { agentId: "a-1", usesDigitalBilling: false, modoFacturacion: "simple" },
+    token: "t",
+  });
+  assert.equal(simple.modoFacturacion, "simple", "el modo del backend llega al perfil");
+
+  // Sesion vieja (token emitido antes de que el backend mandara el modo): se
+  // deriva de `usesDigitalBilling`, que es lo que alimentaba el comportamiento.
+  const oldDigital = mapUserData({
+    agentData: { agentId: "a-2", usesDigitalBilling: true },
+    token: "t",
+  });
+  assert.equal(oldDigital.modoFacturacion, "digital", "sin el campo, digital sigue siendo digital");
+
+  const oldFiscal = mapUserData({
+    agentData: { agentId: "a-3", usesDigitalBilling: false },
+    token: "t",
+  });
+  assert.equal(oldFiscal.modoFacturacion, "fiscal", "y una caja con maquina fiscal sigue fiscal");
+});
+
+test("modo simple: la venta se envía sin resolver canal y sin exigir POS80 (S3)", async () => {
+  // El caso del papel que NO tiene que salir: servicio fiscal vivo y POS80 sin
+  // emparejar. En `fiscal` esto seria un error de canal; en `simple` no hay
+  // canal que mirar, asi que la venta se registra igual.
+  setSimpleProfile();
+  usbState.paired = false;
+  setCart(makeCart("ORD-SIMPLE-1"));
+
+  const result = await store().registerSale("local");
+
+  assert.notEqual(result, null, "la venta se registra: simple no es 'no registrar' (S2)");
+  assert.equal(submits.length, 1, "la orden se envia una sola vez");
+  assert.equal(invoice.calls.length, 0, "no se le pide comprobante a la maquina fiscal");
+  assert.equal(healthCalls, 0, "no se consulta /health: no hay canal que resolver");
+  assert.equal(usbState.transfers, 0, "la POS80 no imprimio");
+  assert.equal(usbState.requests, 0, "tampoco se abre el selector WebUSB");
+  assert.equal(store().errorMessage, null, "sin mensaje de error de canal");
+  assert.doesNotMatch(String(store().errorMessage), /POS80|emparejada|servicio fiscal/i);
+  assert.match(String(store().infoMessage), /simple/i, "el mensaje dice en que modo salio");
+});
+
+test("modo simple: el envío va por la ruta en la que el backend emite el documento", async () => {
+  // Una venta `simple` no lleva numero de control local, y el unico contrato del
+  // backend que acepta una orden sin el es el de emision por backend
+  // (`insertorder`, `docs/migracion-typescript/apis-consumidas/ordenes.md:227`).
+  setSimpleProfile();
+  setCart(makeCart("ORD-SIMPLE-2"));
+
+  await store().registerSale("local");
+
+  assert.equal(submits.length, 1);
+  assert.equal(
+    submits[0].saleType,
+    "digital",
+    "se envia por la ruta de emision del backend, no por /orders/local",
+  );
+  assert.equal(submits[0].sessionId, SESSION.id, "la venta queda atada a su sesion de caja");
+  assert.equal(
+    submits[0].order.numeroControlInterno,
+    null,
+    "no se inventa un numero de control: la numeracion SIMPLE- la pone el backend",
+  );
+  assert.equal(submits[0].order.canal, undefined, "no se declara un canal que no se resolvio");
+});
+
+test("modo simple: si el envío falla, se informa el motivo real y no se imprime nada", async () => {
+  setSimpleProfile();
+  usbState.paired = true; // aunque hubiera impresora, no es un canal de salida
+  cashierAccountantService.submitOrder = async () => {
+    const error = new Error("Network Error");
+    error.response = { status: 502, data: { message: "el servicio de órdenes no respondió" } };
+    throw error;
+  };
+  setCart(makeCart("ORD-SIMPLE-3"));
+
+  const result = await store().registerSale("local");
+
+  assert.equal(result, null, "sin respuesta no hay venta que declarar");
+  assert.equal(invoice.calls.length, 0, "no se pide comprobante local");
+  assert.equal(usbState.transfers, 0, "ni se inventa papel por POS80");
+  assert.equal(healthCalls, 0, "y no se resuelve canal para decidir nada");
+  assert.match(String(store().errorMessage), /no se pudo enviar/i, "dice que fallo el envio");
+  assert.match(
+    String(store().errorMessage),
+    /el servicio de órdenes no respondió/,
+    "y conserva el motivo real del backend",
+  );
+  assert.match(
+    String(store().errorMessage),
+    /pudo haberse registrado/i,
+    "no afirma que la venta no existe cuando no puede saberlo",
+  );
+  assert.doesNotMatch(String(store().errorMessage), /POS80|emparejada/i);
 });

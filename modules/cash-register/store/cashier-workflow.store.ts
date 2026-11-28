@@ -4,6 +4,7 @@ import { cashierAccountantService } from "@/modules/cash-register/api/cashier-ac
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { useCurrentOrderStore } from "@/modules/cash-register/store/current-order.store";
 import { useAuthStore } from "@/modules/auth/store/useAuthStore";
+import { resolveModoFacturacion } from "@/modules/auth/api/auth.services";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
@@ -287,6 +288,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       phone: String(profile.pharmacyPhone || ""),
     };
 
+    // Modo de facturacion de la FARMACIA (`odd/tasks/modo-facturacion-simple.md`,
+    // Spec S4): no se elige venta por venta. Manda sobre la deteccion de canal
+    // (Spec S3), y el default de las sesiones que no traen el campo es el camino
+    // que ya tenian (`resolveModoFacturacion`).
+    const modoFacturacion = resolveModoFacturacion(profile);
+
     const order = useCurrentOrderStore.getState().buildModelOrder(profile);
     if (!order) {
       set({ errorMessage: "No hay productos en la orden" });
@@ -370,6 +377,72 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
         await get().load();
         return pos80;
       };
+
+      /**
+       * Modo `simple`: la venta se envia y nada mas. Sin deteccion de canal, sin
+       * `/health`, sin WebUSB y sin papel: no hay documento local que emitir
+       * (Spec S3), y el comprobante contable lo escribe el backend (Spec S2).
+       *
+       * Va por la ruta de emision del backend (`insertorder`, `saleType
+       * "digital"`): una venta `simple` no lleva numero de control local, y es
+       * el unico contrato del backend que acepta una orden sin el
+       * (`docs/migracion-typescript/apis-consumidas/ordenes.md:227`). Que no se
+       * llame a TFHKA en ese modo lo decide el backend, no el POS.
+       */
+      const runSimpleSale = async () => {
+        let simple: Awaited<ReturnType<typeof cashierAccountantService.submitOrder>> | null = null;
+        try {
+          simple = await cashierAccountantService.submitOrder(order, "digital", activeSession.id);
+        } catch (error: any) {
+          // Se informa el motivo REAL. Ni se inventa papel ni se prueba otro
+          // canal: en este modo no hay ninguno.
+          const motivo =
+            error?.response?.data?.detail ||
+            error?.response?.data?.message ||
+            error?.message ||
+            "error desconocido";
+          console.error("❌ [registerSale] Error en modo simple:", motivo);
+          set({
+            isSubmitting: false,
+            errorMessage: `No se pudo enviar la venta: ${motivo}. La orden pudo haberse registrado: verificá el listado de órdenes antes de reintentar.`,
+          });
+          return null;
+        }
+
+        if (!simple?.ordenId) {
+          // Respondio sin orden: no hay evidencia de que la venta exista.
+          set({
+            isSubmitting: false,
+            errorMessage:
+              "El servidor respondió sin registrar la orden. No se pudo confirmar la venta: verificá el listado de órdenes antes de reintentar.",
+          });
+          return null;
+        }
+
+        // La orden esta registrada. Si el backend ademas declara un fallo de
+        // emision, se informa el motivo: nunca se da por emitido un comprobante
+        // que el backend dice que no emitio.
+        if (facturacionRejected(simple.facturacion)) {
+          const motivo =
+            simple.facturacion?.error ?? "el backend no devolvió el motivo";
+          await get().load();
+          set({
+            isSubmitting: false,
+            errorMessage: `La venta quedó registrada, pero el backend no emitió el comprobante: ${motivo}.`,
+          });
+          return simple;
+        }
+
+        set({
+          isSubmitting: false,
+          infoMessage:
+            "Venta registrada. La farmacia emite en modo simple: el comprobante lo genera el sistema, no se imprime papel.",
+        });
+        await get().load();
+        return simple;
+      };
+
+      if (modoFacturacion === "simple") return await runSimpleSale();
 
       if (saleType === "local") {
         // Si esta misma venta ya emitio su comprobante (el registro fallo y el

@@ -13,6 +13,8 @@ declare module "next-auth" {
       pharmacyName?: string;
       rif?: string;
       usesDigitalBilling?: boolean;
+      /** Con qué emite la farmacia: `digital` | `fiscal` | `simple` (`odd/tasks/modo-facturacion-simple.md`). */
+      modoFacturacion?: "digital" | "fiscal" | "simple";
       pharmacies?: any[];
     } & DefaultSession["user"];
     accessToken?: string;
@@ -30,6 +32,8 @@ declare module "next-auth" {
     pharmacyName?: string;
     rif?: string;
     usesDigitalBilling?: boolean;
+    /** Con qué emite la farmacia: `digital` | `fiscal` | `simple` (`odd/tasks/modo-facturacion-simple.md`). */
+    modoFacturacion?: "digital" | "fiscal" | "simple";
     pharmacies?: any[];
     accessToken: string; 
     refreshToken: string; 
@@ -54,6 +58,8 @@ declare module "next-auth/jwt" {
       pharmacyName?: string;
       rif?: string;
       usesDigitalBilling?: boolean;
+      /** Con qué emite la farmacia: `digital` | `fiscal` | `simple` (`odd/tasks/modo-facturacion-simple.md`). */
+      modoFacturacion?: "digital" | "fiscal" | "simple";
       pharmacies?: any[];
     };
     error?: string;

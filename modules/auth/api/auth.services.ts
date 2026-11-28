@@ -15,6 +15,37 @@ interface LoginResponse {
 
 export const TOKEN_EXPIRY_FALLBACK_SECONDS = 3600;
 
+/**
+ * Con qué documento emite la farmacia (`odd/tasks/modo-facturacion-simple.md`,
+ * Spec S1):
+ *  - `digital`: el backend emite (TFHKA).
+ *  - `fiscal`: la máquina fiscal de la terminal emite y el POS toma el COO.
+ *  - `simple`: no hay comprobante fiscal ni papel; la cadena contable la
+ *    escribe el backend con su propia numeración.
+ */
+export type ModoFacturacion = "digital" | "fiscal" | "simple";
+
+/**
+ * Modo de facturación del perfil, con el default que no cambia a nadie.
+ *
+ * El backend manda `modoFacturacion` en `login_agent`. Cuando falta —sesión
+ * emitida antes de que existiera el campo, o respuesta de un backend viejo— se
+ * deriva de `usesDigitalBilling`, que es el único dato con el que se elegía el
+ * camino hasta hoy: digital si facturaba por backend, fiscal si no. Así ninguna
+ * farmacia cambia de comportamiento por no tener el campo.
+ */
+export function resolveModoFacturacion(source?: unknown): ModoFacturacion {
+  // `unknown` y no una forma estructural: el perfil y la respuesta del backend
+  // son tipos abiertos, y el modo se lee de lo que venga.
+  const shaped = (source ?? {}) as { modoFacturacion?: unknown; usesDigitalBilling?: unknown };
+  const raw =
+    typeof shaped.modoFacturacion === "string"
+      ? shaped.modoFacturacion.trim().toLowerCase()
+      : "";
+  if (raw === "digital" || raw === "fiscal" || raw === "simple") return raw;
+  return shaped.usesDigitalBilling ? "digital" : "fiscal";
+}
+
 export function decodeJwtExp(token: string | undefined): number {
   try {
     if (!token) return TOKEN_EXPIRY_FALLBACK_SECONDS * 1000;
@@ -128,6 +159,10 @@ export const mapUserData = (data: LoginResponse, isDirect = false) => {
         ? agent.permits
         : [],
     usesDigitalBilling: Boolean(agent.usesDigitalBilling),
+    // El modo manda sobre la detección de la terminal (Spec S3): con `simple` el
+    // POS no resuelve canal. `resolveModoFacturacion` cubre las sesiones que no
+    // lo traen derivándolo de `usesDigitalBilling`.
+    modoFacturacion: resolveModoFacturacion(agent),
     cajaId: agent.cajaId ?? null,
     accessToken: data.token || agent.token,
     refreshToken: data.refresh_token || agent.refresh_token,
