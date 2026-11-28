@@ -22,12 +22,12 @@ anterior.
 
 | ID | Qué | Repo | Estado |
 | --- | --- | --- | --- |
-| **T1** | `ModelPharmacy.modo_facturacion` (`digital`\|`fiscal`\|`simple`) + `modoFacturacion` en `PresentAgent`, derivado de `active_modules` cuando falta (compatibilidad). | Backend | En curso |
-| **T2** | Tercera rama en `pipeline.rs`: `simple` no llama a TFHKA ni a la máquina fiscal; secuencia `SIMPLE-<n>` por farmacia (idiom de `cotizacion_secuencia`). | Backend | Pendiente |
-| **T3** | `es_movimiento_fiscal: false` y `tipo_comprobante: "no_fiscal"` en la factura/transacción del modo `simple`. | Backend | Pendiente |
-| **T4** | Selector de modo en `CrearFarmaciaModal` y `EditarFarmaciaModal` (precedente `MODULOS`). | Admin general | Pendiente |
-| **T5** | `modoFacturacion` en el perfil del ERP (`auth.services.ts`) y tercer camino en `registerSale`. | ERP | Pendiente |
-| **T6** | Reportes: el libro fiscal y el Z excluyen `tipo_comprobante = "no_fiscal"` y lo desglosan. | Backend + ERP | Pendiente |
+| **T1** | `ModelPharmacy.modo_facturacion` (`digital`\|`fiscal`\|`simple`) + `modoFacturacion` en `PresentAgent`, derivado de `active_modules` cuando falta (compatibilidad). | Backend | Hecho (`b050003b`) |
+| **T2** | Tercera rama en `pipeline.rs`: `simple` no llama a TFHKA ni a la máquina fiscal; secuencia `SIMPLE-<n>` por farmacia (idiom de `cotizacion_secuencia`). | Backend | Hecho (`f732e463`) |
+| **T3** | `es_movimiento_fiscal: false` y `tipo_comprobante: "no_fiscal"` en la factura/transacción del modo `simple`. | Backend | Hecho (`f732e463`) |
+| **T4** | Selector de modo en `CrearFarmaciaModal` y `EditarFarmaciaModal` (precedente `MODULOS`). | Admin general | Hecho (`e5384d2`) |
+| **T5** | `modoFacturacion` en el perfil del ERP (`auth.services.ts`) y tercer camino en `registerSale`. | ERP | Hecho (`af4ab35`) |
+| **T6** | Reportes: el libro fiscal y el Z excluyen `tipo_comprobante = "no_fiscal"` y lo desglosan; el arqueo cuenta el efectivo de las ventas `simple`. | Backend + ERP | Hecho en backend (`0e7a5e4f`) |
 
 ### Topología confirmada (28/11/2026)
 
@@ -196,3 +196,25 @@ muestra `Estado: Error: <motivo>` en el detalle de la orden.
 **Lo que este cambio no arregla**, y hay que decirlo: las filas históricas con `FALLO-` y
 `success: true` siguen mintiendo, y la credencial de esa farmacia sigue faltando. Ninguna de las
 dos cosas se resuelve con código.
+
+## Estado de la implementación (28/11/2026)
+
+Las tres piezas están desplegadas. **Ninguna farmacia está en `simple`**: el modo se elige por farmacia en el administrador general y, mientras nadie lo elija, todo sigue exactamente como antes.
+
+### Lo que quedó funcionando
+
+- El modo se declara en el alta y la edición (`admintest.medizins.com`), con el aviso de que en `simple` las ventas no tendrán comprobante fiscal.
+- El backend lee el modo **de la fila de la farmacia**, nunca de lo que manda el POS. En `simple`: no llama TFHKA, escribe `factura.numero_control = SIMPLE-<n>` con secuencia **por farmacia** (`facturacion_simple_secuencia`), `serie_fiscal: None`, `tipo_comprobante: "no_fiscal"` y `es_movimiento_fiscal: false`.
+- La cadena contable e inventario corre igual: `detalle_factura`, `transaccion`, ingreso, CxC, `movimiento_inventario`, stock por CAS y MQTT.
+- El arqueo **cuenta el efectivo** de esas ventas (antes lo excluía de los dos lados y el cierre habría mostrado la diferencia).
+- El Z fiscal no suma las `simple` ni las usa como rango de documentos; viajan en un bloque propio (`non_fiscal_sales`) que ahora sí se persiste.
+- El POS tiene el tercer camino: envía y no toca canal, WebUSB ni papel.
+- Bug encontrado y cerrado en el camino: el chequeo anti-duplicado de `numero_control` era global, así que la primera venta `simple` de una segunda farmacia colisionaba con el `SIMPLE-1` de la primera.
+
+### Deuda declarada (no bloquea)
+
+- El **cierre de caja** calcula el desglose de ventas sin comprobante pero `sesion_impl.rs` todavía no lo expone en la respuesta: el número no llega a la pantalla del cierre.
+- `useFiscalPrinterConnection` y `FiscalConfigCard` del ERP siguen tratando "no digital" como "tiene máquina fiscal"; en modo `simple` eso muestra una conexión fiscal que no existe.
+- Una devolución no fiscal se informa como gasto operativo: la caja cuadra, el desglose no fiscal queda bruto.
+- El bloque `non_fiscal_sales` va en VES, igual que los demás bloques del Z: una venta `simple` en USD entra al arqueo (líquido USD) pero no al bloque.
+- Las filas históricas con `FALLO-` y `success: true` siguen mintiendo: no hay migración.
