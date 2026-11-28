@@ -26,6 +26,23 @@ export function isFiscalFailure(fac?: FiscalFailure | null): boolean {
   return false;
 }
 
+/**
+ * Rechazo FISCAL de verdad: `success: false` **con motivo**.
+ *
+ * No alcanza con `success === false` ni con `numeroControl == null`: la
+ * respuesta normal de una venta es `facturacion: null` (la fila de `factura` la
+ * escribe un `run_facturacion` desacoplado), y `cashier-accountant.service`
+ * normaliza eso a `{success: false, error: null}`. Contar eso como rechazo
+ * reportaba como fallida una venta que el backend **sí** registró: el operador
+ * veía "la emisión fiscal no devolvió comprobante" con la orden ya insertada.
+ */
+export function facturacionRejected(
+  fac?: { success?: boolean | null; error?: unknown } | null,
+): boolean {
+  if (!fac || fac.success !== false) return false;
+  return typeof fac.error === "string" && fac.error.trim() !== "";
+}
+
 export function synthesizeFiscalNumber(prefix = "NF"): string {
   const n = Math.floor(Math.random() * 1e12)
     .toString()

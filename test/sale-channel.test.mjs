@@ -485,22 +485,67 @@ test("facturación digital: sin servicio fiscal y sin POS80, la venta se registr
   assert.doesNotMatch(String(store().errorMessage), /POS80|emparejada/i);
 });
 
-test("facturación digital con la emisión caída: informa el motivo y no pide emparejar nada", async () => {
+test("digital sin respuesta del servidor: no pide emparejar nada y avisa que la orden pudo quedar", async () => {
   useAuthStore.setState({
     profile: { ...useAuthStore.getState().profile, usesDigitalBilling: true },
   });
   // Servicio fiscal AUSENTE y POS80 sin emparejar: es la caja real del reporte.
   fiscalPrinterClient.getHealth = healthAbsent;
-  cashierAccountantService.submitOrder = async () => ({
-    ordenId: "orden-1",
-    facturacion: { success: false, numeroControl: null, urlPdf: null, error: "sin timbrado" },
-  });
+  cashierAccountantService.submitOrder = async () => {
+    throw new Error("502 backend");
+  };
   usbState.paired = false;
   setCart(makeCart("ORD-DIG-2"));
 
   const result = await store().registerSale("digital");
 
-  assert.equal(result, null, "sin comprobante no hay venta");
+  assert.equal(result, null, "sin respuesta no hay nada que afirmar");
   assert.equal(usbState.transfers, 0, "y no se fabrica papel por POS80 (R7)");
   assert.doesNotMatch(String(store().errorMessage), /emparejada/i, "no se pide un emparejamiento inútil");
+  assert.match(String(store().errorMessage), /pudo haberse registrado/i);
+});
+
+test("(R8) digital: la respuesta sin `facturacion` es una venta registrada, no un fallo", async () => {
+  // La respuesta NORMAL de una venta trae `facturacion: null` (la fila de factura
+  // la escribe un run_facturacion desacoplado) y el servicio la normaliza a
+  // { success:false, error:null }. Eso NO es un rechazo: la orden está insertada.
+  useAuthStore.setState({
+    profile: { ...useAuthStore.getState().profile, usesDigitalBilling: true },
+  });
+  fiscalPrinterClient.getHealth = healthAbsent;
+  usbState.paired = false;
+  cashierAccountantService.submitOrder = async (order, saleType, sessionId) => {
+    events.push("submit");
+    submits.push({ order, saleType, sessionId });
+    return {
+      ordenId: "01ORDEN-INSERTADA",
+      facturacion: { success: false, numeroControl: null, urlPdf: null, error: null },
+    };
+  };
+  setCart(makeCart("ORD-DIG-3"));
+
+  const result = await store().registerSale("digital");
+
+  assert.notEqual(result, null, "la venta se registró: no hay nada que negar");
+  assert.equal(store().errorMessage, null, "y no se anuncia un fallo que no ocurrió");
+  assert.match(String(store().infoMessage), /procesada/i);
+  assert.equal(usbState.transfers, 0);
+});
+
+test("digital con rechazo fiscal real: la venta queda registrada y se informa el motivo", async () => {
+  useAuthStore.setState({
+    profile: { ...useAuthStore.getState().profile, usesDigitalBilling: true },
+  });
+  cashierAccountantService.submitOrder = async () => ({
+    ordenId: "01ORDEN-INSERTADA",
+    facturacion: { success: false, numeroControl: null, urlPdf: null, error: "sin timbrado" },
+  });
+  setCart(makeCart("ORD-DIG-4"));
+
+  const result = await store().registerSale("digital");
+
+  assert.notEqual(result, null, "la orden está insertada: la venta existe");
+  assert.match(String(store().errorMessage), /quedó registrada/i);
+  assert.match(String(store().errorMessage), /sin timbrado/, "el motivo es el del backend");
+  assert.equal(usbState.transfers, 0, "no se fabrica papel por POS80");
 });

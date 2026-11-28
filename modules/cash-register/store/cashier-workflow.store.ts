@@ -7,7 +7,7 @@ import { useAuthStore } from "@/modules/auth/store/useAuthStore";
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { buildFiscalPayload } from "@/modules/cash-register/lib/fiscal-payload";
 import { reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
-import { isFiscalFailure } from "@/modules/cash-register/lib/fiscal-fallback";
+import { facturacionRejected } from "@/modules/cash-register/lib/fiscal-fallback";
 import { runOrderFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { persistLocalSale, quoteBlockReasonForCart, issuedFiscalForCart, cartSignature, matchesControlNumber, type IssuedFiscalDocument } from "@/modules/cash-register/lib/local-sale-persist";
 import { printNoFiscalTicket } from "@/modules/cash-register/lib/pos80-print";
@@ -507,7 +507,9 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       }
 
       // Exito real del canal digital: respondio con numero de control.
-      if (!transportFailed && !isFiscalFailure(result?.facturacion)) {
+      // El exito lo decide la ORDEN registrada, no la factura: en facturacion
+      // digital la emision va desacoplada y la respuesta normal no la trae.
+      if (!transportFailed && !facturacionRejected(result?.facturacion)) {
         set({ isSubmitting: false, infoMessage: "Venta procesada exitosamente" });
         await get().load();
         return result;
@@ -521,13 +523,27 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       // Tampoco hay fallback: imprimir por POS80 un comprobante no fiscal de una
       // venta que el backend facturo es el mismo defecto que la reimpresion
       // (R7). Si la emision falla, se informa con lo que paso.
+      if (transportFailed || !result?.ordenId) {
+        // Sin respuesta (o sin orden en la respuesta) no hay evidencia de nada:
+        // se informa la duda y no se inventa un resultado.
+        set({
+          isSubmitting: false,
+          errorMessage:
+            "No hubo respuesta del servidor al registrar la venta. La orden pudo haberse registrado: verificá el listado de órdenes antes de reintentar.",
+        });
+        return null;
+      }
+
+      // La orden SE registro: la venta existe. Lo que fallo es el comprobante.
+      // El mensaje va DESPUES de `load()`: esa recarga resetea `errorMessage`.
+      const motivoFiscal =
+        result?.facturacion?.error ?? "el backend no devolvió el motivo";
+      await get().load();
       set({
         isSubmitting: false,
-        errorMessage: `La emisión fiscal no devolvió comprobante${
-          transportFailed ? " (no hubo respuesta del servidor)" : ""
-        }. La orden pudo haberse registrado: verificá el listado de órdenes antes de reintentar.`,
+        errorMessage: `La venta quedó registrada, pero el comprobante fiscal no se emitió: ${motivoFiscal}.`,
       });
-      return null;
+      return result;
     } catch (error: any) {
       const mensaje = error.response?.data?.message || error.message || "Error al procesar la venta";
       console.error("❌ [registerSale] Error:", mensaje);
