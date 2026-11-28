@@ -52,7 +52,8 @@ Implementación de esta revisión (detección). F3/F4 quedan abiertas.
 | **T6** | Tests: `test/channel-detect.test.mjs` nuevo + reescritura de los que pinnean el fallback. | S1-S6 | Hecho (`144c837`, `020b0a4`) |
 | **T7** | Evidencia `canal` + `motivo_canal` + `terminal_id` en la orden. | R8 | Pendiente: requiere `Backend-administrativo` |
 | **T8** | Camino `digital` (`usesDigitalBilling`) sujeto al canal. | S3 | Hecho (`020b0a4`) — el canal manda; con el servicio vivo y emisión fallida es error con aviso de verificar el listado, porque la orden pudo existir ya en el backend |
-| **T9** | Vigilante continuo de `/health` para la UI + estado `actualizando` del servicio. | S5 | Pendiente: requiere `service_fiscal` |
+| **T9** | Vigilante continuo de `/health` para la UI, **solo del lado del POS**. | S5 | Pendiente — no toca `service_fiscal`: el servicio ya expone `/health` y eso alcanza |
+| **T10** | Papel POS80 impreso + backend que rechaza: se informa y no se anuncia venta registrada. | S4, R6 | Hecho (`fix` commit) |
 
 ## Estado medido hoy
 
@@ -618,3 +619,15 @@ alteran comportamiento de venta.
   error (no hay fallback); si pasa lo inverso, la impresión POS80 puede necesitar un gesto de
   WebUSB que ya no está. Es el precio de detectar fresco en vez de reusar estado, y se mitiga con
   T9 (vigilante) en la UI para que el operador lo vea antes de cobrar.
+- **L9** — Corrección del 18/11/2026: **no se toca `service_fiscal`**. Ya expone `/health` y eso es
+  todo lo que la detección necesita; el estado `actualizando` que proponía T9 se descarta y el
+  vigilante queda del lado del POS. Consecuencia: la histéresis (dos lecturas fallidas) es la
+  única protección contra la ventana de reinicio, así que su calibración importa más, no menos.
+- **L10** — Defecto encontrado al verificar (no por un test que ya existiera, por una sonda): con
+  el canal POS80 y el papel ya impreso, si el backend rechazaba la orden, `runOrderFallback` se
+  tragaba el error y devolvía `printed: true`; el store anunciaba **"Venta registrada con
+  comprobante POS80"** con `errorMessage: null`. Una venta perdida en silencio, con el ticket en
+  la mano del cliente: exactamente lo que R6 prohíbe en la dirección inversa. Arreglado: el
+  outcome lleva `persisted` + `persistError` y el store muestra el motivo real, con la instrucción
+  de no reimprimir. Test: `test/sale-channel.test.mjs` (caso 8), observado en rojo antes del
+  arreglo.

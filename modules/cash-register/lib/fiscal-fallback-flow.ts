@@ -18,6 +18,20 @@ import {
   type FallbackZInvoice,
 } from "./fiscal-fallback.ts";
 import { toBs2, fiscalLineTotalBs } from "./money.ts";
+
+function messageOf(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  const shaped = error as {
+    response?: { data?: { message?: string; error?: string } };
+    message?: string;
+  } | null;
+  return (
+    shaped?.response?.data?.message ||
+    shaped?.response?.data?.error ||
+    shaped?.message ||
+    fallback
+  );
+}
 import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos80-print.ts";
 import type { TicketHeader, TicketMoneyLine } from "./pos80-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
@@ -184,7 +198,14 @@ export interface OrderFallbackOutcome {
   fiscalFallback: true;
   /** El comprobante salio en papel. Sin esto no hay venta (Spec S4). */
   printed: boolean;
+  /**
+   * La orden quedo registrada en el backend. Impreso NO implica registrado: si
+   * el envio falla despues de sacar el papel, la venta no existe para el
+   * sistema aunque el cliente se lleve el ticket (Regla R6, direccion inversa).
+   */
+  persisted: boolean;
   printError?: string;
+  persistError?: string;
 }
 
 export async function runOrderFallback<TResult extends { ordenId: string }>(
@@ -213,6 +234,7 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
       ordenId: "",
       fiscalFallback: true,
       printed: false,
+      persisted: false,
       printError:
         printOutcome.error || "No se pudo imprimir el comprobante en la POS80",
     };
@@ -221,6 +243,8 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
   // Solo se reintenta persistir cuando la llamada original fallo por
   // transporte; un success=false del backend ya dejo su propio ordenId.
   let ordenId = inputs.initialResult?.ordenId ?? "";
+  let persisted = ordenId !== "";
+  let persistError: string | undefined;
   if (inputs.transportFailed) {
     try {
       const retry = await inputs.submitOrder(
@@ -229,12 +253,20 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
         inputs.sessionId,
       );
       ordenId = retry.ordenId;
+      persisted = true;
     } catch (error) {
+      // El papel ya salio y la orden NO se registro. Antes el error se tragaba
+      // y el call site anunciaba "Venta registrada": una venta perdida en
+      // silencio con el ticket en la mano del cliente (Regla R6).
+      persistError = messageOf(error, "error desconocido al registrar");
       console.error(
         "❌ [registerSale] Reintento de persistencia de la venta fallo:",
-        error instanceof Error ? error.message : "Error de transporte",
+        persistError,
       );
     }
+  } else if (ordenId === "") {
+    persisted = false;
+    persistError = "el backend no devolvió un identificador de orden";
   }
 
   return {
@@ -242,6 +274,8 @@ export async function runOrderFallback<TResult extends { ordenId: string }>(
     ordenId,
     fiscalFallback: true,
     printed: true,
+    persisted,
+    ...(persistError ? { persistError } : {}),
   };
 }
 

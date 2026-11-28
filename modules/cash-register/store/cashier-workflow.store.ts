@@ -330,6 +330,19 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           });
           return null;
         }
+        if (!pos80.persisted) {
+          // El papel ya salio y el backend no registro la orden. Es la
+          // direccion inversa de R6 y la mas cara: la venta existe en el papel
+          // y no en el sistema. Reimprimir duplicaria el comprobante, asi que
+          // se avisa y se para.
+          set({
+            isSubmitting: false,
+            errorMessage: `El comprobante salió en la POS80 pero la venta no se pudo registrar: ${
+              pos80.persistError ?? "error desconocido"
+            }. No vuelvas a imprimir: verificá el listado de órdenes y registrala desde ahí.`,
+          });
+          return null;
+        }
         set({ isSubmitting: false, infoMessage: "Venta registrada con comprobante POS80" });
         await get().load();
         return pos80;
@@ -494,6 +507,15 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           set({
             isSubmitting: false,
             errorMessage: `No se pudo imprimir el comprobante en la POS80: ${pos80.printError}. La venta no se registró.`,
+          });
+          return null;
+        }
+        if (!pos80.persisted) {
+          set({
+            isSubmitting: false,
+            errorMessage: `El comprobante salió en la POS80 pero la venta no se pudo registrar: ${
+              pos80.persistError ?? "error desconocido"
+            }. No vuelvas a imprimir: verificá el listado de órdenes y registrala desde ahí.`,
           });
           return null;
         }
