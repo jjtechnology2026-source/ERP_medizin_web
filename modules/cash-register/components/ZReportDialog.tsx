@@ -25,12 +25,14 @@ import {
   zReportErrorMessage,
 } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import { buildZSummary } from "@/modules/cash-register/lib/z-report";
+import { resolveTerminalChannel, type ChannelDecision } from "@/modules/cash-register/lib/channel-detect";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import type { CreatedZReport } from "@/modules/cash-register/types/fiscal-z-report.types";
 
 /**
  * Las dos operaciones del cierre, nunca encadenadas:
- * - "print": solo imprime el Z (maquina fiscal, o POS80 si no responde).
+ * - "print": solo imprime el Z por el canal DETECTADO de esta terminal (maquina
+ *   fiscal si el servicio responde; POS80 solo si el servicio no esta).
  * - "register": solo carga las ventas del dia en el libro de ventas.
  */
 export type ZReportMode = "print" | "register";
@@ -61,7 +63,6 @@ function formatMoney(value: number | null | undefined): string {
 export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
   const profile = useAuthStore((s) => s.profile);
   const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
-  const usesDigitalBilling = profile?.usesDigitalBilling ?? false;
   const sessionInvoices = useCashierWorkflowStore((s) => s.sessionInvoices);
   const sessionTransactions = useCashierWorkflowStore((s) => s.sessionTransactions);
   const { getEffectiveRate } = useCurrencyStore();
@@ -127,6 +128,11 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
+  // Canal DETECTADO de la terminal para este cierre (no se configura). El Z no
+  // cambia de canal por un fallo: si el servicio esta vivo y la maquina falla,
+  // el cierre se informa y no se inventa un Z de POS80 (Reglas R2 y R7).
+  const [channel, setChannel] = useState<ChannelDecision["channel"] | null>(null);
+  const [channelReason, setChannelReason] = useState("");
   // El Z lee del store de la sesion: hay que cargarla aca mismo, porque este
   // dialogo tambien se abre desde Configuracion (sin pasar por la caja).
   const loadSession = useCashierWorkflowStore((s) => s.load);
@@ -153,6 +159,15 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
     recordLastZPrint(identity);
     setLastPrint(identity);
     setPrintedVia(identity.via);
+  }, []);
+
+  // El canal se resuelve con una lectura FRESCA antes de decidir (Regla R1):
+  // el valor de un chequeo anterior no decide este cierre.
+  const resolveChannel = useCallback(async () => {
+    const decision = await resolveTerminalChannel();
+    setChannel(decision.channel);
+    setChannelReason(decision.reason);
+    return decision;
   }, []);
 
   const printOnFiscalMachine = useCallback(async () => {
@@ -188,9 +203,10 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
     }
   }, [pharmacyId, rememberPrint]);
 
-  // Fallback "sin maquina fiscal": el mismo Z, impreso en la POS80. Sigue sin
-  // registrar: imprimir y cargar el libro son botones distintos.
-  const printOnPos80 = useCallback(async () => {
+  // POS80: solo el canal POS80 (servicio fiscal ausente) imprime el cierre aca.
+  // Es una DECISION, no una caida: el helper recibe el canal detectado y se
+  // niega a sacar un Z por la POS80 con el servicio fiscal vivo (Regla R7).
+  const printOnPos80 = useCallback(async (detected: ChannelDecision) => {
     setPrintedVia("pos80");
     setPrintError(null);
     setStep("printing");
@@ -204,6 +220,7 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
       netTotal: zSummary.netTotal,
       reconciliation: zSummary.reconciliation,
       rate,
+      channel: detected,
       print: printNoFiscalTicket,
     });
     if (!outcome.printed) {
@@ -228,6 +245,20 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
     rate,
     rememberPrint,
   ]);
+
+  // Punto unico de decision: primero se detecta el canal y recien despues se
+  // elige como se imprime el cierre. No hay camino "probar una y caer a la otra".
+  const printByChannel = useCallback(async () => {
+    setPrintedVia(null);
+    setPrintError(null);
+    setStep("printing");
+    const decision = await resolveChannel();
+    if (decision.channel === "pos80") {
+      await printOnPos80(decision);
+      return;
+    }
+    await printOnFiscalMachine();
+  }, [resolveChannel, printOnPos80, printOnFiscalMachine]);
 
   // --- Operacion 2: registrar el Z en el libro (no imprime nada) ---
 
@@ -279,14 +310,16 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
       // Ceder el turno: el arranque no puede ser un setState sincrono del efecto.
       await Promise.resolve();
       if (mode === "print") {
-        // Con facturacion digital no hay maquina fiscal: el papel sale por la POS80.
-        await (usesDigitalBilling ? printOnPos80() : printOnFiscalMachine());
+        // El canal manda: sin servicio fiscal el Z sale por la POS80, y con el
+        // servicio vivo sale por la maquina fiscal. Un fallo de la maquina es
+        // error con motivo, nunca un Z de POS80 (Regla R7).
+        await printByChannel();
         return;
       }
       await register();
     };
     void start();
-  }, [dataLoaded, mode, usesDigitalBilling, printOnPos80, printOnFiscalMachine, register]);
+  }, [dataLoaded, mode, printByChannel, register]);
 
   const [zNumber, setZNumber] = useState("");
   const [fiscalSerial, setFiscalSerial] = useState("");
@@ -403,26 +436,35 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
               <HiOutlineXCircle size={48} />
             </div>
             <div>
-              <p className="text-lg font-bold text-slate-800 mb-2">Error de impresión</p>
+              <p className="text-lg font-bold text-slate-800 mb-2">El reporte Z no salió</p>
               <p className="text-sm text-slate-500 max-w-md">{printError}</p>
+              {channelReason && (
+                <p className="text-[11px] font-bold text-slate-400 max-w-md mt-2">
+                  {channelReason}
+                </p>
+              )}
             </div>
+            {channel === "fiscal" && (
+              <p className="text-[11px] font-bold text-amber-800 bg-amber-50 rounded-xl px-4 py-3 max-w-md">
+                El servicio fiscal está activo en esta terminal: el cierre tiene que salir por la
+                máquina fiscal y no se imprime por la POS80. No quedó ningún Z emitido.
+              </p>
+            )}
+            {channel === "pos80" && (
+              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-xl px-4 py-3 max-w-md">
+                El servicio fiscal no está en esta terminal: el cierre sale por la POS80.
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 type="button"
-                onClick={() => void printOnPos80()}
+                onClick={() => void printByChannel()}
                 className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm transition-all"
               >
-                Imprimir en la POS80
+                {channel === "pos80"
+                  ? "Reintentar en la POS80"
+                  : "Reintentar en la máquina fiscal"}
               </button>
-              {!usesDigitalBilling && (
-                <button
-                  type="button"
-                  onClick={() => void printOnFiscalMachine()}
-                  className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all"
-                >
-                  Reintentar en la máquina fiscal
-                </button>
-              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -432,7 +474,8 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
               </button>
             </div>
             <p className="text-[11px] font-bold text-slate-400 max-w-md">
-              Imprimir en la POS80 tampoco registra el Z en el libro de ventas.
+              Al reintentar se vuelve a detectar el canal de esta terminal. Imprimir el Z tampoco lo
+              registra en el libro de ventas.
             </p>
           </div>
         )}
@@ -447,7 +490,7 @@ export default function ZReportDialog({ onClose, mode }: ZReportDialogProps) {
               </p>
               <p className="text-[11px] font-bold text-emerald-600/70 mt-1">
                 {printedVia === "pos80"
-                  ? "Salió por la POS80 porque la máquina fiscal no respondió."
+                  ? "Salió por la POS80: el servicio fiscal no está en esta terminal."
                   : "Salió por la máquina fiscal."}
               </p>
             </div>

@@ -12,6 +12,8 @@ import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
 import { buildFallbackNote } from "@/modules/cash-register/lib/fiscal-fallback";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
+import { resolveTerminalChannel, type SaleChannel } from "@/modules/cash-register/lib/channel-detect";
+import { documentChannelBlockReason } from "@/modules/cash-register/lib/fiscal-fallback-flow";
 import type { TicketHeader } from "@/modules/cash-register/lib/pos80-ticket";
 import {
   decideNotaCreditoOutcome,
@@ -40,6 +42,16 @@ interface StoredPrintContext {
   affectedDocument: string;
   reason: string;
 }
+
+// La nota quedo guardada pero el papel no salio por la maquina fiscal. Con el
+// servicio fiscal vivo NO se ofrece la POS80: el comprobante tiene que salir por
+// la maquina fiscal (Regla R7).
+const NOTA_GUARDADA_SIN_PAPEL_FISCAL =
+  "La nota de crédito se guardó y el stock fue devuelto, pero el comprobante no salió por la máquina fiscal.";
+// Canal POS80: no hay maquina fiscal a la que pedirle el papel, asi que el
+// comprobante se imprime por la POS80 bajo demanda (nunca solo).
+const NOTA_GUARDADA_SIN_PAPEL_POS80 =
+  "El servicio fiscal no está en esta terminal: el comprobante de la nota sale por la POS80.";
 
 function parseRif(rif: string): { tipo: string; numero: string } {
   const cleaned = rif.replace(/-/g, "").trim().toUpperCase();
@@ -128,6 +140,10 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
   const [storedReason, setStoredReason] = useState("");
   const [printState, setPrintState] = useState<"idle" | "printing" | "printed" | "failed">("idle");
   const [printError, setPrintError] = useState("");
+  // Canal DETECTADO de la terminal para esta nota (no se configura). Decide si
+  // el comprobante sale por la maquina fiscal o por la POS80 (Regla R7).
+  const [channel, setChannel] = useState<SaleChannel | null>(null);
+  const [channelReason, setChannelReason] = useState("");
 
   useEffect(() => {
     facturasService.detail(factura.id)
@@ -163,6 +179,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     if (decision.step === "stored-not-printed") {
       setStoredContext(context);
       setStoredReason(decision.reason ?? "");
+      setSuccessMsg(decision.message);
       setPrintState("idle");
       setPrintError("");
       setStep("stored-not-printed");
@@ -199,7 +216,12 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     const seleccion = computeNotaCreditoSelectionTotals(lineas);
 
     // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
-    await prepairPrinter();
+    // El canal se DETECTA antes de decidir: con el servicio fiscal vivo la nota
+    // tiene que salir por la maquina fiscal y la POS80 no se prepara siquiera.
+    const detected = await resolveTerminalChannel();
+    setChannel(detected.channel);
+    setChannelReason(detected.reason);
+    if (detected.channel === "pos80") await prepairPrinter();
     setStep("submitting");
 
     // Total a acreditar = SOLO las lineas seleccionadas, nunca la factura completa.
@@ -307,9 +329,23 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
       return;
     }
 
-    // Solo con la NC ya guardada se intenta la impresora fiscal. Si falla, la
-    // nota queda guardada (y el stock devuelto) y se ofrece el "No Fiscal" bajo
-    // demanda con un click explícito; nunca se imprime solo.
+    // Solo con la NC ya guardada se intenta la impresora fiscal, y solo si el
+    // canal detectado es fiscal: sin servicio fiscal no hay maquina fiscal a la
+    // que pedirle el papel, y el comprobante sale por la POS80 bajo demanda con
+    // un click explicito (nunca solo). Si la maquina falla con el servicio vivo,
+    // la nota queda guardada y se informa el motivo: no se cruza de canal (R7).
+    if (detected.channel !== "fiscal") {
+      applyDecision(
+        decideNotaCreditoOutcome({
+          persisted: true,
+          printed: false,
+          printError: new Error(NOTA_GUARDADA_SIN_PAPEL_POS80),
+        }),
+        context,
+      );
+      return;
+    }
+
     try {
       await emitirNotaCreditoFiscal(detail, motivo.trim(), seleccion.detalles, lineas, totalVes);
     } catch (e) {
@@ -327,6 +363,22 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
     if (!detail || !storedContext) return;
     setPrintState("printing");
     setPrintError("");
+
+    // El canal se resuelve ANTES de imprimir (Regla R7): la POS80 solo saca el
+    // papel cuando esta terminal emite por la POS80. Con el servicio fiscal vivo
+    // el comprobante tiene que salir por la maquina fiscal y un fallo es error
+    // con motivo, no un comprobante por el otro canal.
+    const detected = await resolveTerminalChannel();
+    setChannel(detected.channel);
+    setChannelReason(detected.reason);
+    const blocked = documentChannelBlockReason("la nota de crédito", detected);
+    if (blocked) {
+      setPrintState("failed");
+      setPrintError(blocked);
+      return;
+    }
+
+    await prepairPrinter();
 
     const note = buildFallbackNote();
     const profileData = useAuthStore.getState().profile;
@@ -427,10 +479,24 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             <div className="p-5 bg-amber-50 rounded-full text-amber-500">
               <HiOutlineDocumentReport size={48} />
             </div>
-            <p className="text-sm font-bold text-amber-700 max-w-md">{successMsg}</p>
+            <p className="text-sm font-bold text-amber-700 max-w-md">
+              {channel === "fiscal" ? NOTA_GUARDADA_SIN_PAPEL_FISCAL : successMsg}
+            </p>
             {storedReason && (
               <p className="text-[11px] text-slate-400 max-w-md">
-                Detalle de la impresora: {storedReason}
+                Detalle: {storedReason}
+              </p>
+            )}
+            {channel === "fiscal" && (
+              <p className="text-[11px] font-bold text-amber-800 bg-amber-50 rounded-xl px-4 py-3 max-w-md">
+                El servicio fiscal está activo en esta terminal: el comprobante tiene que salir por la
+                máquina fiscal y no se imprime por la POS80.
+                {channelReason ? ` ${channelReason}` : ""}
+              </p>
+            )}
+            {channel === "pos80" && printState !== "printed" && (
+              <p className="text-[11px] font-bold text-slate-500 bg-[#F8FAFC] rounded-xl px-4 py-3 max-w-md">
+                El servicio fiscal no está en esta terminal: el comprobante sale por la POS80.
               </p>
             )}
             {printState === "printed" && (
@@ -440,7 +506,7 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
             )}
             {printState === "failed" && (
               <p className="text-xs font-bold text-red-500 max-w-md">
-                No se pudo imprimir el comprobante: {printError || "intente nuevamente"}.
+                {printError || "No se pudo imprimir el comprobante."}
               </p>
             )}
             <div className="flex gap-3 justify-center pt-2">
@@ -450,17 +516,19 @@ export default function FacturaNotaCreditoDialog({ factura, onClose, onSuccess, 
               >
                 Cerrar
               </button>
-              <button
-                onClick={handlePrintNoFiscal}
-                disabled={printState === "printing" || printState === "printed"}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm disabled:opacity-50 disabled:hover:bg-amber-500"
-              >
-                {printState === "printing"
-                  ? "Imprimiendo..."
-                  : printState === "printed"
-                    ? "Impreso"
-                    : "Imprimir comprobante"}
-              </button>
+              {channel === "pos80" && (
+                <button
+                  onClick={handlePrintNoFiscal}
+                  disabled={printState === "printing" || printState === "printed"}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm disabled:opacity-50 disabled:hover:bg-amber-500"
+                >
+                  {printState === "printing"
+                    ? "Imprimiendo..."
+                    : printState === "printed"
+                      ? "Impreso"
+                      : "Imprimir comprobante"}
+                </button>
+              )}
             </div>
           </div>
         )}

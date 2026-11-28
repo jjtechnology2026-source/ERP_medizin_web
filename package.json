@@ -32,7 +32,9 @@
     "test:local-sale-cart": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/local-sale-fiscal-cart.test.mjs",
     "test:facturas-date": "TZ=America/Caracas node --experimental-strip-types --import ./test/register-loader.mjs --test modules/facturas/lib/date-presets.test.mjs",
     "test:scan-to-cart": "node --experimental-strip-types --test modules/cash-register/lib/scan-to-cart.test.mjs",
-    "sync:fiscal-installer": "node scripts/sync-fiscal-installer.mjs"
+    "sync:fiscal-installer": "node scripts/sync-fiscal-installer.mjs",
+    "test:note-channel": "node --experimental-strip-types --import ./test/register-loader.mjs --test test/note-channel.test.mjs",
+    "test:channel-watchdog": "node --experimental-strip-types --test test/channel-watchdog.test.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

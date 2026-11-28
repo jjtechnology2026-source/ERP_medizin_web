@@ -21,6 +21,7 @@ import { useCashierWorkflowStore } from "@/modules/cash-register/store/cashier-w
 import { useCurrencyStore } from "@/modules/core/store/currency.store";
 import { buildSessionSummary } from "@/modules/cash-register/lib/z-report";
 import { runXReportFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
 
 // Implementaciones fiscales reales cableadas al servicio (service_fiscal).
 // El value es la marca que usa el cliente para enrutar a /bematech/* o a las
@@ -416,56 +417,75 @@ export default function FiscalConfigCard() {
     const done = () => setReportXStatus("done");
     const fail = () => setReportXStatus("error");
     try {
-      // 1) Maquina fiscal: el X es un corte parcial, no cierra el turno.
-      await fiscalPrinterClient.reportX();
-      done();
-      chatToast.show("Reporte X generado en la máquina fiscal (no cierra el turno).");
-    } catch {
-      // 2) Sin maquina fiscal: se imprime el X en la POS80, con el
-      // mismo cuadre que el Z pero sin registrar nada.
-      try {
-        await prepairPrinter();
-        const profile = useAuthStore.getState().profile;
-        const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
-        await useCashierWorkflowStore.getState().load(pharmacyId || undefined);
-        const { sessionInvoices, sessionTransactions } = useCashierWorkflowStore.getState();
-        const { paymentBreakdown, deviationsByMethod, summary } = buildSessionSummary({
-          sessionInvoices: sessionInvoices as Array<{ totalVes?: number }>,
-          sessionTransactions: sessionTransactions as Array<{
-            type?: string;
-            paymentMethod?: string;
-            amountVes?: number;
-          }>,
-        });
-        const res = await runXReportFallback({
-          header: {
-            name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
-            rif: String(profile?.rif || ""),
-            address: String(profile?.pharmacyAddress || ""),
-            phone: String(profile?.pharmacyPhone || ""),
-          },
-          pharmacyId,
-          sessionInvoices: sessionInvoices as Array<{ controlNumber?: string; totalVes?: number }>,
-          paymentBreakdown: paymentBreakdown,
-          deviations: deviationsByMethod,
-          reconciliation: summary.reconciliation,
-          netTotal: summary.netTotal,
-          rate: useCurrencyStore.getState().getEffectiveRate(),
-          print: printNoFiscalTicket,
-        });
-        if (res.printed) {
+      // El canal se DETECTA antes de decidir: con el servicio fiscal vivo el X
+      // sale por la maquina fiscal y un fallo es error con motivo; sin servicio,
+      // el X sale por la POS80. El corte no cruza de canal (Regla R7).
+      const decision = await resolveTerminalChannel();
+
+      if (decision.channel === "fiscal") {
+        // No tiene sentido pedirle un corte parcial a una POS80 cuando la
+        // terminal emite por la maquina fiscal: si la maquina falla, se dice
+        // por que y no se imprime por el otro canal.
+        try {
+          await fiscalPrinterClient.reportX();
           done();
-          chatToast.show("Reporte X impreso en la POS80. El turno sigue abierto.");
-        } else {
+          chatToast.show("Reporte X generado en la máquina fiscal (no cierra el turno).");
+        } catch (e) {
           fail();
-          chatToast.show(`No se pudo imprimir el reporte X en la POS80: ${res.error || "error"}`);
+          chatToast.show(
+            `El servicio fiscal está activo pero la máquina no generó el reporte X: ${
+              e instanceof Error && e.message ? e.message : decision.reason
+            }. No se imprime por la POS80.`,
+          );
         }
-      } catch (e) {
-        fail();
-        chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+        return;
       }
+
+      // Canal POS80 (servicio fiscal ausente): el corte sale por la POS80, con
+      // el mismo cuadre que el Z pero sin registrar nada.
+      await prepairPrinter();
+      const profile = useAuthStore.getState().profile;
+      const pharmacyId = profile?.pharmacyId || profile?.id_group || "";
+      await useCashierWorkflowStore.getState().load(pharmacyId || undefined);
+      const { sessionInvoices, sessionTransactions } = useCashierWorkflowStore.getState();
+      const { paymentBreakdown, deviationsByMethod, summary } = buildSessionSummary({
+        sessionInvoices: sessionInvoices as Array<{ totalVes?: number }>,
+        sessionTransactions: sessionTransactions as Array<{
+          type?: string;
+          paymentMethod?: string;
+          amountVes?: number;
+        }>,
+      });
+      const res = await runXReportFallback({
+        header: {
+          name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
+          rif: String(profile?.rif || ""),
+          address: String(profile?.pharmacyAddress || ""),
+          phone: String(profile?.pharmacyPhone || ""),
+        },
+        pharmacyId,
+        sessionInvoices: sessionInvoices as Array<{ controlNumber?: string; totalVes?: number }>,
+        paymentBreakdown: paymentBreakdown,
+        deviations: deviationsByMethod,
+        reconciliation: summary.reconciliation,
+        netTotal: summary.netTotal,
+        rate: useCurrencyStore.getState().getEffectiveRate(),
+        channel: decision,
+        print: printNoFiscalTicket,
+      });
+      if (res.printed) {
+        done();
+        chatToast.show("Reporte X impreso en la POS80. El turno sigue abierto.");
+      } else {
+        fail();
+        chatToast.show(`No se pudo imprimir el reporte X en la POS80: ${res.error || "error"}`);
+      }
+    } catch (e) {
+      fail();
+      chatToast.show(`Error al generar el reporte X: ${e instanceof Error ? e.message : "servicio no disponible"}`);
+    } finally {
+      setTimeout(() => setReportXStatus("idle"), 4000);
     }
-    setTimeout(() => setReportXStatus("idle"), 4000);
   };
 
   const handlePairPos80 = async () => {

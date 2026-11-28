@@ -35,8 +35,46 @@ function messageOf(error: unknown, fallback: string): string {
 import type { NoFiscalTicket, NoFiscalPrintResult } from "./pos80-print.ts";
 import type { TicketHeader, TicketMoneyLine } from "./pos80-ticket.ts";
 import type { CreateZReportDto } from "@/modules/cash-register/types/fiscal-z-report.types";
+import type { SaleChannel } from "./channel-detect.ts";
 
 export type PrintFn = (ticket: NoFiscalTicket) => Promise<NoFiscalPrintResult>;
+
+/**
+ * Lo unico que estos helpers necesitan de la decision de canal
+ * (`ChannelDecision` de `channel-detect.ts` cumple esta forma tal cual).
+ */
+export interface DocumentChannelState {
+  channel: SaleChannel;
+  /** Motivo del canal (`ChannelDecision.reason`); viaja en el error (Spec S6). */
+  reason?: string;
+  /**
+   * `ChannelDecision.ready`: con true el canal puede emitir, asi que el motivo
+   * es informativo y no se repite en el error.
+   */
+  ready?: boolean;
+}
+
+/**
+ * Regla R7: un documento derivado (nota de credito, X, Z) solo se imprime por
+ * la POS80 cuando el canal DETECTADO de esta terminal es POS80. Con el servicio
+ * fiscal vivo el canal es fiscal y un fallo de la maquina es un error con
+ * motivo, nunca un comprobante por el otro canal.
+ *
+ * Devuelve el motivo del bloqueo, o null cuando la POS80 es el canal correcto.
+ * Sin canal declarado se mantiene el comportamiento historico del helper
+ * (imprimir por la POS80); los call sites de la UI siempre pasan el canal que
+ * resolvio `resolveTerminalChannel()`.
+ */
+export function documentChannelBlockReason(
+  documentLabel: string,
+  channel?: DocumentChannelState,
+): string | null {
+  if (channel === undefined || channel.channel === "pos80") return null;
+  const detail = channel.ready === true ? undefined : channel.reason?.trim();
+  return `El servicio fiscal está activo en esta terminal: ${documentLabel} tiene que salir por la máquina fiscal${
+    detail ? ` (${detail})` : ""
+  }. No se imprime por la POS80.`;
+}
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Efectivo Bs",
@@ -308,6 +346,8 @@ export interface ZPrintInputs {
   /** Total NETO (ventas − devoluciones). Si falta, se usa el bruto del fallback. */
   netTotal?: number;
   rate?: number;
+  /** Canal DETECTADO de la terminal (Regla R7). */
+  channel?: DocumentChannelState;
   print: PrintFn;
 }
 
@@ -407,6 +447,13 @@ function buildZFallbackReport(inputs: ZPrintInputs): FallbackZReport {
  */
 export async function printZReportFallback(inputs: ZPrintInputs): Promise<ZPrintOutcome> {
   const fallback = buildZFallbackReport(inputs);
+
+  // Un cierre no cruza de canal: con el servicio fiscal vivo, el Z sale por la
+  // maquina fiscal. Si la maquina falla se informa el motivo y NO se inventa un
+  // Z con la identidad sintetica de la POS80 (Reglas R7 y R6).
+  const blocked = documentChannelBlockReason("el reporte Z", inputs.channel);
+  if (blocked) return { fallback, printed: false, error: blocked };
+
   const outcome = await inputs.print(buildZFallbackTicket(inputs, fallback));
   return {
     fallback,
@@ -582,6 +629,8 @@ export interface XReportFallbackInputs {
   /** Total NETO (ventas − devoluciones). Si falta, se usa el bruto. */
   netTotal?: number;
   rate?: number;
+  /** Canal DETECTADO de la terminal (Regla R7). */
+  channel?: DocumentChannelState;
   print: PrintFn;
 }
 
@@ -597,6 +646,10 @@ export interface XReportFallbackOutcome {
 export async function runXReportFallback(
   inputs: XReportFallbackInputs,
 ): Promise<XReportFallbackOutcome> {
+  // Misma regla que el Z: el corte sale por el canal detectado, sin cruzar.
+  const blocked = documentChannelBlockReason("el reporte X", inputs.channel);
+  if (blocked) return { printed: false, error: blocked };
+
   const fallback = buildFallbackZReport({
     sessionInvoices: inputs.sessionInvoices,
     pharmacyId: inputs.pharmacyId,
@@ -641,14 +694,83 @@ export interface NoteFallbackInputs<TPayload extends object> {
   customerName?: string;
   customerDoc?: string;
   reason?: string;
+  /** Canal DETECTADO de la terminal (Regla R7). */
+  channel?: DocumentChannelState;
+}
+
+/**
+ * Resultado del fallback de nota de credito. Lleva los datos del comprobante
+ * sintetizado (`FallbackNote`, que ya consumian los call sites) mas el mismo
+ * par `printed`/`persisted` que devuelve `runOrderFallback`: impreso NO implica
+ * registrado.
+ */
+export interface NoteFallbackOutcome extends FallbackNote {
+  /** El comprobante salio en papel por la POS80. */
+  printed: boolean;
+  /** La nota quedo persistida (reintento incluido). */
+  persisted: boolean;
+  printError?: string;
+  persistError?: string;
+  /** Motivo por el que el canal detectado NO permite imprimir por la POS80. */
+  blockedReason?: string;
+}
+
+/** Lo que el dialogo le muestra al operador despues del fallback. */
+export interface NoteFallbackDisplay {
+  /** true SOLO si el papel salio y la nota quedo registrada (Regla R6). */
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Decide QUE SE LE DICE al operador despues del fallback de nota de credito.
+ *
+ * Papel y registro son dos hechos distintos (Regla R6): el dialogo solo puede
+ * anunciar la nota como emitida cuando el comprobante salio Y la nota quedo
+ * registrada. Antes se anunciaba siempre con el control sintetizado, aunque no
+ * hubiera papel ni registro.
+ */
+export function describeNoteFallbackOutcome(
+  outcome: NoteFallbackOutcome,
+): NoteFallbackDisplay {
+  // Canal fiscal: la nota no salio por ningun canal propio. El motivo concreto
+  // (servicio activo, maquina muda) es lo unico que hay para mostrar.
+  if (outcome.blockedReason) return { ok: false, message: outcome.blockedReason };
+
+  if (!outcome.printed) {
+    const motivo = outcome.printError || "el comprobante no salió por la POS80";
+    return {
+      ok: false,
+      message: outcome.persisted
+        ? `La nota de crédito quedó registrada, pero el comprobante no salió por la POS80: ${motivo}. No vuelvas a emitir la nota para no duplicarla; pedí el comprobante desde soporte.`
+        : `No se pudo imprimir la nota de crédito: ${motivo}. La nota no quedó emitida.`,
+    };
+  }
+
+  if (!outcome.persisted) {
+    return {
+      ok: false,
+      message: `El comprobante salió por la POS80 pero la nota no quedó registrada: ${
+        outcome.persistError ?? "el backend no confirmó el registro"
+      }. No vuelvas a emitir la nota: verificá el listado y regularizá el registro desde soporte.`,
+    };
+  }
+
+  return { ok: true, message: `Nota de Crédito emitida: ${outcome.numero_control}` };
 }
 
 export async function runNoteFallback<TPayload extends object>(
   inputs: NoteFallbackInputs<TPayload>,
-): Promise<FallbackNote> {
+): Promise<NoteFallbackOutcome> {
   const note = buildFallbackNote();
 
-  await inputs.print({
+  // Con el servicio fiscal vivo la nota tiene que salir por la maquina fiscal:
+  // el call site muestra ese error y este helper NO imprime por la POS80 ni
+  // persiste un comprobante que no salio por ningun canal (Regla R7).
+  const blocked = documentChannelBlockReason("la nota de crédito", inputs.channel);
+  if (blocked) return { ...note, printed: false, persisted: false, blockedReason: blocked };
+
+  const printOutcome = await inputs.print({
     kind: "credit-note",
     header: inputs.header,
     title: "NOTA DE CREDITO",
@@ -661,19 +783,36 @@ export async function runNoteFallback<TPayload extends object>(
     reason: inputs.reason,
     total: inputs.total,
   });
+  const printed = printOutcome.printed === true;
 
   // Reintento unico de persistencia con los identificadores sintetizados.
   // ponytail: createNotaCredito normaliza los errores HTTP y createCreditNoteTFHKA
   // lanza en cualquier error; no se distingue transporte de 4xx, se reintenta siempre.
+  let persisted = false;
+  let persistError: string | undefined;
   try {
     await inputs.createNote({
       ...inputs.payload,
       tracking_id: note.tracking_id,
       numero_control_interno: note.numero_control,
     } as TPayload);
-  } catch {
+    persisted = true;
+  } catch (error) {
     // el reintento fallo: la nota queda impresa y la persistencia pendiente
+    persistError = messageOf(error, "no se pudo registrar la nota de crédito");
   }
 
-  return note;
+  return {
+    ...note,
+    printed,
+    persisted,
+    ...(printed
+      ? {}
+      : {
+          printError:
+            printOutcome.error?.trim() ||
+            "No se pudo imprimir la nota de crédito en la POS80",
+        }),
+    ...(persistError ? { persistError } : {}),
+  };
 }

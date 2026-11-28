@@ -11,7 +11,8 @@ import { fiscalNotesService } from "@/modules/cash-register/api/fiscal-notes.ser
 import fiscalPrinterClient from "@/modules/cash-register/api/fiscal-printer-client";
 import { toBs2, reconcileFiscalTotal } from "@/modules/cash-register/lib/money";
 import { mapVatToTaxCode } from "@/modules/cash-register/lib/fiscal-payload";
-import { runNoteFallback } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { runNoteFallback, describeNoteFallbackOutcome } from "@/modules/cash-register/lib/fiscal-fallback-flow";
+import { resolveTerminalChannel } from "@/modules/cash-register/lib/channel-detect";
 import { printNoFiscalTicket, prepairPrinter } from "@/modules/cash-register/lib/pos80-print";
 import type { Order } from "@/modules/orders/types/orders";
 import type {
@@ -104,8 +105,12 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
       return;
     }
 
-    // En el mismo gesto del click: WebUSB exige activacion para pedir la POS80.
-    await prepairPrinter();
+    // El canal se DETECTA antes de decidir, en el mismo gesto del click: WebUSB
+    // exige activacion transitoria para pedir la POS80 y se pierde tras los
+    // awaits. Con el servicio fiscal vivo la nota sale por la maquina fiscal y
+    // no hay nada que preparar por USB (Specs S1/S2, Regla R7).
+    const detected = await resolveTerminalChannel();
+    if (detected.channel === "pos80") await prepairPrinter();
     setStep("loading");
 
     if (mode === "fiscal") {
@@ -139,21 +144,33 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
           reason: motivo,
         };
 
-        const result = await fiscalPrinterClient.createCreditNote(payload);
+        // Un fallo de la maquina no puede dejar el dialogo colgado en "loading":
+        // se informa el motivo concreto y no se imprime por la POS80 (S3/S6).
+        let fiscalNumber = "";
+        try {
+          const result = await fiscalPrinterClient.createCreditNote(payload);
 
-        const recon = reconcileFiscalTotal(result.total, payload.items);
-        if (recon) console.error("❌ [FiscalNoteDialog]", recon);
+          const recon = reconcileFiscalTotal(result.total, payload.items);
+          if (recon) console.error("❌ [FiscalNoteDialog]", recon);
 
-        if (!result.fiscal_number) {
+          if (!result.fiscal_number) {
+            setStep("error");
+            setErrorMsg("La impresora fiscal no devolvió número de control");
+            return;
+          }
+          fiscalNumber = result.fiscal_number;
+        } catch (e) {
           setStep("error");
-          setErrorMsg("La impresora fiscal no devolvió número de control");
+          setErrorMsg(
+            `La máquina fiscal no emitió la nota de crédito: ${
+              e instanceof Error && e.message ? e.message : "sin respuesta de la impresora"
+            }.`,
+          );
           return;
         }
 
         setStep("result");
-        setResultMsg(
-          `Nota de Crédito fiscal emitida: ${result.fiscal_number}`
-        );
+        setResultMsg(`Nota de Crédito fiscal emitida: ${fiscalNumber}`);
         return;
       }
 
@@ -161,10 +178,11 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
     const result = await fiscalNotesService.createNotaCredito(payload);
 
     if (!result.success) {
-      // Fallback "No Fiscal" (digital o local): se sintetizan los identificadores no
-      // monetarios (money.ts sigue siendo el unico origen de montos), se imprime en la
-      // POS80 y se persiste la NC real por el endpoint existente.
-      const note = await runNoteFallback({
+      // Fallback por canal: se sintetizan los identificadores no monetarios
+      // (money.ts sigue siendo el unico origen de montos) y se imprime por la
+      // POS80 SOLO si el canal detectado es POS80. Con el servicio fiscal vivo
+      // el helper devuelve el motivo y no imprime ni persiste nada (Regla R7).
+      const outcome = await runNoteFallback({
         header: {
           name: String(profile?.pharmacyName || profile?.name_group || profile?.name || ""),
           rif: rifEmisor || String(profile?.rif || ""),
@@ -177,11 +195,21 @@ export default function FiscalNoteDialog({ order, onClose, mode = "digital" }: F
         affectedDocument: documentoAfectado.numero_documento,
         total: documentoAfectado.monto_total,
         reason: motivo,
+        channel: detected,
       });
 
+      // Papel y registro son dos hechos distintos (Regla R6): la nota se anuncia
+      // emitida solo si el comprobante salio Y quedo registrada. Si no, se
+      // muestra el motivo concreto.
+      const display = describeNoteFallbackOutcome(outcome);
+      if (!display.ok) {
+        setStep("error");
+        setErrorMsg(display.message);
+        return;
+      }
       setFiscalFallback(true);
       setStep("result");
-      setResultMsg(`Nota de Crédito emitida: ${note.numero_control}`);
+      setResultMsg(display.message);
       return;
     }
 
