@@ -750,3 +750,16 @@ alteran comportamiento de venta.
 - **L22** — Sigue sin usarse `/busy` en la UI: el cartel podría decir "la máquina está ocupada, esperá
   un segundo" en vez de inferirlo por tiempo. Es una mejora de mensaje, no un defecto: el canal y la
   venta ya no dependen de ese dato.
+- **L23** — Reporte del usuario (captura del diálogo de pago): dos carteles rojos/ámbar con "El
+  servicio fiscal no está instalado o no responde. La POS80 no está emparejada." en una farmacia con
+  **facturación digital**. Diagnóstico: mi rama `digital` consultaba el canal **solo cuando la
+  emisión del backend fallaba**, y ahí exigía `ready` (POS80 emparejada) — un requisito que la
+  facturación digital no tiene, porque el comprobante lo emite el backend y no hay papel local. En
+  una caja sin impresora eso bloqueaba la venta pidiendo un emparejamiento inútil. Arreglo: la rama
+  `digital` **no consulta el canal**, informa lo que dijo el backend y nunca toca la POS80 (R7:
+  imprimir un no fiscal de una venta que el backend facturó es el mismo defecto que la
+  reimpresión); la pantalla de pago deja de mostrar el cartel de canal y de preparar WebUSB en esas
+  farmacias. RED observado contra el código anterior: el mensaje **literal de la captura**. Nota de
+  método: el primer test que escribí no servía (no simulaba servicio ausente y pasaba en los dos
+  códigos); se corrigió hasta ver el rojo real. Evidencia: 480 tests, deploy `SUCCESS`, `erp.medizins.com` 200.
+  Commit `7313a66`.
