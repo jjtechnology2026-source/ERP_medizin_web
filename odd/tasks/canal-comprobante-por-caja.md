@@ -53,7 +53,10 @@ Implementación de esta revisión (detección). F3/F4 quedan abiertas.
 | **T7** | Evidencia `canal` + `motivo_canal` + `terminal_id` en la orden. | R8 | Pendiente: requiere `Backend-administrativo` |
 | **T8** | Camino `digital` (`usesDigitalBilling`) sujeto al canal. | S3 | Hecho (`020b0a4`) — el canal manda; con el servicio vivo y emisión fallida es error con aviso de verificar el listado, porque la orden pudo existir ya en el backend |
 | **T9** | Vigilante continuo de `/health` para la UI, **solo del lado del POS**. | S5 | Pendiente — no toca `service_fiscal`: el servicio ya expone `/health` y eso alcanza |
-| **T10** | Papel POS80 impreso + backend que rechaza: se informa y no se anuncia venta registrada. | S4, R6 | Hecho (`fix` commit) |
+| **T10** | Papel POS80 impreso + backend que rechaza: se informa y no se anuncia venta registrada. | S4, R6 | Hecho (`894d015`) |
+| **T11** | Documentos derivados por canal: NC, reimpresión, X y Z dejan de cruzar a POS80 con el servicio vivo. | S3, R7 | Hecho (commit siguiente) |
+| **T12** | Vigilante del `/health` del lado del POS, para que el operador vea el canal antes de cobrar. | S5 | Hecho (commit siguiente) |
+| **T13** | Evidencia de canal por orden en `Backend-administrativo`. | R8 | En curso |
 
 ## Estado medido hoy
 
@@ -631,3 +634,32 @@ alteran comportamiento de venta.
   outcome lleva `persisted` + `persistError` y el store muestra el motivo real, con la instrucción
   de no reimprimir. Test: `test/sale-channel.test.mjs` (caso 8), observado en rojo antes del
   arreglo.
+- **L11** — Cierre del 18/11/2026 (T11, T12, T13-parcial). **T11**: los documentos derivados ya
+  obedecen al canal. Nuevo gate puro `documentChannelBlockReason` en `fiscal-fallback-flow.ts`;
+  `printZReportFallback`, `runXReportFallback` y `runNoteFallback` aceptan `channel` y con canal
+  fiscal **no** imprimen por POS80 ni persisten. `ZReportDialog` resuelve el canal antes de
+  imprimir y su pantalla de error ya no ofrece "Imprimir en la POS80"; `usesDigitalBilling` deja
+  de decidir el canal del Z. `FacturaNotaCreditoDialog` y `FiscalConfigCard` (X) rutean por canal.
+  La NC de la caja (`modules/orders/components/FiscalNoteDialog.tsx` — la ruta que yo había escrito
+  mal) resuelve el canal en el gesto del click y decide con el helper puro
+  `describeNoteFallbackOutcome`: papel y registro son dos hechos, y no se anuncia una nota emitida
+  sin los dos. Se cerró además el `createCreditNote` sin try/catch que dejaba el diálogo colgado.
+  **T12**: `channel-watchdog.ts` + `useChannelStatus` (nie: solo del lado del POS, `service_fiscal`
+  intacto), integrado en la pantalla de pago: el cajero ve el canal antes de cobrar y si la máquina
+  no responde lo ve en rojo, no al fallar la venta.
+- **L12** — Verificación completa antes de publicar: **453 tests, 0 fallos** (22 suites de
+  `package.json` + `note-channel` 13 + `channel-watchdog` 9), `tsc --noEmit` limpio, `npm run build`
+  exit 0, y `eslint` sin regresión en cada archivo tocado (comparado contra `HEAD` con
+  `--stdin-filename`).
+- **L13** — Deuda viva que queda declarada: (a) **T13** — la evidencia de canal por orden sigue sin
+  existir en la base. `ModelOrder` (`src/shape/src/models/pruebas.rs:77`, repo
+  `Backend-administrativo`) **no** tiene `deny_unknown_fields`, así que hoy el POS podría mandar
+  `canal`/`motivoCanal`/`terminalId` y el backend los ignoraría en silencio: no rompe, pero tampoco
+  guarda. Ese repo está parado en la rama `fix/supplier-scope-grupo` con trabajo ajeno en curso, así
+  que el cambio pide rama propia desde `dev`, campos opcionales con `#[serde(default)]`, su review y
+  su deploy. (b) `runNoteFallback` acepta `channel` opcional y sin él asume POS80 (lo exige
+  `test/fiscal-fallback.test.mjs`): un call site nuevo que lo omita reintroduce el fallback en
+  silencio; volverlo obligatorio es un cambio de una línea con su test. (c) La NC de la caja en canal
+  POS80 conserva el diseño "imprime primero, reintenta persistir": no se pasó a fail-closed porque no
+  es una venta y no se pidió. (d) `fiscalNotesService.createNotaCredito` (camino digital) sigue sin
+  try/catch.
