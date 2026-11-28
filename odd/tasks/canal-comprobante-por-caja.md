@@ -688,3 +688,30 @@ alteran comportamiento de venta.
   instalado no puede emitir, **no vende**. Es lo pedido, y el rollback es inmediato y no destructivo
   (Railway redeploy del deployment `c5080116` para el ERP, `168cebc7` para el backend). Ninguno de
   los dos cambios toca datos: el backend solo agrega dos campos opcionales en una tabla SCHEMALESS.
+- **L17** — Verificación independiente del código **ya desplegado** (`gentle-ai-verify`, 28/11). Encontró
+  cuatro defectos que los 455 tests no podían ver, todos en los escenarios que este documento llama
+  los peores. **(1) Bloqueante:** un servicio **presente pero trabado** (timeout, 500,
+  `{"status":"arrancando"}`) se leía como **ausente** — `probeService` metía el timeout en el mismo
+  `catch` que una negativa de conexión — y la venta salía por POS80 sin comprobante y sin error.
+  Medido: 4,2 s hasta `{channel:"pos80", service:"ausente", ready:true}`. Regla corregida: **solo una
+  negativa de conexión demuestra ausencia**; todo lo demás es "presente y no operativo" → canal
+  fiscal, `ready:false`, motivo concreto. Y una negativa dentro de 15 s de una lectura buena es un
+  **reinicio** (la tarea de update hace `Stop-Process` + `Start-Sleep 2`), no una ausencia.
+  **(2)** `withTimeout` no abortaba el `fetch`: 2 sockets por sondeo, acumulados hasta el tope de 6
+  por origen de Chrome — el canal quedaba pegado en POS80 hasta recargar la página. El cliente ahora
+  acepta `AbortSignal` y los seams reales usan `AbortSignal.timeout`; `createInvoice` queda sin
+  abortar a propósito. **(3)** La NC "registrada sin papel" caía en una pantalla cuya única salida
+  habilitaba **reemitir** → doble nota de crédito. Ahora el flag ejecutable `mustNotReemit` (derivado
+  de `printed !== persisted`) hace ese paso terminal. **(4)** La reimpresión seguía cruzando de canal:
+  `OrderDetailModal` imprimía por POS80 sin consultar el canal. Nuevo `reprint-channel.ts`: una venta
+  que el propio POS80 emitió se reimprime por POS80 en cualquier canal; una venta fiscal no, y dice
+  por qué. Evidencia: **475 tests, 0 fallos** (24 suites + `reprint-channel` 9 + `channel-detect` 12
+  + `note-channel` 18 + `channel-watchdog` 10), `tsc` y `next build` limpios. Commit `02e67a0`.
+- **L18** — Deuda que queda declarada, con nombre y número: (a) la histéresis de 150 ms no cubre una
+  caída de 2 s si **nunca** hubo lectura buena en esa pestaña (recarga justo durante el reinicio): el
+  residual baja a "una venta por POS80 en ese borde", y la mitigación real es la ventana de
+  actualización fuera de horario; (b) POS80 "papel impreso + persistencia ambigua" puede duplicar la
+  orden si el operador vuelve a cobrar — el camino fiscal resuelve eso con reconciliación
+  (`local-sale-persist.ts`) y el camino POS80 todavía no; (c) cotizaciones y notas de entrega
+  (`COT-`/`NDE-`) se clasifican como fiscales y su reimpresión queda bloqueada: es fail-closed, pero
+  si el negocio quiere reimprimirlas por POS80 hay que agregar su señal a `saleDocumentKind`.
