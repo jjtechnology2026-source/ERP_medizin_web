@@ -305,12 +305,23 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
       let decisionPromise: Promise<ChannelDecision> | null = null;
       const decision = () => (decisionPromise ??= resolveTerminalChannel());
 
+      // Evidencia (Regla R8): la orden guarda con que canal salio y por que. No
+      // es configuracion, es el unico rastro que permite responder despues
+      // "cuantas ventas salieron por POS80 y por que" sin cuadrar el papel a mano.
+      // Codigos cortos a proposito: el texto largo vive en `reason`, para la UI.
+      const stampChannel = (chosen: ChannelDecision) => {
+        order.canal = chosen.channel;
+        order.motivoCanal =
+          chosen.service === "vivo" ? "servicio_presente" : "servicio_ausente";
+      };
+
       /** Canal POS80: el ticket ES el documento. Sin papel no hay venta. */
       const runPos80Sale = async (chosen: ChannelDecision) => {
         if (!chosen.ready) {
           set({ isSubmitting: false, errorMessage: chosen.reason });
           return null;
         }
+        stampChannel(chosen);
         const pos80 = await runOrderFallback({
           header,
           order,
@@ -366,6 +377,12 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
             set({ isSubmitting: false, errorMessage: chosen.reason });
             return null;
           }
+          stampChannel(chosen);
+        } else {
+          // El comprobante ya existe: el canal de esta venta ES el fiscal, sin
+          // volver a preguntar (Regla R6).
+          order.canal = "fiscal";
+          order.motivoCanal = "comprobante_ya_emitido";
         }
 
         let controlNumber: string;
@@ -493,6 +510,7 @@ export const useCashierWorkflowStore = create<CashierWorkflowStore>((set, get) =
           set({ isSubmitting: false, errorMessage: chosen.reason });
           return null;
         }
+        stampChannel(chosen);
         const pos80 = await runOrderFallback({
           header,
           order,

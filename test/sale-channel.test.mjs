@@ -376,3 +376,29 @@ test("servicio ausente + POS80 que imprime y backend que rechaza: la venta NO se
   assert.match(String(store().errorMessage), /502/);
   assert.match(String(store().errorMessage), /no vuelvas a imprimir/i);
 });
+
+test("(R8) canal POS80: la orden registra por qué canal salió y por qué", async () => {
+  setCart(makeCart("ORD-EVID-1"));
+  usbState.paired = true;
+  fiscalPrinterClient.getHealth = healthAbsent;
+
+  await store().registerSale("local");
+
+  assert.equal(submits.length, 1);
+  assert.equal(submits[0].order.canal, "pos80", "la venta dice por dónde salió");
+  assert.equal(
+    submits[0].order.motivoCanal,
+    "servicio_ausente",
+    "y por qué: el servicio fiscal no estaba",
+  );
+});
+
+test("(R8) canal fiscal: la evidencia dice servicio presente", async () => {
+  setCart(makeCart("ORD-EVID-2"));
+
+  await store().registerSale("local");
+
+  assert.equal(submits.length, 1);
+  assert.equal(submits[0].order.canal, "fiscal");
+  assert.equal(submits[0].order.motivoCanal, "servicio_presente");
+});
