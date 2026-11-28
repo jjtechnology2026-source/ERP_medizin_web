@@ -763,3 +763,17 @@ alteran comportamiento de venta.
   método: el primer test que escribí no servía (no simulaba servicio ausente y pasaba en los dos
   códigos); se corrigió hasta ver el rojo real. Evidencia: 480 tests, deploy `SUCCESS`, `erp.medizins.com` 200.
   Commit `7313a66`.
+- **L24** — Reporte del usuario: *"igual se insertó en el background… no entiendo por qué me la está
+  negando"*, con la captura del mensaje "La emisión fiscal no devolvió comprobante. La orden pudo
+  haberse registrado". **Causa raíz:** la rama `digital` juzgaba la venta por `facturacion.success`,
+  pero la respuesta normal de una venta **no trae `facturacion`**: la fila de `factura` la escribe un
+  `run_facturacion` desacoplado, `submitOrder` normaliza el faltante a
+  `{success:false, error:null}` y `isFiscalFailure` lo leía como fallo. La orden estaba insertada y
+  el POS negaba la venta. El repo ya tenía la lección escrita para las ventas locales
+  (`local-sale-persist.ts`): **un rechazo exige motivo**. Nuevo `facturacionRejected` =
+  `success === false` **con error no vacío**; sin `facturacion` la venta está registrada, un rechazo
+  con motivo informa "la venta quedó registrada, pero el comprobante no se emitió: <motivo>" y solo
+  la falta de respuesta queda como duda. **Segundo defecto en el mismo camino:** el mensaje se
+  escribía antes de `get().load()`, que resetea `errorMessage` — nunca llegaba a la pantalla; ahora va
+  después. RED observado en los dos tests nuevos contra el código desplegado (14/16), GREEN 16/16;
+  **482 tests, 0 fallos**. Commit `28438c4`, deploy `SUCCESS`, `erp.medizins.com` 200.
