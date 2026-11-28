@@ -146,8 +146,13 @@ function terminalSeams(timeoutMs: number): ChannelSeams {
   return {
     health: () =>
       fiscalPrinterClient.getHealth({ signal: timeoutSignal(timeoutMs) }),
+    // El status lleva su propio tope, mas largo: espera el lock del servicio
+    // mientras hay una factura imprimiendose. Con 2 s el cartel diria "no
+    // respondio" durante una impresion normal.
     printerStatus: () =>
-      fiscalPrinterClient.getPrinterStatus({ signal: timeoutSignal(timeoutMs) }),
+      fiscalPrinterClient.getPrinterStatus({
+        signal: timeoutSignal(Math.max(timeoutMs, MACHINE_PROBE_TIMEOUT_MS)),
+      }),
     pos80Paired: () => isPrinterPaired(),
   };
 }
